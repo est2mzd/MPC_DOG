@@ -6,6 +6,36 @@
 
 ---
 
+## このリポジトリの位置づけ（OSS との関係）
+
+### 上流 OSS 単体では何ができるか
+
+[Quadruped-PyMPC](https://github.com/iit-DLSLab/Quadruped-PyMPC) を clone し、README に従って **acados ビルド・依存インストール** を済ませれば、MuJoCo 上で Go2 の **trot + SRB-MPC + 足場最適化 + WBC 相当層** が動きます。  
+標準シーン（`flat` / `random_boxes` / `perlin` 等）での sim は上流だけで可能です。
+
+**ただし「何もしなくても走る」わけではありません。** submodule・acados codegen・環境変数など、初回セットアップは必須です。
+
+### mpc_dog が追加したもの（＝「発展」の中身）
+
+新しい MPC アルゴリズムや WBC の研究実装を追加したリポジトリ **ではありません**。  
+上流 PyMPC の制御コアはそのままに、**コンサル・2 日ワークショップ向けの統合・小拡張・試行錯誤の記録** を載せています。
+
+| レイヤ | mpc_dog の追加 | 制御技術としての新規性 |
+|--------|----------------|------------------------|
+| **環境** | `uv` + `setup_uv_workshop.sh` + `.env.workshop` | なし（再現性のため） |
+| **設定** | YAML preset → `config.py` パッチ（Session 1–4） | なし（教材用ワークフロー） |
+| **地形** | `workshop_terrain.py` — `bumpy_flat` / `uphill` / `downhill` | 小（Perlin + 勾配のカスタムシーン登録） |
+| **sim API** | `pympc_lab.py` — headless sim、**resilient モード**（転倒 reset + 累積距離） | 小（評価・デモ用ラッパー） |
+| **試行錯誤** | Session 4: 5 kph × 凸凹坂の no-fall / resilient 探索と JSON ログ | なし（既存パラメータの調整記録） |
+| **教材** | Notebook 00–11、GIF/MP4、20 シナリオ lab、QA マスタ | なし（説明・体感用） |
+
+**一言で言うと:**  
+上流 OSS（**acados 勾配 MPC + 足場最適化**）を土台に、**ワークショップ基盤（uv / preset / 教材）** と **Session 4 向けの小さな sim 拡張（凸凹坂地形・resilient 評価）** を足し、**中身の理解とパラメータ試行錯誤** を体系化したリポジトリです。
+
+制御スタック自体の「次世代化」（Whole-body iLQR、OCS2 perceptive NMPC 等）は [docs/stack_selection.md](docs/stack_selection.md) に **Phase 2–3 候補** として整理しており、本 repo のメイン実装には含めていません。
+
+---
+
 ## 概要
 
 | 項目 | 内容 |
@@ -68,7 +98,7 @@ ADAS 操舵 MPC 経験者向けの対応: 車両モデル → SRB、タイヤ力
 | **出発点 OSS** | Quadruped-PyMPC を採用。GRF を明示最適化し、WBC 相当層まで一気通貫 |
 | **環境** | conda ではなく **uv** で `.venv` を管理（再現性・依存の明示化） |
 | **教材形式** | Markdown（WORKSHOP.md）+ **実行済み Notebook** + **生成済み assets**（GIF/MP4/JSON） |
-| **検証** | 5 セッション preset の headless / resilient sim OK、Notebook 00–05 実行済み |
+| **検証** | 5 セッション preset の headless / resilient sim OK、Notebook 00–11 実行済み |
 | **拡張方針** | 不整地・犬速度 → PyMPC ベース。必要なら MuJoCo iLQR または OCS2 perceptive へ（[top2_stack_comparison.md](docs/top2_stack_comparison.md)） |
 
 ---
@@ -154,7 +184,7 @@ mpc_dog/
 │   │   ├── MPC_TUNING_JOURNEY.md      #   MPC 設計者体験（fail/success）
 │   │   ├── WORKSHOP.md                #   統合技術資料
 │   │   ├── SPEED_TERRAIN_TRIAL_LOG.md #   S4 試行錯誤ログ
-│   │   ├── notebooks/                 #   実行済み Jupyter（00 理論 + 01–05 デモ）
+│   │   ├── notebooks/                 #   実行済み Jupyter（00 理論 + 01–11 デモ・シナリオ）
 │   │   └── assets/                    #   GIF / MP4 / PNG / JSON 計算結果
 │   ├── stack_selection.md             # OSS 選定の評価軸と結論
 │   ├── top2_stack_comparison.md       # PyMPC vs MuJoCo iLQR 比較
@@ -200,7 +230,7 @@ mpc_dog/
 | [docs/pympc_2day/TUNING_GUIDE.md](docs/pympc_2day/TUNING_GUIDE.md) | **パラメータ調整早見表** — 成功/失敗パターン |
 | [docs/pympc_2day/WORKSHOP.md](docs/pympc_2day/WORKSHOP.md) | **統合技術資料**。理論・数式・アーキ・コードリンク・デモ結果 GIF |
 | [docs/pympc_2day/SPEED_TERRAIN_TRIAL_LOG.md](docs/pympc_2day/SPEED_TERRAIN_TRIAL_LOG.md) | Session 4 試行錯誤ログ（5 kph × 凸凹地形） |
-| [docs/pympc_2day/notebooks/](docs/pympc_2day/notebooks/) | **Step-by-step 実習**。理論 NB + セッション別デモ NB（00–05） |
+| [docs/pympc_2day/notebooks/](docs/pympc_2day/notebooks/) | **Step-by-step 実習**。理論 NB + セッション別デモ NB（00–11） |
 | [docs/pympc_2day/assets/](docs/pympc_2day/assets/) | **計算結果**。GIF/MP4/PNG、param study JSON、headless 検証結果 |
 | [docs/stack_selection.md](docs/stack_selection.md) | OSS 選定の評価軸と Phase 1–3 結論 |
 | [docs/top2_stack_comparison.md](docs/top2_stack_comparison.md) | PyMPC vs MuJoCo iLQR の比較（コンサル説明用） |
