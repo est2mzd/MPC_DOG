@@ -29,6 +29,8 @@ workshop = [
   "ipykernel>=6.29",
   "imageio>=2.34",
   "imageio-ffmpeg>=0.5",
+  "jax>=0.4.28",
+  "jaxlib>=0.4.28",
 ]
 dev = ["pytest>=7.0"]
 

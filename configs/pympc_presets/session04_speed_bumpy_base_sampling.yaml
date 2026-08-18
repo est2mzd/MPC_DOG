@@ -1,0 +1,33 @@
+# Session 4 (sampling track): 5 kph on bumpy terrains
+session_id: session04_speed_bumpy_base_sampling
+description: |
+  Parallel to session04_speed_bumpy_base. MPPI + resilient eval for bumpy_* scenes.
+
+patches:
+  robot: go2
+  mpc_params.type: sampling
+  mpc_params.sampling_method: mppi
+  mpc_params.device: cpu
+  mpc_params.num_parallel_computations: 800
+  mpc_params.num_sampling_iterations: 1
+  mpc_params.sigma_mppi: 3
+  mpc_params.mu: 0.42
+  mpc_params.use_foothold_optimization: false
+  simulation_params.reflex_trigger_mode: false
+  simulation_params.scene: perlin
+  simulation_params.gait: trot
+  simulation_params.mode: human
+  mpc_params.horizon: 12
+  mpc_params.dt: 0.02
+  simulation_params.mpc_frequency: 50
+  simulation_params.visual_foothold_adaptation: blind
+
+gait_patches:
+  trot:
+    step_freq: 1.25
+    duty_factor: 0.76
+
+ref_z_scale: 1.08
+
+notes: |
+  Scene set at runtime (bumpy_flat/uphill/downhill). Notebook 15 compares vs nominal winners.

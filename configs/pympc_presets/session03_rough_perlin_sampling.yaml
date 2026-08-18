@@ -1,0 +1,29 @@
+# Session 3b (sampling track): perlin rough terrain
+session_id: session03_rough_perlin_sampling
+description: |
+  Parallel to session03_rough_perlin. MPPI on continuous rough terrain.
+
+patches:
+  robot: go2
+  mpc_params.type: sampling
+  mpc_params.sampling_method: mppi
+  mpc_params.device: cpu
+  mpc_params.num_parallel_computations: 1000
+  mpc_params.num_sampling_iterations: 1
+  mpc_params.sigma_mppi: 2.5
+  mpc_params.mu: 0.52
+  mpc_params.use_foothold_optimization: false
+  simulation_params.reflex_trigger_mode: false
+  simulation_params.scene: perlin
+  simulation_params.gait: trot
+  simulation_params.mode: human
+  simulation_params.mpc_frequency: 50
+  simulation_params.visual_foothold_adaptation: blind
+
+gait_patches:
+  trot:
+    step_freq: 1.0
+    duty_factor: 0.78
+
+notes: |
+  Conservative gait vs nominal perlin preset; compare in notebook 14.

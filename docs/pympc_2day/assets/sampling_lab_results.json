@@ -1,0 +1,122 @@
+{
+  "smp_s1_flat": {
+    "lab_id": "smp_s1_flat",
+    "title": "S1 sampling — flat smoke",
+    "session": 1,
+    "preset": "session01_flat_smoke_sampling",
+    "nominal_preset": "session01_flat_smoke",
+    "scene": "flat",
+    "controller": "sampling_mppi",
+    "paper": "Turrisi IROS 2024",
+    "result": {
+      "mean_vx": 0.12322648545630359,
+      "std_vx": 0.04375632087736436,
+      "min_z": 0.28886123298545047,
+      "max_roll_deg": 2.3477922949657946,
+      "steps": 2000,
+      "terminated": false
+    }
+  },
+  "smp_s2_flat": {
+    "lab_id": "smp_s2_flat",
+    "title": "S2 sampling — flat tune baseline",
+    "session": 2,
+    "preset": "session02_flat_tune_sampling",
+    "nominal_preset": "session02_flat_tune",
+    "scene": "flat",
+    "controller": "sampling_mppi",
+    "paper": "Turrisi IROS 2024",
+    "result": {
+      "mean_vx": 0.11806131267775972,
+      "std_vx": 0.04011067045085495,
+      "min_z": 0.28887436014541645,
+      "max_roll_deg": 2.370588684799319,
+      "steps": 2000,
+      "terminated": false
+    }
+  },
+  "smp_s3a_boxes": {
+    "lab_id": "smp_s3a_boxes",
+    "title": "S3a sampling — random_boxes",
+    "session": "3a",
+    "preset": "session03_rough_boxes_sampling",
+    "nominal_preset": "session03_rough_boxes",
+    "scene": "random_boxes",
+    "controller": "sampling_mppi",
+    "paper": "Turrisi IROS 2024",
+    "result": {
+      "mean_vx": 0.11426439824322979,
+      "std_vx": 0.05128211140403118,
+      "min_z": 0.28881731589478293,
+      "max_roll_deg": 3.2868849994113116,
+      "steps": 2000,
+      "terminated": false
+    }
+  },
+  "smp_s3b_perlin": {
+    "lab_id": "smp_s3b_perlin",
+    "title": "S3b sampling — perlin",
+    "session": "3b",
+    "preset": "session03_rough_perlin_sampling",
+    "nominal_preset": "session03_rough_perlin",
+    "scene": "perlin",
+    "controller": "sampling_mppi",
+    "paper": "Turrisi IROS 2024",
+    "result": {
+      "mean_vx": 0.09275149081631881,
+      "std_vx": 0.0579340234373416,
+      "min_z": 0.7374993178916062,
+      "max_roll_deg": 7.015971009500911,
+      "steps": 2000,
+      "terminated": false
+    }
+  },
+  "smp_s4_bumpy_flat": {
+    "lab_id": "smp_s4_bumpy_flat",
+    "title": "S4 sampling — bumpy_flat resilient 12m",
+    "session": 4,
+    "preset": "session04_speed_bumpy_base_sampling",
+    "nominal_preset": "session04_speed_bumpy_base",
+    "scene": "bumpy_flat",
+    "controller": "sampling_mppi",
+    "paper": "Turrisi IROS 2024",
+    "result": {
+      "scene": "bumpy_flat",
+      "target_speed_kph": 3.0,
+      "target_mps": 0.8333333333333334,
+      "min_distance_m": 8.0,
+      "distance_m": 8.000047347955503,
+      "duration_s": 32.934,
+      "mean_vx": 0.24291150021119529,
+      "mean_kph": 0.874481400760303,
+      "falls": 2,
+      "steps": 16467,
+      "terminated": true,
+      "success": true
+    }
+  },
+  "smp_s4_bumpy_uphill": {
+    "lab_id": "smp_s4_bumpy_uphill",
+    "title": "S4 sampling — bumpy_uphill resilient 10m",
+    "session": 4,
+    "preset": "session04_speed_bumpy_base_sampling",
+    "nominal_preset": "session04_speed_bumpy_base",
+    "scene": "bumpy_uphill",
+    "controller": "sampling_mppi",
+    "paper": "Turrisi IROS 2024",
+    "result": {
+      "scene": "bumpy_uphill",
+      "target_speed_kph": 2.5,
+      "target_mps": 0.6944444444444444,
+      "min_distance_m": 8.0,
+      "distance_m": 8.001083520129406,
+      "duration_s": 35.022,
+      "mean_vx": 0.2284587836254177,
+      "mean_kph": 0.8224516210515037,
+      "falls": 0,
+      "steps": 17511,
+      "terminated": false,
+      "success": true
+    }
+  }
+}

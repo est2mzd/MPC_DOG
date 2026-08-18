@@ -1178,6 +1178,185 @@ plt.show()
     return nb(cells, "05")
 
 
+SAMPLING_TRACK_INTRO = """\
+> **Sampling トラック（Notebook 12–15）** — 既存 Session 1–4（nominal acados）を **壊さず** 並行追加。  
+> 技術: Turrisi et al. **IROS 2024** — JAX **MPPI**（`mpc_params.type: sampling`）。  
+> preset: `session0X_*_sampling.yaml` · 結果 JSON: `assets/sampling_lab_results.json`
+"""
+
+SAMPLING_COMPARE = """\
+## Nominal vs Sampling（同シナリオ）
+
+| | **Nominal（01–05）** | **Sampling（12–15）** |
+|---|---------------------|------------------------|
+| **論文** | Elobaid RAL 2025 centroidal NMPC | Turrisi IROS 2024 sample-based MPC |
+| **求解** | acados 勾配法 | JAX MPPI ロールアウト |
+| **GRF** | 最適化変数（明示） | サンプル軌道から選択 |
+| **足場 opt** | Session 3–4 で ON | **非対応**（gradient 専用） |
+| **preset** | `session0X_*` | `session0X_*_sampling` |
+"""
+
+
+def _sampling_setup_block() -> str:
+    return SETUP + """
+try:
+    import jax
+    print("JAX", jax.__version__, jax.devices())
+except ImportError as e:
+    raise ImportError("Install: uv pip install jax jaxlib") from e
+
+from sampling_labs import list_labs, run_lab, load_results, compare_table, SAMPLING_LABS
+"""
+
+
+def demo_sampling_s1_notebook() -> dict:
+    cells = [
+        md("""# 12 — Sampling MPC: Session 1 平坦スモーク（IROS 2024）
+
+**目的:** 同じ **flat / trot** シナリオで **MPPI（sampling）** と **nominal acados** を比較する。
+
+""" + SAMPLING_TRACK_INTRO),
+        md(SAMPLING_COMPARE.replace("**Nominal（01–05）**", "**Nominal（01–05）**").replace("Session 1", "**Session 1 ← 今ここ**")),
+        *gif_gallery(["s01_flat"], "参照: Nominal Session 1 GIF"),
+        code(_sampling_setup_block()),
+        md("## Step 1 — Sampling preset"),
+        code("""\
+preset = load_preset_yaml("session01_flat_smoke_sampling")
+print(preset["patches"]["mpc_params.type"], preset["patches"]["mpc_params.sampling_method"])
+"""),
+        md("## Step 2 — MPPI headless 4 s"),
+        code("""\
+apply_preset("session01_flat_smoke_sampling")
+smp = run_flat_sim(seconds=4.0)
+print("sampling:", smp["mean_vx"], smp["min_z"], smp["terminated"])
+"""),
+        md("## Step 3 — 同シナリオ nominal 比較"),
+        code("""\
+apply_preset("session01_flat_smoke")
+nom = run_flat_sim(seconds=4.0)
+fig = compare_runs([("nominal acados", nom), ("MPPI sampling", smp)])
+plt.suptitle("Session 1 flat: nominal vs sampling", y=1.02)
+plt.show()
+"""),
+        md("## Step 4 — キャッシュ結果（benchmark）"),
+        code("""\
+from sampling_labs import load_results
+import pandas as pd
+data = load_results()
+if "smp_s1_flat" in data:
+    display(pd.DataFrame([data["smp_s1_flat"]["result"]]))
+else:
+    print("Run: python scripts/run_sampling_benchmark.py --lab smp_s1_flat")
+"""),
+    ]
+    return nb(cells, "12")
+
+
+def demo_sampling_s2_notebook() -> dict:
+    cells = [
+        md("""# 13 — Sampling MPC: Session 2 平坦チューニング
+
+**目的:** `sigma_mppi` / 歩調を触り、サンプリング MPC の感度を体感。
+
+""" + SAMPLING_TRACK_INTRO),
+        md(SAMPLING_COMPARE),
+        *gif_gallery(["s02_tune"], "参照: Nominal Session 2 GIF"),
+        code(_sampling_setup_block()),
+        code("""\
+apply_preset("session02_flat_tune_sampling")
+base = run_flat_sim(seconds=4.0)
+apply_preset("session02_flat_tune_sampling")
+from pympc_lab import patch_config
+patch_config(**{"mpc.sigma_mppi": 5.0})
+high_sigma = run_flat_sim(seconds=4.0)
+fig = compare_runs([("sigma=3", base), ("sigma=5", high_sigma)])
+plt.suptitle("MPPI sigma sweep (flat)", y=1.02)
+plt.show()
+"""),
+        code("""\
+data = load_results()
+if "smp_s2_flat" in data:
+    display(pd.DataFrame([data["smp_s2_flat"]["result"]]))
+print("Re-run benchmark: python scripts/run_sampling_benchmark.py --lab smp_s2_flat")
+"""),
+    ]
+    return nb(cells, "13")
+
+
+def demo_sampling_s3_notebook() -> dict:
+    cells = [
+        md("""# 14 — Sampling MPC: Session 3 不整地（boxes / perlin）
+
+**注意:** sampling では **gradient 足場最適化は無効**。ロールアウト頑健性 + blind adaptation で走る。
+
+""" + SAMPLING_TRACK_INTRO),
+        md(SAMPLING_COMPARE),
+        *gif_gallery(["s03_boxes", "s03_perlin"], "参照: Nominal Session 3 GIF"),
+        code(_sampling_setup_block()),
+        code("""\
+for scene, preset in [("random_boxes", "session03_rough_boxes_sampling"), ("perlin", "session03_rough_perlin_sampling")]:
+    apply_preset(preset)
+    m = run_flat_sim(seconds=4.0, scene=scene)
+    print(scene, "vx=", round(m["mean_vx"], 3), "terminated=", m["terminated"])
+"""),
+        code("""\
+import pandas as pd
+rows = compare_table()
+if rows:
+    display(pd.DataFrame(rows))
+"""),
+    ]
+    return nb(cells, "14")
+
+
+def demo_sampling_s4_notebook() -> dict:
+    cells = [
+        md("""# 15 — Sampling MPC: Session 4 凸凹坂（resilient 短距離）
+
+**目的:** 同じ **bumpy_*** 地形で sampling resilient を試し、nominal 勝者 JSON と比較。
+
+> sampling は 5 kph / 20 m より **保守速度・短距離** から検証（CPU MPPI）。
+
+""" + SAMPLING_TRACK_INTRO),
+        md(SAMPLING_COMPARE),
+        *gif_gallery(["s04_flat", "s04_uphill", "s04_downhill"], "参照: Nominal Session 4 GIF"),
+        code(_sampling_setup_block()),
+        code("""\
+from pympc_lab import load_speed_winners
+winners = load_speed_winners()
+for scene, w in winners.items():
+    print(scene, w["result"]["distance_m"], "m", "falls", w["result"].get("falls"))
+"""),
+        code("""\
+apply_preset("session04_speed_bumpy_base_sampling")
+from pympc_lab import run_speed_terrain_sim_resilient
+smp = run_speed_terrain_sim_resilient(
+    scene="bumpy_flat",
+    target_speed_kph=3.0,
+    min_distance_m=8.0,
+    max_seconds=120.0,
+    speed_ramp_s=14.0,
+    mu=0.45,
+    step_freq=1.1,
+    duty_factor=0.78,
+    ref_z_scale=1.08,
+    max_falls=15,
+)
+print("sampling bumpy_flat:", smp["distance_m"], "m falls", smp.get("falls"), "success", smp.get("success"))
+fig = compare_runs([("MPPI resilient", smp)])
+plt.show()
+"""),
+        code("""\
+data = load_results()
+for key in ("smp_s4_bumpy_flat", "smp_s4_bumpy_uphill"):
+    if key in data:
+        r = data[key]["result"]
+        print(key, r.get("distance_m"), "m", "falls", r.get("falls"))
+"""),
+    ]
+    return nb(cells, "15")
+
+
 def tuning_journey_notebook() -> dict:
     cells = [
         md("""# 06 — MPC 設計者ジャーニー: 失敗・成功・体験（統合）
@@ -1668,6 +1847,10 @@ def main() -> None:
         ("04_demo_session03b_rough_perlin.ipynb", demo_s3b_notebook()),
         ("05_demo_session04_speed_bumpy.ipynb", demo_s4_notebook()),
         ("06_mpc_tuning_journey.ipynb", tuning_journey_notebook()),
+        ("12_demo_sampling_session01_flat.ipynb", demo_sampling_s1_notebook()),
+        ("13_demo_sampling_session02_tune.ipynb", demo_sampling_s2_notebook()),
+        ("14_demo_sampling_session03_rough.ipynb", demo_sampling_s3_notebook()),
+        ("15_demo_sampling_session04_bumpy.ipynb", demo_sampling_s4_notebook()),
     ]
     for part, fname, title, nums in SCENARIO_PARTS:
         notebooks.append((fname, scenario_part_notebook(part, fname, title, nums)))

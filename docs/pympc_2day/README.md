@@ -40,6 +40,7 @@
 | **06** | **[06_mpc_tuning_journey.ipynb](./notebooks/06_mpc_tuning_journey.ipynb)** | **MPC 調整ジャーニー統合（fail/success 体験）** |
 | **07–10** | **[07–10 高度シナリオ](./notebooks/07_scenarios_flat_foundation.ipynb)** | **20 シナリオ（路面·速度·勾配·遷移）— お客様 QA 用** |
 | **11** | **[11_qa_discussion_master.ipynb](./notebooks/11_qa_discussion_master.ipynb)** | **QA ディスカッション索引（全 20 シナリオ横断）** |
+| **12–15** | **[Sampling MPC トラック](./notebooks/12_demo_sampling_session01_flat.ipynb)** | **IROS 2024 MPPI — Session 1–4 同シナリオ（nominal と並行）** |
 
 ### デモ映像・計算結果
 
@@ -49,6 +50,7 @@
 | headless 検証 | [assets/headless_results.json](./assets/headless_results.json) |
 | パラメータスタディ | [assets/param_study_results.json](./assets/param_study_results.json) |
 | Session 4 勝者パラメータ | [assets/speed_terrain_results.json](./assets/speed_terrain_results.json) |
+| Sampling MPC ベンチ | [assets/sampling_lab_results.json](./assets/sampling_lab_results.json) |
 
 ---
 

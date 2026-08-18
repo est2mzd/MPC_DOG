@@ -103,7 +103,7 @@ flowchart LR
 
 | 技術 | 論文 | 切り替え方 |
 |------|------|------------|
-| **GPU Sample-Based Stochastic MPC**（JAX / MPPI・CEM） | Turrisi et al., **IROS 2024** — [On the Benefits of GPU Sample-Based Stochastic Predictive Controllers](https://arxiv.org/abs/2403.11383) | `mpc_params.type: sampling`（[WORKSHOP.md](docs/pympc_2day/WORKSHOP.md) 参照） |
+| **GPU Sample-Based Stochastic MPC**（JAX / MPPI・CEM） | Turrisi et al., **IROS 2024** — [On the Benefits of GPU Sample-Based Stochastic Predictive Controllers](https://arxiv.org/abs/2403.11383) | `mpc_params.type: sampling` · **Notebook 12–15** · preset `session0X_*_sampling` |
 
 ### **文献・比較用**（`external/` に clone、本 repo の sim パイプラインでは未実行）
 
@@ -128,7 +128,7 @@ flowchart LR
 | **採用 OSS** | [Quadruped-PyMPC](https://github.com/iit-DLSLab/Quadruped-PyMPC)（IIT DLS Lab、Unitree 実機実績） |
 | **ロボット** | Unitree Go2（MuJoCo sim） |
 | **環境管理** | [uv](https://github.com/astral-sh/uv)（Python 3.11、`.venv`） |
-| **教材** | [docs/pympc_2day/](docs/pympc_2day/) — 教育用 Markdown + 実行済み Notebook + GIF/MP4 |
+| **教材** | Notebook 00–11（nominal acados）+ **12–15（IROS 2024 sampling MPPI）** + GIF/MP4 |
 
 **制御パイプライン（3 層）**
 
