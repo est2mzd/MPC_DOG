@@ -1,0 +1,10 @@
+{
+  "tag": "s04_uphill",
+  "scene": "bumpy_uphill",
+  "target_speed_kph": 5.0,
+  "final_dist_m": 20.001,
+  "final_x_m": 20.001,
+  "falls": 19,
+  "n_saved_frames": 25,
+  "n_gif_frames": 25
+}

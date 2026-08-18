@@ -1,0 +1,8 @@
+{
+  "tag": "s03_perlin",
+  "scene": "perlin",
+  "final_x_m": 1.739,
+  "n_saved_frames": 300,
+  "n_gif_frames": 50,
+  "n_steps": 4500
+}

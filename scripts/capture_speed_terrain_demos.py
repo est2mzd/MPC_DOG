@@ -31,10 +31,10 @@ class SpeedCaptureProfile:
     min_distance_m: float = 20.0
     max_seconds: float = 180.0
     max_falls: int = 30
-    frame_stride: int = 25
-    max_frames: int = 55
-    distance: float = 5.5
-    elevation: float = -34.0
+    distance_milestones: tuple[float, ...] = (0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20)
+    max_gif_frames: int = 50
+    distance: float = 6.0
+    elevation: float = -38.0
     azimuth: float = 92.0
     overlay_lines: list[str] = field(default_factory=list)
 
@@ -48,7 +48,7 @@ def _load_profiles() -> list[SpeedCaptureProfile]:
     }
     profiles: list[SpeedCaptureProfile] = []
     for scene, spec in data.items():
-        mf = int(spec.get("max_falls", spec.get("result", {}).get("falls", 25)) + 5)
+        mf = int(spec.get("max_falls", spec.get("result", {}).get("falls", 25)) + 8)
         profiles.append(
             SpeedCaptureProfile(
                 scene=scene,
@@ -79,6 +79,15 @@ def _try_mujoco_gl() -> str:
         except Exception as exc:
             print(f"MUJOCO_GL={backend} failed: {exc}")
     raise RuntimeError("No working MUJOCO_GL backend")
+
+
+def _pick_frames(saved: list[Path], n: int = 50) -> list[Path]:
+    if len(saved) <= n:
+        return saved
+    import numpy as np
+
+    idx = np.linspace(0, len(saved) - 1, n, dtype=int)
+    return [saved[i] for i in idx]
 
 
 def _draw_overlay(img, lines: list[str]):
@@ -174,6 +183,8 @@ def capture(profile: SpeedCaptureProfile) -> Path:
     cumulative_m = 0.0
     falls = 0
     session_start = float(env.base_pos[0])
+    next_milestone = 0
+    last_capture_dist = -1.0
 
     def reset_segment() -> None:
         nonlocal session_start
@@ -181,7 +192,7 @@ def capture(profile: SpeedCaptureProfile) -> Path:
         wrapper.reset(initial_feet_pos=env.feet_pos(frame="world"))
         session_start = float(env.base_pos[0])
 
-    def render_frame(i: int, dist_m: float) -> None:
+    def render_frame(i: int, dist_m: float, *, reason: str) -> None:
         cam.lookat[:] = env.base_pos
         cam.distance = profile.distance
         cam.elevation = profile.elevation
@@ -189,9 +200,25 @@ def capture(profile: SpeedCaptureProfile) -> Path:
         renderer.update_scene(env.mjData, camera=cam)
         lines = profile.overlay_lines + [f"dist {dist_m:.1f} m | falls {falls}"]
         img = _draw_overlay(renderer.render(), lines)
-        path = out / f"frame_{i:04d}.png"
+        path = out / f"frame_{len(saved):04d}_{reason}.png"
         img.save(path)
         saved.append(path)
+
+    def maybe_capture(step_i: int, dist_m: float, *, reason: str = "dist") -> None:
+        nonlocal next_milestone, last_capture_dist
+        while (
+            next_milestone < len(profile.distance_milestones)
+            and dist_m >= profile.distance_milestones[next_milestone]
+        ):
+            render_frame(step_i, dist_m, reason=f"m{profile.distance_milestones[next_milestone]:.0f}")
+            next_milestone += 1
+            last_capture_dist = dist_m
+        # Also capture on large fall events (reset storytelling)
+        if reason == "fall" and dist_m - last_capture_dist >= 0.5:
+            render_frame(step_i, dist_m, reason="fall")
+            last_capture_dist = dist_m
+
+    maybe_capture(0, 0.0)
 
     n_max = int(profile.max_seconds / sim_dt)
     for step_i in range(n_max):
@@ -244,12 +271,12 @@ def capture(profile: SpeedCaptureProfile) -> Path:
         seg_x = float(env.base_pos[0]) - session_start
         dist_m = cumulative_m + max(seg_x, 0.0)
 
-        if step_i % profile.frame_stride == 0 and len(saved) < profile.max_frames:
-            render_frame(step_i, dist_m)
+        maybe_capture(step_i, dist_m)
 
         if term or trunc:
             cumulative_m += max(seg_x, 0.0)
             falls += 1
+            maybe_capture(step_i, cumulative_m, reason="fall")
             if falls > profile.max_falls or cumulative_m >= profile.min_distance_m:
                 break
             reset_segment()
@@ -257,8 +284,7 @@ def capture(profile: SpeedCaptureProfile) -> Path:
 
         if dist_m >= profile.min_distance_m:
             cumulative_m = dist_m
-            if len(saved) < profile.max_frames:
-                render_frame(step_i, dist_m)
+            render_frame(step_i, dist_m, reason="goal20")
             break
 
     env.close()
@@ -267,7 +293,9 @@ def capture(profile: SpeedCaptureProfile) -> Path:
 
     gif_path = ASSETS / f"demo_{profile.tag}.gif"
     png_path = ASSETS / f"demo_{profile.tag}.png"
-    frames = [Image.open(p).convert("RGB") for p in saved]
+    meta_path = ASSETS / f"demo_{profile.tag}.meta.json"
+    gif_frames = _pick_frames(saved, n=profile.max_gif_frames)
+    frames = [Image.open(p).convert("RGB") for p in gif_frames]
     frames[0].save(
         gif_path,
         save_all=True,
@@ -276,8 +304,30 @@ def capture(profile: SpeedCaptureProfile) -> Path:
         loop=0,
         optimize=True,
     )
-    frames[-1].save(png_path)
-    print(f"saved {len(saved)} frames, dist={cumulative_m:.2f} m falls={falls} -> {gif_path}")
+    try:
+        import imageio.v3 as iio
+
+        mp4_path = ASSETS / f"demo_{profile.tag}.mp4"
+        stack = np.stack([np.array(Image.open(p).convert("RGB")) for p in gif_frames])
+        iio.imwrite(mp4_path, stack, fps=8, codec="libx264")
+        print(f"mp4: {mp4_path}")
+    except Exception as exc:
+        print(f"mp4 skip: {exc}")
+
+    last_frame = saved[-1]
+    Image.open(last_frame).convert("RGB").save(png_path)
+    meta = {
+        "tag": profile.tag,
+        "scene": profile.scene,
+        "target_speed_kph": profile.target_speed_kph,
+        "final_dist_m": round(cumulative_m, 3),
+        "final_x_m": round(cumulative_m, 3),
+        "falls": falls,
+        "n_saved_frames": len(saved),
+        "n_gif_frames": len(gif_frames),
+    }
+    meta_path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
+    print(f"saved {len(saved)} frames ({len(gif_frames)} in GIF), dist={cumulative_m:.2f} m falls={falls} -> {gif_path}")
     return gif_path
 
 

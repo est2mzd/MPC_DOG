@@ -1,0 +1,8 @@
+{
+  "tag": "s03_boxes",
+  "scene": "random_boxes",
+  "final_x_m": 1.293,
+  "n_saved_frames": 300,
+  "n_gif_frames": 50,
+  "n_steps": 4500
+}

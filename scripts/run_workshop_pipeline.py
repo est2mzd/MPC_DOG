@@ -88,11 +88,16 @@ def step_execute_notebooks() -> None:
         )
 
 
+def step_verify_assets() -> None:
+    print("\n=== Verify workshop assets ===")
+    run([str(PYTHON), str(ROOT / "scripts" / "verify_workshop_assets.py")], timeout=120)
+
+
 def main() -> int:
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--from-step", choices=("all", "capture", "notebooks"), default="all")
+    parser.add_argument("--from-step", choices=("all", "capture", "notebooks", "verify"), default="all")
     args = parser.parse_args()
 
     if not PYTHON.is_file():
@@ -105,10 +110,14 @@ def main() -> int:
         step_generate_notebooks()
         step_capture_gifs()
         step_execute_notebooks()
+        step_verify_assets()
     elif args.from_step == "capture":
         step_generate_notebooks()
         step_capture_gifs()
         step_execute_notebooks()
+        step_verify_assets()
+    elif args.from_step == "verify":
+        step_verify_assets()
     else:
         step_execute_notebooks()
     print("\n=== WORKSHOP PIPELINE OK ===")

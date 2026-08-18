@@ -595,6 +595,20 @@ def load_param_study() -> list[dict]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def load_speed_trial_log() -> list[dict]:
+    path = ASSETS / "speed_terrain_trial_log.json"
+    if not path.is_file():
+        raise FileNotFoundError(f"Missing {path}")
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def load_speed_winners() -> dict:
+    path = ASSETS / "speed_terrain_results.json"
+    if not path.is_file():
+        raise FileNotFoundError(f"Missing {path}")
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
 def plot_friction_cone(mu: float = 0.5, f_max: float = 150.0, ax=None):
     """Visualize friction cone in Fx-Fz plane."""
     import matplotlib.pyplot as plt

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import json
 import os
 import subprocess
 import sys
@@ -115,6 +116,16 @@ def _draw_overlay(img, lines: list[str]):
         draw.text((10, y), line, fill=(255, 255, 255, 255), font=font)
         y += th + 8
     return Image.alpha_composite(im, overlay).convert("RGB")
+
+
+def _pick_frames(saved: list[Path], n: int = 50) -> list[Path]:
+    """Evenly sample frames so GIF spans the full run (not just the first 1–2 s)."""
+    if len(saved) <= n:
+        return saved
+    import numpy as np
+
+    idx = np.linspace(0, len(saved) - 1, n, dtype=int)
+    return [saved[i] for i in idx]
 
 
 def capture(profile: CaptureProfile) -> Path:
@@ -240,7 +251,9 @@ def capture(profile: CaptureProfile) -> Path:
 
     gif_path = ASSETS / f"demo_{profile.tag}.gif"
     png_path = ASSETS / f"demo_{profile.tag}.png"
-    frames = [Image.open(p).convert("RGB") for p in saved[:50]]
+    meta_path = ASSETS / f"demo_{profile.tag}.meta.json"
+    gif_frames = _pick_frames(saved, n=50)
+    frames = [Image.open(p).convert("RGB") for p in gif_frames]
     frames[0].save(
         gif_path,
         save_all=True,
@@ -253,14 +266,25 @@ def capture(profile: CaptureProfile) -> Path:
         import imageio.v3 as iio
 
         mp4_path = ASSETS / f"demo_{profile.tag}.mp4"
-        stack = np.stack([np.array(Image.open(p).convert("RGB")) for p in saved[:50]])
+        stack = np.stack([np.array(Image.open(p).convert("RGB")) for p in gif_frames])
         iio.imwrite(mp4_path, stack, fps=8, codec="libx264")
         print(f"mp4: {mp4_path}")
     except Exception as exc:
         print(f"mp4 skip: {exc}")
 
-    frames[-1].save(png_path)
-    print(f"saved {len(saved)} frames, final x={final_x:.2f} -> {gif_path}")
+    # PNG + metadata from **last** captured frame (end of run)
+    last_frame = saved[-1]
+    Image.open(last_frame).convert("RGB").save(png_path)
+    meta = {
+        "tag": profile.tag,
+        "scene": scene,
+        "final_x_m": round(final_x, 3),
+        "n_saved_frames": len(saved),
+        "n_gif_frames": len(gif_frames),
+        "n_steps": profile.n_steps,
+    }
+    meta_path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
+    print(f"saved {len(saved)} frames ({len(gif_frames)} in GIF), final x={final_x:.2f} -> {gif_path}")
     return gif_path
 
 

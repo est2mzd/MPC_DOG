@@ -15,7 +15,13 @@
 
 | 種別 | パス |
 |------|------|
-| 統合資料 | 本ファイル |
+| **インデックス** | [README.md](./README.md) |
+| 受講者ガイド | [LEARNER_GUIDE.md](./LEARNER_GUIDE.md) |
+| 講師ガイド | [INSTRUCTOR_GUIDE.md](./INSTRUCTOR_GUIDE.md) |
+| 調整早見表 | [TUNING_GUIDE.md](./TUNING_GUIDE.md) |
+| MPC 設計者体験 | [MPC_TUNING_JOURNEY.md](./MPC_TUNING_JOURNEY.md) |
+| 統合技術資料 | 本ファイル |
+| Session 4 試行ログ | [SPEED_TERRAIN_TRIAL_LOG.md](./SPEED_TERRAIN_TRIAL_LOG.md) |
 | 実行済み Notebook | [notebooks/](./notebooks/) |
 | 計算結果 | [assets/](./assets/) |
 
@@ -81,7 +87,7 @@ GRF と WBC は **対立する選択肢ではなく、MPC の出力を実機で�
 | 日 | 午前 | 午後 |
 |----|------|------|
 | **1 日目** | [00 理論 NB](./notebooks/00_theory_grf_mpc_wbc.ipynb) + 環境構築 + [01 デモ NB](./notebooks/01_demo_session01_flat_smoke.ipynb) | [02 デモ NB](./notebooks/02_demo_session02_flat_tune.ipynb) |
-| **2 日目** | [03a/03b デモ NB](./notebooks/03_demo_session03a_rough_boxes.ipynb) | Notebook 復習 + パイプライン再実行 |
+| **2 日目** | [03a/03b デモ NB](./notebooks/03_demo_session03a_rough_boxes.ipynb) | [05 Session 4](./notebooks/05_demo_session04_speed_bumpy.ipynb) + 復習 |
 
 ```bash
 ./scripts/setup_references.sh && ./scripts/setup_uv_workshop.sh
@@ -89,7 +95,7 @@ source .venv/bin/activate && . .env.workshop
 jupyter lab docs/pympc_2day/notebooks/
 ```
 
-### 3.2 3 セッション概要
+### 3.2 5 セッション概要
 
 | セッション | プリセット | ゴール |
 |------------|------------|--------|
@@ -97,6 +103,10 @@ jupyter lab docs/pympc_2day/notebooks/
 | **2** | `session02_flat_tune` | Q/R・μ・ゲイトを触って体感 |
 | **3a** | `session03_rough_boxes` | 段差・箱 terrain |
 | **3b** | `session03_rough_perlin` | 連続起伏（本番デモ） |
+| **4** | `session04_bumpy_*` | 5 kph × 凸凹坂 20 m（試行錯誤） |
+
+受講者向け詳細チェックリスト：[LEARNER_GUIDE.md §5](./LEARNER_GUIDE.md#5-セッション別学ぶことやること確認)  
+講師向けデモ台本：[INSTRUCTOR_GUIDE.md §3](./INSTRUCTOR_GUIDE.md#3-セッション別デモ台本)
 
 ### 3.3 環境（uv）
 
@@ -121,6 +131,9 @@ python scripts/run_workshop_pipeline.py   # 計算・GIF・Notebook 一括
 - Session 1: headless OK + [demo GIF](./assets/demo_s01_flat.gif) で 3 層を説明できる
 - Session 2: μ / step_freq を 1 つずつ変えた **Notebook 実験** を説明できる
 - Session 3: 足場 opt ON の意味を 1 文で説明できる
+- Session 4: no-fall vs resilient の違いと、下り坂 tuning 方向を説明できる
+
+調整早見表：[TUNING_GUIDE.md](./TUNING_GUIDE.md)
 
 ---
 
@@ -297,13 +310,13 @@ def compute_actions(...):
 
 ### 4 セッションの違い（必読）
 
-| | S1 flat | S2 tune | S3a boxes | S3b perlin |
-|---|---------|---------|-----------|------------|
-| **scene** | flat | flat | **random_boxes** | **perlin** |
-| **足場 opt** | OFF | OFF | ON | ON |
-| **主な目的** | 最小構成で動作確認 | μ / 歩調チューニング | 段差・箱 | 連続起伏 |
-| **GIFで見る点** | 平坦＋標準 trot (1.4 Hz) | 平坦＋**速い trot** (1.75 Hz) | **箱障害** | **うねり地形** |
-| **GIF** | [demo_s01_flat.gif](./assets/demo_s01_flat.gif) | [demo_s02_tune.gif](./assets/demo_s02_tune.gif) | [demo_s03_boxes.gif](./assets/demo_s03_boxes.gif) | [demo_s03_perlin.gif](./assets/demo_s03_perlin.gif) |
+| | S1 flat | S2 tune | S3a boxes | S3b perlin | **S4 speed+bumpy** |
+|---|---------|---------|-----------|------------|---------------------|
+| **scene** | flat | flat | **random_boxes** | **perlin** | **bumpy_flat / uphill / downhill** |
+| **足場最適化** | OFF | OFF | ON | ON | ON |
+| **主な目的** | 最小構成で動作確認 | μ / 歩調チューニング | 段差・離散障害 | 連続起伏 | **5 kph 指令・20 m・坂道** |
+| **GIFで見る点** | 平坦＋標準 trot | 平坦＋**速い trot** | **箱が見える** | **うねり地形** | **凸凹＋坂＋距離表示** |
+| **GIF** | demo_s01_flat | demo_s02_tune | demo_s03_boxes | demo_s03_perlin | demo_s04_{flat,uphill,downhill} |
 
 > **S1 と S2 は地形とも平坦**です。GIF の違いは **歩調（S2 は速い trot）** と **Notebook 内の実験内容** です。  
 > **旧 GIF が全部平坦に見えた原因:** 600 step（≈1.2 s）では S3 の障害物エリア（x≈1 m 以降）に到達する前に終了していた。現行 GIF は S3 を **約 9 s 走行**＋**画面左上ラベル**＋**ワイド intro カメラ** で撮り直しています。
@@ -484,6 +497,16 @@ python scripts/run_workshop_pipeline.py --from-step notebooks # Notebook 実行�
 ```
 
 MP4 エンコードには `imageio-ffmpeg`（uv workshop 依存に同梱）を使用。
+
+**アセット検証（デモ GIF が平坦路だけになっていないか等）:**
+
+```bash
+python scripts/verify_workshop_assets.py
+# または
+python scripts/run_workshop_pipeline.py --from-step verify
+```
+
+各デモ PNG 横の `demo_*.meta.json` に `scene` / `final_dist_m` / `final_x_m` が記録されます。
 
 ---
 

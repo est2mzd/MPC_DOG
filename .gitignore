@@ -7,3 +7,7 @@ __pycache__/
 .env.workshop
 *.egg-info/
 .pytest_cache/
+
+# Workshop capture intermediates (regenerate via scripts)
+docs/pympc_2day/assets/frames_*/
+docs/pympc_2day/assets/tuning_lab_results.json

@@ -1,0 +1,8 @@
+{
+  "tag": "s01_flat",
+  "scene": "flat",
+  "final_x_m": 0.538,
+  "n_saved_frames": 80,
+  "n_gif_frames": 50,
+  "n_steps": 1200
+}

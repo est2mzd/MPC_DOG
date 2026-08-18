@@ -82,6 +82,38 @@ from pympc_lab import (
     run_speed_terrain_sim_resilient,
 )
 
+from tuning_labs import (
+    TUNING_LABS,
+    list_labs,
+    run_lab,
+    run_lab_pair,
+    plot_speed_trial_journey,
+    plot_param_study_mu,
+    load_cached_lab_results,
+)
+
+%matplotlib inline
+plt.rcParams["figure.figsize"] = (9, 4)
+print(f"repo: {ROOT}")
+"""
+
+THEORY_SETUP = """\
+import sys
+from pathlib import Path
+
+ROOT = Path.cwd()
+for p in [ROOT, *ROOT.parents]:
+    if (p / "scripts" / "pympc_lab.py").exists():
+        ROOT = p
+        break
+sys.path.insert(0, str(ROOT / "scripts"))
+
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+
+from pympc_lab import TUNING_GUIDE, plot_friction_cone
+
 %matplotlib inline
 plt.rcParams["figure.figsize"] = (9, 4)
 print(f"repo: {ROOT}")
@@ -93,31 +125,30 @@ def theory_notebook() -> dict:
         md("""# 00 — 理論理解: GRF · MPC · WBC（MPC設計者向け）
 
 **対象:** 四足制御初心者 + ADAS操舵MPC経験者  
-**ゴール:** 「何を調整すると何が起きるか」を **失敗と成功のパターン** として理解する
+**ゴール:** 3 層アーキテクチャを **数式と数値デモ** で結びつけ、「何を調整すると何が起きるか」を理解する
 
 ---
 
 ## この Notebook の進め方
 
-1. **Step 1–4:** 3層パイプラインと数式を「直觉」で理解  
-2. **Step 5–6:** 摩擦円錐を **目で見る**（μ の意味）  
-3. **Step 7:** MPC設計者向け **調整マトリクス** を読む  
-4. **Step 8:** 簡単な数値実験（SRB の合力）  
-5. **Step 9:** デモ Notebook へ進む
+1. **Step 1:** 3 層パイプライン概観  
+2. **Step 2:** 機体モデル化（SRB）の理論式 + **数値デモ A**  
+3. **Step 3:** 足接触反力（GRF）の理論式 + **数値デモ B**  
+4. **Step 4:** 3 層アーキテクチャと数式の紐付け + **数値デモ C**  
+5. **Step 5–6:** MPC 定式化 · WBC 相当層  
+6. **Step 7–8:** 摩擦円錐可視化 · SRB 合力  
+7. **Step 9:** 調整マトリクス · チェックリスト  
 
 > 詳細版: [WORKSHOP.md](../WORKSHOP.md)
 """),
-        code(SETUP),
+        code(THEORY_SETUP),
         md("""## Step 1 — 四足制御の「定番3層」（対立ではなく接続）
 
 ```
-速度指令 / ゲイト
-      ↓
-MPC (SRB)  … 最適化変数 = 接地反力 GRF（12次元）
-      ↓
-WBC相当     … Stance: GRF→関節τ / Swing: 足軌道+PD
-      ↓
-MuJoCo / 実機
+Layer 1  速度指令 / ゲイト (trot)     →  接触スケジュール s_i(k)
+Layer 2  MPC (SRB)                   →  最適 GRF u = [F_1…F_4]  (12D)
+Layer 3  WBC 相当                    →  Stance: τ=J^T F / Swing: 軌道+PD
+         MuJoCo / 実機               →  全関節トルク τ
 ```
 
 **ADAS MPC との対応**
@@ -131,42 +162,324 @@ MuJoCo / 実機
 
 **初心者向け一言:** MPCは「各足が地面を **どれだけ蹴るか**」を決める。WBCは「その蹴りを **関節で実現** する」。
 """),
-        md("""## Step 2 — GRF（Ground Reaction Force）とは
+        md("""## Step 2 — 機体モデル化（SRB）の理論式
+
+四足ロボットを **質量 $m$・慣性テンソル $\\mathbf{I}$** の剛体 1 個（Single Rigid Body, SRB）で近似する。
+
+### 状態ベクトル（centroidal 系のイメージ）
+
+$$
+\\mathbf{x} = \\big[ \\mathbf{p}^\\top, \\boldsymbol{\\Theta}^\\top, \\mathbf{v}^\\top, \\boldsymbol{\\omega}^\\top \\big]^\\top
+$$
+
+| 記号 | 意味 |
+|------|------|
+| $\\mathbf{p} \\in \\mathbb{R}^3$ | CoM（重心）位置 |
+| $\\boldsymbol{\\Theta}$ | 姿勢（Euler 角または quaternion） |
+| $\\mathbf{v}$ | CoM 並進速度 |
+| $\\boldsymbol{\\omega}$ | 角速度（ボディ or 世界系 — 実装に依存） |
+
+### 入力
+
+各足 $i \\in \\{\\mathrm{FL,FR,RL,RR}\\}$ の GRF:
+
+$$
+\\mathbf{F}_i = (F_{ix}, F_{iy}, F_{iz})^\\top, \\quad
+\\mathbf{u} = [\\mathbf{F}_1^\\top, \\ldots, \\mathbf{F}_4^\\top]^\\top \\in \\mathbb{R}^{12}
+$$
+
+### 並進（Newton の第 2 法則）
+
+$$
+m \\dot{\\mathbf{v}} = \\sum_{i=1}^{4} \\mathbf{F}_i + m \\mathbf{g}
+$$
+
+### 回転（Euler の運動方程式, CoM 周り）
+
+$$
+\\mathbf{I} \\dot{\\boldsymbol{\\omega}} + \\boldsymbol{\\omega} \\times (\\mathbf{I}\\boldsymbol{\\omega})
+  = \\sum_{i=1}^{4} \\mathbf{r}_i \\times \\mathbf{F}_i
+$$
+
+$\\mathbf{r}_i$ は CoM から足 $i$ の作用点へのベクトル。
+
+### 離散化（MPC で使う形）
+
+サンプリング $\\Delta t$ で
+
+$$
+\\mathbf{x}_{k+1} = f_{\\mathrm{SRB}}(\\mathbf{x}_k, \\mathbf{u}_k)
+$$
+
+PyMPC デフォルト: $N=12$, $\\Delta t=0.02$ s → **0.24 s 先読み**。
+
+> **MPC 屋メモ:** 全 12 関節を直接 MPC するのではなく、**低次元の $\\mathbf{u}$（GRF）** で CoM 運動を計画し、関節は Layer 3 に任せる。
+"""),
+        code("""\
+# --- 数値デモ A: SRB 並進・回転（足反力 → 加速度）---
+m = 15.0          # Go2 近似 [kg]
+Izz = 0.35        # ヨー慣性 [kg·m²]（教学用の代表値）
+g = 9.81
+
+# 4 足の GRF [N] と CoM から見た足位置 [m]（平面近似: x 前, z 上）
+feet = ["FL", "FR", "RL", "RR"]
+F = np.array([
+    [40, 0, 100],   # FL: 前向きに蹴る
+    [40, 0, 100],   # FR
+    [-10, 0, 100],  # RL
+    [-10, 0, 100],  # RR
+], dtype=float)
+r = np.array([
+    [0.25, 0, -0.15],   # FL: 前左
+    [0.25, 0, 0.15],    # FR
+    [-0.25, 0, -0.15],  # RL
+    [-0.25, 0, 0.15],   # RR
+])
+
+F_sum = F.sum(axis=0)
+a = F_sum[:3] / m + np.array([0.0, 0.0, -g])  # v_dot = sum(F)/m + g
+
+# 2D トルク（y 軸回り）: tau_y = sum(r_x * F_z - r_z * F_x)
+tau_y = np.sum(r[:, 0] * F[:, 2] - r[:, 2] * F[:, 0])
+alpha_y = tau_y / Izz
+
+print("=== SRB dynamics from foot forces ===")
+print(f"sum Fx={F_sum[0]:.1f} N  sum Fz={F_sum[2]:.1f} N  (mg={m*g:.1f} N)")
+print(f"CoM accel ax={a[0]:.2f} m/s²  az={a[2]:.2f} m/s²")
+print(f"yaw torque={tau_y:.1f} N·m → alpha_y={alpha_y:.2f} rad/s²")
+
+# 0.2 s 一定力で CoM 速度を更新（Euler 積分）
+dt = 0.02
+v = np.zeros(3)
+p = np.zeros(3)
+traj_p, traj_v = [p.copy()], [v.copy()]
+for _ in range(10):
+    v = v + a * dt
+    p = p + v * dt
+    traj_p.append(p.copy())
+    traj_v.append(v.copy())
+
+traj_p = np.array(traj_p)
+traj_v = np.array(traj_v)
+t = np.arange(len(traj_p)) * dt
+
+fig, axes = plt.subplots(1, 2, figsize=(10, 3.5))
+axes[0].plot(t, traj_p[:, 0], "o-", label="CoM x [m]")
+axes[0].set_xlabel("time [s]")
+axes[0].set_ylabel("position")
+axes[0].grid(True, alpha=0.3)
+axes[0].legend()
+axes[1].plot(t, traj_v[:, 0], "o-", label="vx [m/s]")
+axes[1].set_xlabel("time [s]")
+axes[1].set_ylabel("velocity")
+axes[1].grid(True, alpha=0.3)
+axes[1].legend()
+fig.suptitle("Demo A: constant GRF → SRB CoM motion (0.2 s)", y=1.02)
+plt.tight_layout()
+plt.show()
+"""),
+        md("""## Step 3 — 足の接触反力（GRF）の取り扱い — 理論式
+
+### 接触スケジュール（ゲイト）
+
+足 $i$ の stance / swing をバイナリ $s_i(k) \\in \\{0,1\\}$ で表す（Layer 1 が生成）:
+
+$$
+s_i(k) = 1 \\Rightarrow \\text{stance（地面反力あり）}, \\quad
+s_i(k) = 0 \\Rightarrow \\text{swing（}$\\mathbf{F}_i = \\mathbf{0}$\\text{）}
+$$
+
+### 非負性（片方向接触）
+
+$$
+F_{iz} \\ge 0 \\quad \\text{（地面は引っ張れない）}
+$$
+
+### 摩擦円錐（Coulomb 近似）
+
+$$
+\\sqrt{F_{ix}^2 + F_{iy}^2} \\le \\mu F_{iz}
+$$
+
+MPC パラメータ `mpc_params.mu` がこの $\\mu$ に相当（**sim 地面摩擦とは別**）。
+
+### 垂直 GRF 上下限
+
+$$
+F_{iz}^{\\min} \\le F_{iz} \\le F_{iz}^{\\max}
+$$
+
+`grf_max` 等でソフト制限。跳ねすぎ・関節飽和を防ぐ。
+
+### Stance 足のみに力を割り当て
+
+$$
+\\sum_{i: s_i=1} F_{ix} \\approx m a_x^{\\mathrm{des}}, \\quad
+\\sum_{i: s_i=1} F_{iz} \\approx mg
+$$
+
+（前後・左右の力配分は MPC が $Q, R$ と制約の下で最適化）
+
+### Convex 化の要点
+
+**どの足が stance かをゲイトで固定** → GRF $\\mathbf{u}$ について **凸**（QP / NLP）に近づける。  
+足の ON/OFF を MPC 内で離散最適化すると NP 困難になりやすい。
+"""),
+        code("""\
+# --- 数値デモ B: 摩擦円錐・垂直力制約の判定 ---
+mu = 0.5
+fz_min, fz_max = 20.0, 150.0
+
+candidates = {
+    "OK: moderate push": np.array([30.0, 0.0, 100.0]),
+    "OK: vertical only": np.array([0.0, 0.0, 100.0]),
+    "FAIL: |Fx|>mu*Fz": np.array([60.0, 0.0, 100.0]),
+    "FAIL: Fz too small": np.array([10.0, 0.0, 15.0]),
+    "FAIL: negative Fz": np.array([0.0, 0.0, -5.0]),
+}
+
+
+def check_contact(F, mu, fz_min, fz_max):
+    fx, fy, fz = F
+    friction_ok = np.hypot(fx, fy) <= mu * fz + 1e-9
+    fz_ok = fz_min <= fz <= fz_max
+    unilateral_ok = fz >= 0
+    return friction_ok and fz_ok and unilateral_ok
+
+rows = []
+for name, F in candidates.items():
+    fx, fy, fz = F
+    rows.append({
+        "case": name,
+        "Fx": fx, "Fz": fz,
+        "|F_t|": np.hypot(fx, fy),
+        "mu*Fz": mu * fz,
+        "feasible": check_contact(F, mu, fz_min, fz_max),
+    })
+print(pd.DataFrame(rows).to_string(index=False))
+
+# 4 足の力配分: 前進 60 N を stance 2 脚で分担
+F_stance = np.array([
+    [30, 0, 100],
+    [30, 0, 100],
+    [0, 0, 0],
+    [0, 0, 0],
+], dtype=float)
+print("\\nStance FL+FR each Fx=30, Fz=100 → all feasible:",
+      all(check_contact(F_stance[i], mu, fz_min, fz_max) for i in range(2)))
+
+fig, ax = plt.subplots(figsize=(5, 5))
+plot_friction_cone(mu=mu, f_max=fz_max, ax=ax)
+for name, F in candidates.items():
+    c = "green" if check_contact(F, mu, fz_min, fz_max) else "red"
+    ax.scatter(F[2], F[0], s=80, c=c, label=name)
+ax.legend(fontsize=7, loc="upper left")
+ax.set_title("Demo B: GRF candidates in friction cone (Fx-Fz)")
+plt.tight_layout()
+plt.show()
+"""),
+        md("""## Step 4 — 3 層アーキテクチャと数式の紐付け
+
+| Layer | モジュール（PyMPC） | 数式上の役割 | 入出力 |
+|-------|---------------------|--------------|--------|
+| **1 ゲイト** | `periodic_gait_generator` | $s_i(k)$, $\\mathbf{v}^{ref}(k)$ を生成 | 指令速度 → 接触表 |
+| **2 MPC** | `SRBDControllerInterface` | $\\min \\sum \\|x-x^{ref}\\|_Q + \\|u\\|_R$ s.t. SRB + 摩擦円錐 | $\\mathbf{x}_k \\to \\mathbf{u}_k^*$ (GRF) |
+| **3 WBC** | `WBInterface` + Swing | Stance: $\\boldsymbol{\\tau}=\\mathbf{J}^\\top\\mathbf{F}^*$ / Swing: PD | GRF → $\\boldsymbol{\\tau}$ |
+
+### 1 制御周期の信号流（数式）
+
+1. **Layer 1:** $\\{s_i(k)\\}$, $\\mathbf{v}^{ref}(k)$ を更新  
+2. **Layer 2:** $\\mathbf{u}_k^* = \\arg\\min \\|\\cdot\\|$ subject to $f_{\\mathrm{SRB}}$, $\\mu$, $F_z$ bounds, $s_i(k)$  
+3. **Layer 3:** 各足 $i$ について  
+   - $s_i=1$: $\\boldsymbol{\\tau}_i = \\mathbf{J}_i^\\top \\mathbf{F}_i^* + \\text{PD}$  
+   - $s_i=0$: $\\boldsymbol{\\tau}_i = \\text{SwingPD}(\\mathbf{x}_{foot,i}^{ref})$
+
+### MPC 設計者が触るパラメータ → 数式への効き
+
+| パラメータ | 数式上の効き |
+|------------|--------------|
+| `mu` | 摩擦円錐の傾き $\\mu$ |
+| `grf_max` | $F_{iz}^{\\max}$ |
+| `Q, R` | 状態追従 vs 入力コスト |
+| `step_freq`, `duty` | $s_i(k)$ パターン（Layer 1） |
+| `ref_z` | $\\mathbf{x}^{ref}$ の高さ成分 |
+"""),
+        code("""\
+# --- 数値デモ C: 3 層を 1 周期でつなぐ（教学用 toy model）---
+m, g = 15.0, 9.81
+mu = 0.5
+v_ref = 0.5  # 目標 vx [m/s]
+ax_des = 0.3  # 目標加速度 [m/s²]（定常加速のイメージ）
+
+# Layer 1: trot duty=0.5 → FL,RR stance / FR,RL swing（対角1相のみ）
+stance = {"FL": 1, "FR": 0, "RL": 0, "RR": 1}
+print("Layer 1 gait mask:", stance)
+
+# Layer 2: 必要水平力 ≈ m*ax_des, 垂直 ≈ mg を stance 脚で分担
+Fx_total = m * ax_des
+Fz_total = m * g
+n_stance = sum(stance.values())
+Fx_each = Fx_total / n_stance
+Fz_each = Fz_total / n_stance
+print(f"Layer 2 required per stance foot: Fx={Fx_each:.1f} N, Fz={Fz_each:.1f} N")
+print("  friction check:", abs(Fx_each) <= mu * Fz_each)
+
+# Layer 3: 2D 脚 Jacobian（教学用） J = [r_z; -r_x] → tau = J^T [Fx, Fz]
+# 前左足 FL: r = (0.25, -0.15) [x,z]
+r_x, r_z = 0.25, -0.15
+J = np.array([[0.0, r_z], [1.0, -r_x]])  # [Fx,Fz] → [tau_hip, tau_knee] の toy
+F_fl = np.array([Fx_each, Fz_each])
+tau_fl = J.T @ F_fl
+print(f"Layer 3 FL torque (toy 2-DOF): {tau_fl.round(1)} N·m")
+
+# 信号流の概念図
+fig, ax = plt.subplots(figsize=(9, 3))
+layers = ["L1 Gait\\nstance mask", "L2 MPC\\nGRF F*", "L3 WBC\\ntau", "MuJoCo\\nintegrate"]
+xpos = [0, 1, 2, 3]
+ax.bar(xpos, [1, 1, 1, 1], color=["#93c5fd", "#86efac", "#fde68a", "#fca5a5"])
+for x, lab in zip(xpos, layers):
+    ax.text(x, 0.5, lab, ha="center", va="center", fontsize=10)
+ax.set_xticks(xpos)
+ax.set_xticklabels(["s_i(k)", "u=F_i", "tau", "x"])
+ax.set_yticks([])
+ax.set_title("Demo C: 3-layer signal flow (equations linked)")
+plt.tight_layout()
+plt.show()
+"""),
+        md("""## Step 5 — GRF（Ground Reaction Force）まとめ
 
 - 足先と地面の間の力 $\\mathbf{F}_i = (F_{ix}, F_{iy}, F_{iz})$
 - 4足 → **12次元** の入力（低次元で物理制約を入れやすい）
-- ロボットの加速は $\\sum_i \\mathbf{F}_i$（+ 重力）で決まる
+- ロボットの加速は $\\sum_i \\mathbf{F}_i + m\\mathbf{g}$ で決まる（Step 2）
 
-**なぜ関節角度を直接MPCしないのか？**
-- 次元が高い（12関節以上）
+**なぜ関節角度を直接 MPC しないのか？**
+- 次元が高い（12 関節以上）
 - 摩擦円錐など **接触力の物理** を入れにくい
-- GRFを決めれば CoM 運動を計画できる → 関節はWBCに任せる
+- GRF を決めれば CoM 運動を計画できる → 関節は WBC に任せる
 """),
-        md("""## Step 3 — MPC の数式（口頭説明用）
+        md("""## Step 6 — MPC の定式化（口頭説明用）
 
 離散時間ホライゾン $N$、サンプリング $\\Delta t$:
 
 $$\\min \\sum_{k=0}^{N-1} \\|x_k - x_k^{ref}\\|_Q + \\|u_k\\|_R
 \\quad \\text{s.t.} \\quad x_{k+1} = f_{SRB}(x_k, u_k)$$
 
-**摩擦円錐**（各足 $i$、接触中）:
+**摩擦円錐**（各足 $i$、$s_i(k)=1$ のとき）:
 
 $$\\sqrt{F_{ix}^2 + F_{iy}^2} \\le \\mu F_{iz}, \\quad F_{iz}^{min} \\le F_{iz} \\le F_{iz}^{max}$$
 
-**Convex化のコツ:** どの足が stance/swing かを **ゲイトで固定** → GRFについて凸に近づける。
-
-PyMPC デフォルト: $N=12$, $\\Delta t=0.02$ s → **0.24 s 先読み**
+**Convex 化のコツ:** どの足が stance/swing かを **ゲイトで固定** → GRF について凸に近づける。
 """),
-        md("""## Step 4 — WBC 相当層
+        md("""## Step 7 — WBC 相当層
 
 | 脚 | 処理 |
 |----|------|
-| **Stance** | MPCの $\\mathbf{F}_i$ → $\\boldsymbol{\\tau} = \\mathbf{J}^\\top \\mathbf{F} + \\text{PD}$ |
+| **Stance** | MPCの $\\mathbf{F}_i^*$ → $\\boldsymbol{\\tau} = \\mathbf{J}^\\top \\mathbf{F} + \\text{PD}$ |
 | **Swing** | Bezier足軌道 + PD（MPCのGRFは使わない） |
 
-MPC設計者が触るのは主に **MPC層**。WBCゲインは「追従の硬さ」= 計画通りに蹴れるかどうか。
+MPC 設計者が触るのは主に **Layer 2（MPC）**。Layer 3 ゲインは「追従の硬さ」= 計画 GRF を関節で実現できるか。
 """),
-        md("## Step 5 — 摩擦円錐を可視化（μ を上げ下げすると？）"),
+        md("## Step 8 — 摩擦円錐を可視化（μ を上げ下げすると？）"),
         code("""\
 fig, axes = plt.subplots(1, 3, figsize=(12, 4))
 for ax, mu in zip(axes, [0.3, 0.5, 0.8]):
@@ -184,7 +497,7 @@ plt.tight_layout()
 
 ⚠️ **sim の地面摩擦** と **MPC の μ** は別パラメータ。両方の意味を混同しないこと。
 """),
-        md("## Step 6 — SRB の合力デモ（F=ma の直觉）"),
+        md("## Step 9 — SRB の合力デモ（F=ma の直觉）"),
         code("""\
 m = 15.0  # Go2 近似 [kg]
 g = 9.81
@@ -201,7 +514,7 @@ for name, fx, fz in [("前足FL", 30, 100), ("過剰水平", 80, 100)]:
     ok = abs(fx) <= mu * fz
     print(f"{name}: |Fx|={abs(fx)} <= mu*Fz={mu*fz:.0f} ? {ok}")
 """),
-        md("## Step 7 — MPC設計者向け 調整マトリクス（成功/失敗パターン）"),
+        md("## Step 10 — MPC設計者向け 調整マトリクス（成功/失敗パターン）"),
         code("""\
 df = pd.DataFrame(TUNING_GUIDE)
 cols = ["param", "what", "raise", "lower", "failure_symptom", "failure_fix", "success_sign"]
@@ -217,12 +530,14 @@ display(df[cols])
 
 次の Notebook で **実際に sim を回して** 体感します。
 """),
-        md("""## Step 8 — チェックリスト
+        md("""## Step 11 — チェックリスト
 
-- [ ] GRF / MPC / WBC の役割を1文ずつ説明できる  
-- [ ] 摩擦円錐が何を制約しているか説明できる  
+- [ ] SRB の並進・回転方程式を書ける（Step 2）  
+- [ ] 摩擦円錐・$F_z$ 上下限・stance/swing の意味を説明できる（Step 3）  
+- [ ] 3 層それぞれが **どの変数**（$s_i$, $\\mathbf{F}_i$, $\\boldsymbol{\\tau}$）を扱うか説明できる（Step 4）  
+- [ ] 数値デモ A–C を実行し、GRF → 加速度 → トルクの流れを説明できる  
 - [ ] `mu` を上げると **何が起きやすいか**（加速 vs 転倒）を説明できる  
-- [ ] 転倒時の最初の3つのアクションを言える  
+- [ ] 転倒時の最初の 3 つのアクションを言える  
 
 ---
 
@@ -841,10 +1156,162 @@ plt.show()
 - [ ] 上り / 下りで **mu・duty・ramp** の調整方向を説明できる  
 - [ ] 試行ログ JSON を読み、自分で 1 パラメータ変えて再試行できる  
 
-**関連:** [WORKSHOP.md](../WORKSHOP.md) §7 Session 4 · [SPEED_TERRAIN_TRIAL_LOG.md](../SPEED_TERRAIN_TRIAL_LOG.md)
+**関連:** [WORKSHOP.md](../WORKSHOP.md) §7 Session 4 · [SPEED_TERRAIN_TRIAL_LOG.md](../SPEED_TERRAIN_TRIAL_LOG.md) · [MPC_TUNING_JOURNEY.md](../MPC_TUNING_JOURNEY.md) · [06 統合 Notebook](./06_mpc_tuning_journey.ipynb)
 """),
     ]
     return nb(cells, "05")
+
+
+def tuning_journey_notebook() -> dict:
+    cells = [
+        md("""# 06 — MPC 設計者ジャーニー: 失敗・成功・体験（統合）
+
+**目的:** Phase 1–4 の試行錯誤を **1 本の Notebook** で体験する。  
+読み物: [MPC_TUNING_JOURNEY.md](../MPC_TUNING_JOURNEY.md) · 早見表: [TUNING_GUIDE.md](../TUNING_GUIDE.md)
+
+> 各 Step は `scripts/tuning_labs.py` の **lab ID** と 1:1 対応。CLI でも同じ実験が再現できます。
+"""),
+        code(SETUP),
+        md("""## Step 0 — Lab カタログ
+
+`tuning_labs.py` に登録された fail / success ペア一覧。
+"""),
+        code("""\
+for lab in list_labs():
+    print(f"{lab.id:28} [{lab.phase:7}] session={lab.session}  {lab.title}")
+print(f"\\n{len(TUNING_LABS)} labs total")
+"""),
+        md("""## Phase 1 — ref_z（MPC 以前の物理パラメータ）
+
+[Phase 1 — 平坦スモーク](../MPC_TUNING_JOURNEY.md#phase-1-flat-smoke)
+"""),
+        code("""\
+from pympc_lab import compare_runs
+pair = run_lab_pair("s1_ref_z_fail", "s1_ref_z_ok")
+fig = compare_runs(pair)
+plt.suptitle("Phase 1: ref_z fail vs ok", y=1.02)
+plt.show()
+for label, m in pair:
+    print(label, "terminated=", m["terminated"], "min_z=", round(m["min_z"], 3))
+"""),
+        md("""## Phase 2 — μ と step_freq（平坦）
+
+[Phase 2 — 平坦チューニング](../MPC_TUNING_JOURNEY.md#phase-2-flat-tune)
+"""),
+        code("""\
+pair_mu = run_lab_pair("s2_mu_aggressive", "s2_mu_conservative")
+fig = compare_runs(pair_mu)
+plt.suptitle("Phase 2a: mu aggressive vs conservative", y=1.02)
+plt.show()
+
+fail_freq = run_lab("s2_step_freq_fast")
+ok_freq = run_lab("s2_mu_conservative")  # baseline gait for contrast
+fig = compare_runs([
+    ("step_freq=1.6 FAIL", fail_freq["metrics"]),
+    ("mu=0.35 stable gait", ok_freq["metrics"]),
+])
+plt.suptitle("Phase 2b: step_freq too fast", y=1.02)
+plt.show()
+"""),
+        code("""\
+# 事前計測 param study（scripts/run_parameter_study.py）
+fig = plot_param_study_mu()
+plt.show()
+"""),
+        md("""## Phase 3 — 不整地（boxes / perlin）
+
+[Phase 3 — 不整地](../MPC_TUNING_JOURNEY.md#phase-3-rough-terrain)
+
+| デモ | GIF |
+|------|-----|
+| boxes | ![boxes](../assets/demo_s03_boxes.gif) |
+| perlin | ![perlin](../assets/demo_s03_perlin.gif) |
+"""),
+        code("""\
+pair_boxes = run_lab_pair("s3_boxes_freq_fail", "s3_boxes_freq_ok")
+fig = compare_runs(pair_boxes)
+plt.suptitle("Phase 3a: boxes step_freq fail vs ok", y=1.02)
+plt.show()
+
+fail_perlin = run_lab("s3_perlin_mu_fail")
+print("perlin mu=0.55:", fail_perlin["result"]["terminated"], fail_perlin["result"]["distance_m"])
+"""),
+        md("""## Phase 4 — 5 kph × 凸凹坂
+
+[Phase 4 — 5 kph × 凸凹坂](../MPC_TUNING_JOURNEY.md#phase-4-speed-bumpy)
+
+| 地形 | GIF | meta |
+|------|-----|------|
+| flat | ![](../assets/demo_s04_flat.gif) | demo_s04_flat.meta.json |
+| uphill | ![](../assets/demo_s04_uphill.gif) | demo_s04_uphill.meta.json |
+| downhill | ![](../assets/demo_s04_downhill.gif) | demo_s04_downhill.meta.json |
+"""),
+        code("""\
+import json
+# 全試行ログの可視化
+fig = plot_speed_trial_journey()
+plt.show()
+
+fail_s4 = run_lab("s4_no_fall_fail")
+print("no-fall 5kph:", fail_s4["result"])
+"""),
+        code("""\
+# ✅ resilient 勝ちパラメータ（時間がかかる — 1 地形だけ実行例）
+# 全 3 地形は Notebook 05 または tuning_labs.py --lab s4_resilient_* で
+
+win = run_lab("s4_resilient_flat_win")
+print(win["result"]["distance_m"], "m", "falls=", win["result"].get("falls"))
+fig, ax = plt.subplots(figsize=(9, 3))
+m = win["metrics"]
+ax.plot(m["x"], m["vx"] * 3.6, lw=1.5)
+ax.axhline(5.0, ls="--", color="k", alpha=0.4)
+ax.set_xlabel("cumulative distance [m]")
+ax.set_ylabel("vx [kph]")
+ax.set_title("Phase 4 success: bumpy_flat resilient 20m")
+ax.grid(True, alpha=0.3)
+plt.show()
+"""),
+        md("""## Step 7 — あなたの手で 1 パラメータ変更
+
+`run_lab("s4_resilient_flat_win")` の kwargs を **1 つだけ** 変えて再実行し、距離・転倒を記録。
+
+例: `duty_factor` を 0.70 に下げると falls が増えるか？
+"""),
+        code("""\
+# --- 演習: 下の kwargs を 1 つだけ編集 ---
+from pympc_lab import apply_preset, run_speed_terrain_sim_resilient
+
+apply_preset("session04_speed_bumpy_base")
+custom = run_speed_terrain_sim_resilient(
+    scene="bumpy_flat",
+    target_speed_kph=5.0,
+    min_distance_m=20.0,
+    max_seconds=90.0,
+    max_falls=22,
+    mu=0.42,
+    step_freq=1.20,
+    duty_factor=0.76,   # ← ここを 0.70 などに変更して試す
+    ref_z_scale=1.07,
+    speed_ramp_s=18.0,
+)
+print("distance_m", custom["distance_m"], "falls", custom["falls"], "success", custom["success"])
+"""),
+        md("""## Step 8 — 修了チェック
+
+- [ ] Phase 1–4 各 1 つの **fail lab** と **success lab** を実行した
+- [ ] [MPC_TUNING_JOURNEY.md](../MPC_TUNING_JOURNEY.md) のトリアージフローを説明できる
+- [ ] `python scripts/verify_workshop_assets.py` でデモ meta を確認した
+- [ ] 勝ちパラメータが `configs/pympc_presets/session04_bumpy_*.yaml` に保存されていることを確認した
+
+**CLI 再現:**
+```bash
+python scripts/tuning_labs.py --list
+python scripts/tuning_labs.py --lab s2_mu_aggressive
+python scripts/verify_workshop_assets.py
+```
+"""),
+    ]
+    return nb(cells, "06")
 
 
 def main() -> None:
@@ -856,6 +1323,7 @@ def main() -> None:
         ("03_demo_session03a_rough_boxes.ipynb", demo_s3a_notebook()),
         ("04_demo_session03b_rough_perlin.ipynb", demo_s3b_notebook()),
         ("05_demo_session04_speed_bumpy.ipynb", demo_s4_notebook()),
+        ("06_mpc_tuning_journey.ipynb", tuning_journey_notebook()),
     ]
     for name, content in notebooks:
         path = OUT / name

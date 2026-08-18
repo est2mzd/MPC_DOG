@@ -14,7 +14,7 @@
 | **採用 OSS** | [Quadruped-PyMPC](https://github.com/iit-DLSLab/Quadruped-PyMPC)（IIT DLS Lab、Unitree 実機実績） |
 | **ロボット** | Unitree Go2（MuJoCo sim） |
 | **環境管理** | [uv](https://github.com/astral-sh/uv)（Python 3.11、`.venv`） |
-| **教材** | [docs/pympc_2day/WORKSHOP.md](docs/pympc_2day/WORKSHOP.md) + 実行済み Jupyter Notebook + 計算結果 GIF/MP4 |
+| **教材** | [docs/pympc_2day/](docs/pympc_2day/) — 教育用 Markdown + 実行済み Notebook + GIF/MP4 |
 
 **制御パイプライン（3 層）**
 
@@ -68,7 +68,7 @@ ADAS 操舵 MPC 経験者向けの対応: 車両モデル → SRB、タイヤ力
 | **出発点 OSS** | Quadruped-PyMPC を採用。GRF を明示最適化し、WBC 相当層まで一気通貫 |
 | **環境** | conda ではなく **uv** で `.venv` を管理（再現性・依存の明示化） |
 | **教材形式** | Markdown（WORKSHOP.md）+ **実行済み Notebook** + **生成済み assets**（GIF/MP4/JSON） |
-| **検証** | 4 セッション preset の headless sim OK、param study 完了、Notebook 01–04 全セル実行済み |
+| **検証** | 5 セッション preset の headless / resilient sim OK、Notebook 00–05 実行済み |
 | **拡張方針** | 不整地・犬速度 → PyMPC ベース。必要なら MuJoCo iLQR または OCS2 perceptive へ（[top2_stack_comparison.md](docs/top2_stack_comparison.md)） |
 
 ---
@@ -128,14 +128,79 @@ jupyter lab docs/pympc_2day/notebooks/
 
 ---
 
+## フォルダ構成
+
+```
+mpc_dog/
+├── README.md                          # 本ファイル — リポジトリ概要・環境構築
+├── pyproject.toml                     # uv プロジェクト定義（sim + workshop 依存）
+├── uv.lock                            # 依存バージョン固定
+├── .gitignore
+├── .env.workshop                      # acados / MuJoCo 環境変数（setup 時に生成）
+│
+├── configs/
+│   └── pympc_presets/                 # セッション別 PyMPC 設定（YAML → config.py）
+│       ├── session01_flat_smoke*.yaml # S1 平坦スモーク
+│       ├── session02_flat_tune.yaml   # S2 パラメータチューニング
+│       ├── session03_rough_*.yaml     # S3 不整地（boxes / perlin）
+│       └── session04_*.yaml           # S4 5 kph × 凸凹坂
+│
+├── docs/
+│   ├── pympc_2day/                    # ★ 2 日間ワークショップ教材（→ 詳細は下記）
+│   │   ├── README.md                  #   教材インデックス
+│   │   ├── LEARNER_GUIDE.md           #   受講者向けガイド
+│   │   ├── INSTRUCTOR_GUIDE.md        #   講師向けガイド
+│   │   ├── TUNING_GUIDE.md            #   パラメータ調整早見表
+│   │   ├── MPC_TUNING_JOURNEY.md      #   MPC 設計者体験（fail/success）
+│   │   ├── WORKSHOP.md                #   統合技術資料
+│   │   ├── SPEED_TERRAIN_TRIAL_LOG.md #   S4 試行錯誤ログ
+│   │   ├── notebooks/                 #   実行済み Jupyter（00 理論 + 01–05 デモ）
+│   │   └── assets/                    #   GIF / MP4 / PNG / JSON 計算結果
+│   ├── stack_selection.md             # OSS 選定の評価軸と結論
+│   ├── top2_stack_comparison.md       # PyMPC vs MuJoCo iLQR 比較
+│   ├── quadruped_mpc_rl_survey.md     # 論文・技術サーベイ
+│   └── learning_paths_for_consulting.md  # コンサル到達の学習パス
+│
+├── scripts/                           # セットアップ・sim・教材生成
+│   ├── setup_references.sh            #   external/ へ Quadruped-PyMPC を clone
+│   ├── setup_uv_workshop.sh           #   uv .venv + acados ビルド
+│   ├── run_workshop_pipeline.py       #   教材一括再生成（入口）
+│   ├── pympc_lab.py                   #   Notebook 用 sim API・TUNING_GUIDE
+│   ├── apply_pympc_preset.py          #   YAML preset → config.py パッチ
+│   ├── capture_demo_frames.py         #   S1–S3 デモ GIF キャプチャ
+│   ├── capture_speed_terrain_demos.py #   S4 デモ GIF キャプチャ
+│   ├── workshop_terrain.py            #   凸凹坂カスタム地形（bumpy_*）
+│   ├── generate_workshop_notebooks.py #   Notebook テンプレ生成
+│   ├── run_parameter_study.py         #   μ / step_freq スイープ
+│   ├── run_pympc_headless.py          #   headless sim 検証
+│   └── run_speed_terrain_benchmark.py #   S4 速度×地形ベンチマーク
+│
+├── tests/                             # 単体テスト（preset パッチ等）
+├── prompts/                           # Cursor 用タスクメモ
+│
+├── external/                          # Quadruped-PyMPC（gitignore · clone 先）
+├── logs/                              # preset バックアップ・sim ログ（gitignore）
+└── .venv/                             # uv 仮想環境（gitignore）
+```
+
+**ワークショップ教材の詳細ツリー:** [docs/pympc_2day/README.md](docs/pympc_2day/README.md)
+
+---
+
 ## ファイル構成（背景 · 目的）
 
 ### ドキュメント
 
 | ファイル | 背景 · 目的 |
 |----------|-------------|
-| [docs/pympc_2day/WORKSHOP.md](docs/pympc_2day/WORKSHOP.md) | **統合教材**。理論・数式・アーキ・コードリンク・デモ結果 GIF を 1 本に集約 |
-| [docs/pympc_2day/notebooks/](docs/pympc_2day/notebooks/) | **Step-by-step 実習**。理論 NB + セッション別デモ NB（01–04）。実行済み outputs 付き |
+| [docs/pympc_2day/README.md](docs/pympc_2day/README.md) | **教材インデックス**（受講者 / 講師 / 技術資料への入口） |
+| [docs/pympc_2day/LEARNER_GUIDE.md](docs/pympc_2day/LEARNER_GUIDE.md) | **受講者向け** — 2 日スケジュール・セッション別チェックリスト |
+| [docs/pympc_2day/INSTRUCTOR_GUIDE.md](docs/pympc_2day/INSTRUCTOR_GUIDE.md) | **講師向け** — タイムテーブル・デモ台本・Q&A |
+| [docs/pympc_2day/MPC_TUNING_JOURNEY.md](docs/pympc_2day/MPC_TUNING_JOURNEY.md) | **MPC 設計者体験** — 失敗・成功・Phase 1–4 + lab 連携 |
+| [docs/pympc_2day/TUNING_GUIDE.md](docs/pympc_2day/TUNING_GUIDE.md) | **パラメータ調整早見表** — 成功/失敗パターン |
+| [docs/pympc_2day/WORKSHOP.md](docs/pympc_2day/WORKSHOP.md) | **統合技術資料**。理論・数式・アーキ・コードリンク・デモ結果 GIF |
+| [docs/pympc_2day/SPEED_TERRAIN_TRIAL_LOG.md](docs/pympc_2day/SPEED_TERRAIN_TRIAL_LOG.md) | Session 4 試行錯誤ログ（5 kph × 凸凹地形） |
+| [docs/pympc_2day/notebooks/](docs/pympc_2day/notebooks/) | **Step-by-step 実習**。理論 NB + セッション別デモ NB（00–05） |
 | [docs/pympc_2day/assets/](docs/pympc_2day/assets/) | **計算結果**。GIF/MP4/PNG、param study JSON、headless 検証結果 |
 | [docs/stack_selection.md](docs/stack_selection.md) | OSS 選定の評価軸と Phase 1–3 結論 |
 | [docs/top2_stack_comparison.md](docs/top2_stack_comparison.md) | PyMPC vs MuJoCo iLQR の比較（コンサル説明用） |
@@ -152,8 +217,13 @@ jupyter lab docs/pympc_2day/notebooks/
 | [scripts/apply_pympc_preset.py](scripts/apply_pympc_preset.py) | YAML preset → `external/.../config.py` パッチ |
 | [scripts/run_parameter_study.py](scripts/run_parameter_study.py) | μ / step_freq スイープ → assets JSON/PNG |
 | [scripts/run_pympc_headless.py](scripts/run_pympc_headless.py) | 8 s headless sim 検証（パイプラインから呼び出し） |
-| [scripts/capture_demo_frames.py](scripts/capture_demo_frames.py) | offscreen フレーム → GIF/MP4 生成 |
+| [scripts/capture_demo_frames.py](scripts/capture_demo_frames.py) | offscreen フレーム → GIF/MP4 生成（S1–S3） |
+| [scripts/capture_speed_terrain_demos.py](scripts/capture_speed_terrain_demos.py) | S4 凸凹坂デモ GIF キャプチャ |
+| [scripts/workshop_terrain.py](scripts/workshop_terrain.py) | カスタム地形 bumpy_flat / uphill / downhill |
+| [scripts/run_speed_terrain_benchmark.py](scripts/run_speed_terrain_benchmark.py) | Session 4 速度×地形ベンチマーク |
 | [scripts/generate_workshop_notebooks.py](scripts/generate_workshop_notebooks.py) | Notebook テンプレ再生成（編集後に実行） |
+| [scripts/tuning_labs.py](scripts/tuning_labs.py) | **MPC 調整 lab** — fail/success 再現（Notebook 06 連携） |
+| [scripts/verify_workshop_assets.py](scripts/verify_workshop_assets.py) | デモ GIF/PNG・JSON が要件を満たすか自動検証 |
 
 ### 設定 · その他
 
@@ -175,6 +245,8 @@ jupyter lab docs/pympc_2day/notebooks/
 | `session02_flat_tune` | μ / step_freq / gain チューニングのベースライン |
 | `session03_rough_boxes` | 段差 terrain + 足場 opt ON |
 | `session03_rough_perlin` | 連続起伏 terrain。本番デモ用 |
+| `session04_speed_bumpy_base` | Session 4 共通ベース（5 kph・足場 opt ON） |
+| `session04_bumpy_{flat,uphill,downhill}` | Session 4 地形別勝ちパラメータ |
 
 ---
 
@@ -183,7 +255,7 @@ jupyter lab docs/pympc_2day/notebooks/
 | 日 | 午前 | 午後 |
 |----|------|------|
 | **1 日目** | [00 理論 NB](docs/pympc_2day/notebooks/00_theory_grf_mpc_wbc.ipynb) + [01 平坦デモ](docs/pympc_2day/notebooks/01_demo_session01_flat_smoke.ipynb) | [02 チューニング](docs/pympc_2day/notebooks/02_demo_session02_flat_tune.ipynb) |
-| **2 日目** | [03a boxes](docs/pympc_2day/notebooks/03_demo_session03a_rough_boxes.ipynb) + [03b perlin](docs/pympc_2day/notebooks/04_demo_session03b_rough_perlin.ipynb) | WORKSHOP.md + GIF でデモリハーサル |
+| **2 日目** | [03a boxes](docs/pympc_2day/notebooks/03_demo_session03a_rough_boxes.ipynb) + [03b perlin](docs/pympc_2day/notebooks/04_demo_session03b_rough_perlin.ipynb) | [05 Session 4](docs/pympc_2day/notebooks/05_demo_session04_speed_bumpy.ipynb) + **[06 調整ジャーニー](docs/pympc_2day/notebooks/06_mpc_tuning_journey.ipynb)** |
 
 ---
 
