@@ -53,6 +53,52 @@
 
 **ワークショップの説明軸:** 「Di Carlo 2018 系の **GRF を MPC で計画 → 下位で関節トルクへ**」という 3 層パイプラインを、**2024–2025 の centroidal NMPC 実装（Quadruped-PyMPC）** で触る、という位置づけです。
 
+### 技術的に親しい論文（系譜・比較）
+
+ワークショップ sim の **直接実装** 以外に、同じ問題意識・同じアーキテクチャ族として **説明・比較で必ずセットに語られる** 文献です。
+
+```mermaid
+flowchart LR
+  subgraph lineage ["GRF-MPC 系譜（本 repo の主軸）"]
+    A["Di Carlo 2018\nConvex SRB-MPC"]
+    B["Katz/Kim 2019\n足場+GRF RPC"]
+    C["Elobaid RAL 2025\ncentroidal NMPC"]
+    A --> B --> C
+  end
+  subgraph rough ["不整地・知覚（Session 3–4 の文脈）"]
+    D["Jenelten 2020\nonline foothold"]
+    E["Grandia 2023\nperceptive NMPC"]
+    B --> D --> E
+  end
+  subgraph alt ["別ルート（比較・Phase 2–3）"]
+    F["Neunert 2018\nwhole-body NMPC"]
+    G["Zhang 2025\nMuJoCo iLQR"]
+    H["Lee/Miki 2020–22\nRL 盲歩行"]
+  end
+  C -.->|同じ GRF 問題| D
+  C -.->|アーキ違い| G
+```
+
+| 関係 | 論文 | なぜ「親しい」か | 本 repo |
+|------|------|------------------|---------|
+| **直接の系譜** | Di Carlo et al., **IROS 2018** — [Cheetah 3 Convex MPC](https://doi.org/10.1109/IROS.2018.8594448) | **GRF を QP/MPC で計画** する現代四足制御の原点。摩擦円錐・SRB・WBC 分離の教科書 | 説明の起点（PyMPC も同系） |
+| **直接の系譜** | Katz / Kim et al., **IROS 2019** — [Footstep + GRF RPC](https://doi.org/10.1109/IROS40897.2019.8968031) | Di Carlo の **足位置固定** を解く足場+力同時最適化。PyMPC の foothold opt の前史 | Session 3–4 で使用 |
+| **直接の系譜** | Elobaid et al., **RAL 2025** — [Adaptive centroidal MPC](https://arxiv.org/abs/2409.01144) | Convex → **非線形 centroidal NMPC** + 安定性。Quadruped-PyMPC の gradient 経路 | Session 1–4 の主 MPC |
+| **予測モデル** | Orin & Goswami, **Autonomous Robots 2008** — [Centroidal dynamics of a humanoid robot](https://doi.org/10.1007/s10514-008-9100-0) | **Centroidal momentum** 方程式の基礎。SRB / centroidal NMPC の数学的背景 | 理論 NB・WORKSHOP で言及 |
+| **同系の別実装** | Bellicoso et al., **ICRA 2016** — [Optimization-based locomotion (ANYmal)](https://doi.org/10.1109/ICRA.2016.7487272) | Cheetah 系と並ぶ **GRF-MPC + 最適化歩行** の ANYmal 定番 | 比較（ETH 系の入口） |
+| **WBC 相当** | Herzog et al., **IROS 2016** — [Momentum control with hierarchical QP](https://doi.org/10.1109/IROS.2016.7759332) | **GRF / 運動量 → 関節トルク** の QP 型 WBC。ANYmal 系の定番 | PyMPC Stance 制御の説明対比 |
+| **不整地 MPC** | Jenelten et al., **RA-L 2020** — [Online foothold optimization](https://doi.org/10.1109/LRA.2020.3007427) | 標高マップ + **オンライン足場**。Session 3 の perlin/boxes の「次の段階」 | 比較・お客様 QA（未実装） |
+| **不整地 MPC** | Grandia et al., **TRO 2023** — [Perceptive NMPC](https://doi.org/10.1109/TRO.2023.3275384) | 知覚制約を NMPC に埋込む **ETH 系の完成形**。OCS2 Phase 3 の理論的背景 | `external/ocs2_ros2` 参照 |
+| **ロバスト Convex** | Xu et al., **TRO 2023** — [Robust Convex MPC](https://doi.org/10.1109/TRO.2023.3299527) | **μ 不確か性・荷重変動** への Convex MPC 拡張。Session 2 の `mu` チューニングの理論的隣接 | 比較（preset 調整のみ） |
+| **Whole-body 代替** | Neunert et al., **RA-L 2018** — [Whole-body NMPC](https://doi.org/10.1109/LRA.2018.2800124) | SRB を使わず **全身 NMPC**。GRF 層を省略する別設計 | 比較 |
+| **Whole-body 代替** | Zhang et al., **2025** — [Whole-Body MPC with MuJoCo](https://arxiv.org/abs/2503.04613) | MuJoCo 全身 + iLQR。**GRF/WBC なし** の最新 whole-body 路線 | Phase 2 候補 |
+| **RL 代替** | Lee et al., **Sci. Robotics 2020** — [Learning over challenging terrain](https://doi.org/10.1126/scirobotics.abc5986) | **盲歩行 RL** の代表。MPC 不整地と対比される定番 | Notebook 11 QA 比較 |
+| **RL 代替** | Miki et al., **Sci. Robotics 2022** — [Robust perceptive locomotion in the wild](https://doi.org/10.1126/scirobotics.abk2822) | エキスロボ系 **知覚統合 RL**。Grandia NMPC の RL 側対偶 | Notebook 11 QA 比較 |
+| **求解基盤** | Houska et al. — **acados** ([IFAC 2019](https://doi.org/10.1016/j.ifacol.2020.12.332)) | リアルタイム NMPC の **コード生成 + RTI**。PyMPC gradient 経路の求解器 | ビルド必須 |
+| **教育用 OSS** | [go2-convex-mpc](https://github.com/erwincoumans/go2-convex-mpc) | Di Carlo 2018 の **Go2 向け再実装**。Convex SRB-MPC を最短で触る入口 | 本 repo は採用せず（比較理由は stack_selection） |
+
+**読み方:** 上表の **「直接の系譜」4 本** が、ワークショップ sim の技術的な「近い親戚」です。Jenelten → Grandia は不整地の **発展方向**、Lee/Miki は **別パラダイム（RL）**、Zhang/Neunert は **GRF 層を省略する whole-body** として、Notebook 11 のお客様 QA で並べて説明しています。
+
 ### PyMPC に含まれるが、**ワークショップ既定 preset では使っていない** 技術
 
 | 技術 | 論文 | 切り替え方 |
