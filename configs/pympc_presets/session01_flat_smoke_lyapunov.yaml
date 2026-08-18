@@ -1,0 +1,27 @@
+# Session 1 (Lyapunov track): RAL 2025 adaptive stable centroidal NMPC — flat smoke
+session_id: session01_flat_smoke_lyapunov
+description: |
+  Parallel to session01_flat_smoke. Lyapunov-stability constrained centroidal NMPC (acados).
+  Paper: Elobaid et al. RAL 2025 — Adaptive Non-linear Centroidal MPC with Stability Guarantees.
+
+patches:
+  robot: go2
+  mpc_params.type: lyapunov
+  mpc_params.verbose: false
+  mpc_params.horizon: 12
+  mpc_params.dt: 0.02
+  mpc_params.mu: 0.5
+  mpc_params.use_foothold_optimization: false
+  mpc_params.solver_mode: balance
+  simulation_params.scene: flat
+  simulation_params.gait: trot
+  simulation_params.mode: human
+  simulation_params.mpc_frequency: 100
+
+gait_patches:
+  trot:
+    step_freq: 1.4
+    duty_factor: 0.65
+
+notes: |
+  First run: acados codegen for lyapunov model (~1–5 min). Compare nominal vs lyapunov in notebook 16.

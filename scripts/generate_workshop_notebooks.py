@@ -1357,6 +1357,160 @@ for key in ("smp_s4_bumpy_flat", "smp_s4_bumpy_uphill"):
     return nb(cells, "15")
 
 
+LYAPUNOV_TRACK_INTRO = """\
+> **Lyapunov トラック（Notebook 16–19）** — Session 1–4 と **同シナリオ** の並行追加。  
+> 技術: Elobaid et al. **RAL 2025** — **Lyapunov 安定性制約**付き centroidal NMPC（`mpc_params.type: lyapunov`）。  
+> preset: `session0X_*_lyapunov.yaml` · 結果: `assets/lyapunov_lab_results.json`
+"""
+
+LYAPUNOV_COMPARE = """\
+## Nominal vs Lyapunov（同シナリオ · 同 acados 系）
+
+| | **Nominal（01–05）** | **Lyapunov（16–19）** |
+|---|---------------------|------------------------|
+| **論文** | centroidal NMPC baseline | **RAL 2025 安定性保証付き reformulation** |
+| **求解** | acados 勾配法 | acados + **Lyapunov 制約** |
+| **GRF** | 最適化変数 | 同（GRF 12D + 摩擦円錐 + 安定性） |
+| **足場 opt** | Session 3–4 で ON | **ON（gradient 系）** |
+| **preset** | `session0X_*` | `session0X_*_lyapunov` |
+"""
+
+
+def _lyapunov_setup_block() -> str:
+    return SETUP + """
+from lyapunov_labs import load_results, compare_table, LYAPUNOV_LABS
+"""
+
+
+def demo_lyapunov_s1_notebook() -> dict:
+    cells = [
+        md("""# 16 — Lyapunov MPC: Session 1 平坦スモーク（RAL 2025）
+
+**目的:** 同じ flat シナリオで **nominal** と **Lyapunov 安定性制約** を比較。
+
+""" + LYAPUNOV_TRACK_INTRO),
+        md(LYAPUNOV_COMPARE),
+        *gif_gallery(["s01_flat"], "参照: Nominal Session 1 GIF"),
+        code(_lyapunov_setup_block()),
+        code("""\
+apply_preset("session01_flat_smoke_lyapunov")
+lya = run_flat_sim(seconds=4.0)
+apply_preset("session01_flat_smoke")
+nom = run_flat_sim(seconds=4.0)
+fig = compare_runs([("nominal", nom), ("lyapunov RAL2025", lya)])
+plt.suptitle("Session 1: nominal vs Lyapunov stable MPC", y=1.02)
+plt.show()
+"""),
+        code("""\
+import pandas as pd
+data = load_results()
+if "lya_s1_flat" in data:
+    display(pd.DataFrame([data["lya_s1_flat"]["result"]]))
+"""),
+    ]
+    return nb(cells, "16")
+
+
+def demo_lyapunov_s2_notebook() -> dict:
+    cells = [
+        md("""# 17 — Lyapunov MPC: Session 2 平坦チューニング（RAL 2025）
+
+**目的:** μ を変えたとき nominal と Lyapunov の **保守性の差** を比較。
+
+""" + LYAPUNOV_TRACK_INTRO),
+        md(LYAPUNOV_COMPARE),
+        *gif_gallery(["s02_tune"], "参照: Nominal Session 2 GIF"),
+        code(_lyapunov_setup_block()),
+        code("""\
+for preset, label in [("session02_flat_tune", "nominal mu=0.35"), ("session02_flat_tune_lyapunov", "lyapunov mu=0.35")]:
+    apply_preset(preset)
+    from pympc_lab import patch_config
+    patch_config(**{"mpc.mu": 0.35})
+    m = run_flat_sim(seconds=4.0)
+    print(label, "vx=", round(m["mean_vx"], 3), "terminated=", m["terminated"])
+"""),
+        code("""\
+display(pd.DataFrame(compare_table()))
+"""),
+    ]
+    return nb(cells, "17")
+
+
+def demo_lyapunov_s3_notebook() -> dict:
+    cells = [
+        md("""# 18 — Lyapunov MPC: Session 3 不整地（boxes / perlin）
+
+**Lyapunov の強み:** gradient 系のため **足場最適化 ON**（sampling とは対照的）。
+
+""" + LYAPUNOV_TRACK_INTRO),
+        md(LYAPUNOV_COMPARE),
+        *gif_gallery(["s03_boxes", "s03_perlin"], "参照: Nominal Session 3 GIF"),
+        code(_lyapunov_setup_block()),
+        code("""\
+pairs = [
+    ("random_boxes", "session03_rough_boxes", "session03_rough_boxes_lyapunov"),
+    ("perlin", "session03_rough_perlin", "session03_rough_perlin_lyapunov"),
+]
+runs = []
+for scene, p_nom, p_lya in pairs:
+    apply_preset(p_nom)
+    runs.append((f"nominal {scene}", run_flat_sim(seconds=4.0, scene=scene)))
+    apply_preset(p_lya)
+    runs.append((f"lyapunov {scene}", run_flat_sim(seconds=4.0, scene=scene)))
+fig = compare_runs(runs)
+plt.suptitle("Session 3 rough: nominal vs Lyapunov", y=1.02)
+plt.show()
+"""),
+    ]
+    return nb(cells, "18")
+
+
+def demo_lyapunov_s4_notebook() -> dict:
+    cells = [
+        md("""# 19 — Lyapunov MPC: Session 4 凸凹坂（resilient）
+
+**目的:** bumpy 地形で Lyapunov resilient を試し、nominal 勝者 JSON と比較。
+
+""" + LYAPUNOV_TRACK_INTRO),
+        md(LYAPUNOV_COMPARE),
+        *gif_gallery(["s04_flat", "s04_uphill", "s04_downhill"], "参照: Nominal Session 4 GIF"),
+        code(_lyapunov_setup_block()),
+        code("""\
+from pympc_lab import load_speed_winners, run_speed_terrain_sim_resilient
+winners = load_speed_winners()
+print("=== Nominal winners ===")
+for scene, w in winners.items():
+    print(scene, w["result"]["distance_m"], "m")
+"""),
+        code("""\
+apply_preset("session04_speed_bumpy_base_lyapunov")
+lya = run_speed_terrain_sim_resilient(
+    scene="bumpy_flat",
+    target_speed_kph=4.0,
+    min_distance_m=10.0,
+    max_seconds=120.0,
+    speed_ramp_s=12.0,
+    mu=0.42,
+    step_freq=1.30,
+    duty_factor=0.75,
+    ref_z_scale=1.08,
+    max_falls=12,
+)
+print("lyapunov bumpy_flat:", lya["distance_m"], "m", "falls", lya.get("falls"), "success", lya.get("success"))
+fig = compare_runs([("Lyapunov resilient", lya)])
+plt.show()
+"""),
+        code("""\
+data = load_results()
+for key in ("lya_s4_bumpy_flat", "lya_s4_bumpy_uphill"):
+    if key in data:
+        r = data[key]["result"]
+        print(key, r.get("distance_m"), "m", "falls", r.get("falls"), "success", r.get("success"))
+"""),
+    ]
+    return nb(cells, "19")
+
+
 def tuning_journey_notebook() -> dict:
     cells = [
         md("""# 06 — MPC 設計者ジャーニー: 失敗・成功・体験（統合）
@@ -1851,6 +2005,10 @@ def main() -> None:
         ("13_demo_sampling_session02_tune.ipynb", demo_sampling_s2_notebook()),
         ("14_demo_sampling_session03_rough.ipynb", demo_sampling_s3_notebook()),
         ("15_demo_sampling_session04_bumpy.ipynb", demo_sampling_s4_notebook()),
+        ("16_demo_lyapunov_session01_flat.ipynb", demo_lyapunov_s1_notebook()),
+        ("17_demo_lyapunov_session02_tune.ipynb", demo_lyapunov_s2_notebook()),
+        ("18_demo_lyapunov_session03_rough.ipynb", demo_lyapunov_s3_notebook()),
+        ("19_demo_lyapunov_session04_bumpy.ipynb", demo_lyapunov_s4_notebook()),
     ]
     for part, fname, title, nums in SCENARIO_PARTS:
         notebooks.append((fname, scenario_part_notebook(part, fname, title, nums)))

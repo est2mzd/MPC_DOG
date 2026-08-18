@@ -1,0 +1,122 @@
+{
+  "lya_s1_flat": {
+    "lab_id": "lya_s1_flat",
+    "title": "S1 Lyapunov — flat smoke",
+    "session": 1,
+    "preset": "session01_flat_smoke_lyapunov",
+    "nominal_preset": "session01_flat_smoke",
+    "scene": "flat",
+    "controller": "lyapunov_centroidal_nmpc",
+    "paper": "Elobaid RAL 2025",
+    "result": {
+      "mean_vx": 0.22330404887929722,
+      "std_vx": 0.031055588525373108,
+      "min_z": 0.2899929537908297,
+      "max_roll_deg": 0.9544605148050693,
+      "steps": 2000,
+      "terminated": false
+    }
+  },
+  "lya_s2_flat": {
+    "lab_id": "lya_s2_flat",
+    "title": "S2 Lyapunov — flat tune",
+    "session": 2,
+    "preset": "session02_flat_tune_lyapunov",
+    "nominal_preset": "session02_flat_tune",
+    "scene": "flat",
+    "controller": "lyapunov_centroidal_nmpc",
+    "paper": "Elobaid RAL 2025",
+    "result": {
+      "mean_vx": 0.15858699418332134,
+      "std_vx": 0.025358313565326984,
+      "min_z": 0.2900033895314276,
+      "max_roll_deg": 0.9766631186241745,
+      "steps": 2000,
+      "terminated": false
+    }
+  },
+  "lya_s3a_boxes": {
+    "lab_id": "lya_s3a_boxes",
+    "title": "S3a Lyapunov — random_boxes",
+    "session": "3a",
+    "preset": "session03_rough_boxes_lyapunov",
+    "nominal_preset": "session03_rough_boxes",
+    "scene": "random_boxes",
+    "controller": "lyapunov_centroidal_nmpc",
+    "paper": "Elobaid RAL 2025",
+    "result": {
+      "mean_vx": 0.17838093132702382,
+      "std_vx": 0.05297104951860703,
+      "min_z": 0.2899932639768941,
+      "max_roll_deg": 4.46234020893612,
+      "steps": 2000,
+      "terminated": false
+    }
+  },
+  "lya_s3b_perlin": {
+    "lab_id": "lya_s3b_perlin",
+    "title": "S3b Lyapunov — perlin",
+    "session": "3b",
+    "preset": "session03_rough_perlin_lyapunov",
+    "nominal_preset": "session03_rough_perlin",
+    "scene": "perlin",
+    "controller": "lyapunov_centroidal_nmpc",
+    "paper": "Elobaid RAL 2025",
+    "result": {
+      "mean_vx": 0.2138707050632201,
+      "std_vx": 0.04348170737962078,
+      "min_z": 0.7439489312572921,
+      "max_roll_deg": 2.75963124933938,
+      "steps": 2000,
+      "terminated": false
+    }
+  },
+  "lya_s4_bumpy_flat": {
+    "lab_id": "lya_s4_bumpy_flat",
+    "title": "S4 Lyapunov — bumpy_flat resilient 10m",
+    "session": 4,
+    "preset": "session04_speed_bumpy_base_lyapunov",
+    "nominal_preset": "session04_speed_bumpy_base",
+    "scene": "bumpy_flat",
+    "controller": "lyapunov_centroidal_nmpc",
+    "paper": "Elobaid RAL 2025",
+    "result": {
+      "scene": "bumpy_flat",
+      "target_speed_kph": 4.0,
+      "target_mps": 1.1111111111111112,
+      "min_distance_m": 10.0,
+      "distance_m": 10.000280147256598,
+      "duration_s": 28.804000000000002,
+      "mean_vx": 0.34718372959507754,
+      "mean_kph": 1.2498614265422792,
+      "falls": 5,
+      "steps": 14402,
+      "terminated": true,
+      "success": true
+    }
+  },
+  "lya_s4_bumpy_uphill": {
+    "lab_id": "lya_s4_bumpy_uphill",
+    "title": "S4 Lyapunov — bumpy_uphill resilient 10m",
+    "session": 4,
+    "preset": "session04_speed_bumpy_base_lyapunov",
+    "nominal_preset": "session04_speed_bumpy_base",
+    "scene": "bumpy_uphill",
+    "controller": "lyapunov_centroidal_nmpc",
+    "paper": "Elobaid RAL 2025",
+    "result": {
+      "scene": "bumpy_uphill",
+      "target_speed_kph": 3.5,
+      "target_mps": 0.9722222222222223,
+      "min_distance_m": 10.0,
+      "distance_m": 10.000726435333956,
+      "duration_s": 38.6,
+      "mean_vx": 0.2590861770811903,
+      "mean_kph": 0.9327102374922851,
+      "falls": 6,
+      "steps": 19300,
+      "terminated": true,
+      "success": true
+    }
+  }
+}

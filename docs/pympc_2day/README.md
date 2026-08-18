@@ -41,6 +41,7 @@
 | **07–10** | **[07–10 高度シナリオ](./notebooks/07_scenarios_flat_foundation.ipynb)** | **20 シナリオ（路面·速度·勾配·遷移）— お客様 QA 用** |
 | **11** | **[11_qa_discussion_master.ipynb](./notebooks/11_qa_discussion_master.ipynb)** | **QA ディスカッション索引（全 20 シナリオ横断）** |
 | **12–15** | **[Sampling MPC トラック](./notebooks/12_demo_sampling_session01_flat.ipynb)** | **IROS 2024 MPPI — Session 1–4 同シナリオ（nominal と並行）** |
+| **16–19** | **[Lyapunov MPC トラック](./notebooks/16_demo_lyapunov_session01_flat.ipynb)** | **RAL 2025 安定性制約 — Session 1–4 同シナリオ（nominal と並行）** |
 
 ### デモ映像・計算結果
 
@@ -51,6 +52,7 @@
 | パラメータスタディ | [assets/param_study_results.json](./assets/param_study_results.json) |
 | Session 4 勝者パラメータ | [assets/speed_terrain_results.json](./assets/speed_terrain_results.json) |
 | Sampling MPC ベンチ | [assets/sampling_lab_results.json](./assets/sampling_lab_results.json) |
+| Lyapunov MPC ベンチ | [assets/lyapunov_lab_results.json](./assets/lyapunov_lab_results.json) |
 
 ---
 
@@ -123,6 +125,10 @@ source .venv/bin/activate && . .env.workshop
 
 # Jupyter 起動
 jupyter lab docs/pympc_2day/notebooks/
+
+# 並行論文トラックのベンチ（nominal Session 1–4 は変更なし）
+python scripts/run_sampling_benchmark.py --list
+python scripts/run_lyapunov_benchmark.py --list
 
 # 計算結果・GIF・Notebook 一括再生成
 python scripts/run_workshop_pipeline.py

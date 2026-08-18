@@ -1,0 +1,31 @@
+# Session 4 (Lyapunov track): bumpy speed terrains
+session_id: session04_speed_bumpy_base_lyapunov
+description: |
+  Parallel to session04_speed_bumpy_base. Lyapunov NMPC for bumpy resilient runs.
+
+patches:
+  robot: go2
+  mpc_params.type: lyapunov
+  mpc_params.mu: 0.42
+  mpc_params.use_foothold_optimization: true
+  mpc_params.solver_mode: balance
+  mpc_params.horizon: 12
+  mpc_params.dt: 0.02
+  simulation_params.scene: perlin
+  simulation_params.gait: trot
+  simulation_params.mode: human
+  simulation_params.mpc_frequency: 100
+  simulation_params.visual_foothold_adaptation: blind
+
+optional_patches:
+  - mpc_params.use_foothold_constraints
+
+gait_patches:
+  trot:
+    step_freq: 1.30
+    duty_factor: 0.75
+
+ref_z_scale: 1.08
+
+notes: |
+  Notebook 19: resilient bumpy runs vs nominal winners JSON.
