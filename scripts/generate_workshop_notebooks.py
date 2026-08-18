@@ -38,6 +38,43 @@ def code(source: str) -> dict:
     }
 
 
+def gif_gallery(tags: list[str], title: str = "デモ GIF（10 秒）") -> list[dict]:
+    """Code cells that embed GIFs via IPython.display (works in Cursor/VS Code)."""
+    tags_json = json.dumps(tags)
+    return [
+        md(f"### {title}\n\nMarkdown の `![](../assets/...)` だけでは IDE 内で見えないことがあります。下のセルで **GIF を直接表示** します。"),
+        code(f"""\
+from pathlib import Path
+import sys
+import json
+from IPython.display import Image, display
+
+ROOT = Path.cwd()
+for p in [ROOT, *ROOT.parents]:
+    if (p / "scripts" / "pympc_lab.py").exists():
+        ROOT = p
+        break
+
+def show_demo_gifs(tags):
+    for tag in tags:
+        gif = ROOT / f"docs/pympc_2day/assets/demo_{{tag}}.gif"
+        meta_path = ROOT / f"docs/pympc_2day/assets/demo_{{tag}}.meta.json"
+        print(f"--- {{tag}} ---")
+        if meta_path.is_file():
+            m = json.loads(meta_path.read_text())
+            for k in ("scene", "final_x_m", "final_dist_m", "gif_playback_s", "falls"):
+                if m.get(k) is not None:
+                    print(f"  {{k}}: {{m[k]}}")
+        if gif.is_file():
+            display(Image(filename=str(gif)))
+        else:
+            print("  MISSING:", gif)
+
+show_demo_gifs({tags_json})
+"""),
+    ]
+
+
 def nb(cells: list, name: str) -> dict:
     return {
         "nbformat": 4,
@@ -1022,14 +1059,7 @@ def demo_s4_notebook() -> dict:
 > 詳細ログ: [SPEED_TERRAIN_TRIAL_LOG.md](../SPEED_TERRAIN_TRIAL_LOG.md)
 """),
         md(SESSION04_COMPARE.replace("**S4 speed+bumpy**", "**S4 speed+bumpy ← 今ここ**")),
-        md("""### 3 シナリオのデモ GIF
-
-| 地形 | 説明 | GIF |
-|------|------|-----|
-| 凸凹平坦 | Perlin、傾斜なし | ![flat](../assets/demo_s04_flat.gif) |
-| 凸凹上り | Perlin + pitch +0.08 rad | ![uphill](../assets/demo_s04_uphill.gif) |
-| 凸凹下り | Perlin + pitch -0.08 rad | ![downhill](../assets/demo_s04_downhill.gif) |
-"""),
+        *gif_gallery(["s04_flat", "s04_uphill", "s04_downhill"], "Session 4 — 3 地形デモ GIF"),
         code(SETUP),
         md("""## Step 1 — 試行ログの読み込み
 
@@ -1079,71 +1109,47 @@ plt.show()
 """),
         md("""## Step 3 — 試行錯誤: 速度ランプ + 保守 gait
 
-- `speed_ramp_s` ↑ … 指令を漸増（18–22 s）
-- `step_freq` ↓ / `duty_factor` ↑ … 支持長め
-- `mu` ↓ … 摩擦円錐を保守的に
+試行ログから no-fall 試行を確認（フル再 sim は [SPEED_TERRAIN_TRIAL_LOG.md](../SPEED_TERRAIN_TRIAL_LOG.md) 参照）。
 """),
         code("""\
-trials = []
-for ramp, freq, duty, mu in [
-    (12.0, 1.35, 0.74, 0.42),
-    (18.0, 1.20, 0.76, 0.42),
-    (20.0, 1.10, 0.78, 0.38),
-]:
-    r = run_speed_terrain_sim(
-        scene="bumpy_uphill",
-        target_speed_kph=5.0,
-        min_distance_m=20.0,
-        max_seconds=40.0,
-        mu=mu,
-        step_freq=freq,
-        duty_factor=duty,
-        ref_z_scale=1.08,
-        speed_ramp_s=ramp,
-    )
-    trials.append((f"ramp={ramp}s f={freq} d={duty} mu={mu}", r))
-    print(r["distance_m"], r["success"])
-
-fig = compare_runs(trials)
-plt.suptitle("no-fall tuning attempts (still failing at 20m)", y=1.02)
+sub = df[(df["scene"] == "bumpy_uphill") & (df["mode"] == "no_fall")].copy()
+cols = ["kph", "distance_m", "mean_kph", "success", "terminated"]
+display(sub[cols].tail(8))
+fig = plot_speed_trial_journey()
+plt.suptitle("Session 4 trial journey (from JSON log)", y=1.02)
 plt.show()
 """),
         md("""## Step 4 — ✅ resilient モードで 20 m 達成
 
-転倒時に env を reset し、**累積距離** が 20 m に達するまで再試行。  
-各地形の勝ちパラメータは `speed_terrain_results.json` / プリセット YAML に保存。
+転倒時 reset + 累積距離 20 m。**勝者パラメータは JSON に保存済み**（Notebook 内では再 sim せず GIF + 表で確認）。
 """),
         code("""\
-WINNERS = {
-    "bumpy_flat": dict(mu=0.42, step_freq=1.20, duty_factor=0.76, ref_z_scale=1.07, speed_ramp_s=18.0, max_falls=22),
-    "bumpy_uphill": dict(mu=0.38, step_freq=1.10, duty_factor=0.78, ref_z_scale=1.08, speed_ramp_s=20.0, max_falls=21),
-    "bumpy_downhill": dict(mu=0.35, step_freq=1.05, duty_factor=0.82, ref_z_scale=1.10, speed_ramp_s=22.0, max_falls=25),
-}
+from pympc_lab import load_speed_winners
 
-runs = []
-for scene, spec in WINNERS.items():
-    p = {k: v for k, v in spec.items() if k != "max_falls"}
-    mf = spec["max_falls"]
-    r = run_speed_terrain_sim_resilient(
-        scene=scene,
-        target_speed_kph=5.0,
-        min_distance_m=20.0,
-        max_seconds=120.0,
-        max_falls=mf,
-        **p,
-    )
-    runs.append((f"{scene} OK={r['success']}", r))
-    print(scene, r["distance_m"], r["falls"], r["success"])
+winners = load_speed_winners()
+rows = []
+for scene, w in winners.items():
+    r = w["result"]
+    rows.append({
+        "scene": scene,
+        "mu": w["mu"],
+        "step_freq": w["step_freq"],
+        "duty": w["duty_factor"],
+        "ramp_s": w["speed_ramp_s"],
+        "distance_m": round(r["distance_m"], 1),
+        "falls": r.get("falls", "-"),
+        "mean_kph": round(r.get("mean_kph", 0), 2),
+    })
+display(pd.DataFrame(rows))
 
-fig, ax = plt.subplots(figsize=(9, 4))
-for label, r in runs:
-    ax.plot(r["x"], r["vx"] * 3.6, label=label, lw=1.2)
-ax.axhline(5.0, color="k", ls="--", lw=0.8, alpha=0.5, label="target 5 kph")
-ax.set_xlabel("cumulative distance [m]")
-ax.set_ylabel("vx [kph]")
-ax.legend(fontsize=8)
-ax.grid(True, alpha=0.3)
-ax.set_title("Resilient runs: velocity vs cumulative distance")
+fig, axes = plt.subplots(1, 2, figsize=(10, 3.5))
+dfw = pd.DataFrame(rows)
+axes[0].bar(dfw["scene"], dfw["falls"], color="#dc2626")
+axes[0].set_title("Resilient falls to reach 20 m")
+axes[0].tick_params(axis="x", rotation=15)
+axes[1].bar(dfw["scene"], dfw["mean_kph"], color="#2563eb")
+axes[1].axhline(5.0, ls="--", color="k", alpha=0.4)
+axes[1].set_title("Mean speed [kph]")
 plt.tight_layout()
 plt.show()
 """),
@@ -1182,6 +1188,7 @@ def tuning_journey_notebook() -> dict:
 > 各 Step は `scripts/tuning_labs.py` の **lab ID** と 1:1 対応。CLI でも同じ実験が再現できます。
 """),
         code(SETUP),
+        *gif_gallery(["s01_flat", "s02_tune"], "Phase 1–2 参照 GIF"),
         md("""## Step 0 — Lab カタログ
 
 `tuning_labs.py` に登録された fail / success ペア一覧。
@@ -1231,12 +1238,8 @@ plt.show()
         md("""## Phase 3 — 不整地（boxes / perlin）
 
 [Phase 3 — 不整地](../MPC_TUNING_JOURNEY.md#phase-3-rough-terrain)
-
-| デモ | GIF |
-|------|-----|
-| boxes | ![boxes](../assets/demo_s03_boxes.gif) |
-| perlin | ![perlin](../assets/demo_s03_perlin.gif) |
 """),
+        *gif_gallery(["s03_boxes", "s03_perlin"], "Phase 3 — 不整地デモ GIF"),
         code("""\
 pair_boxes = run_lab_pair("s3_boxes_freq_fail", "s3_boxes_freq_ok")
 fig = compare_runs(pair_boxes)
@@ -1244,18 +1247,14 @@ plt.suptitle("Phase 3a: boxes step_freq fail vs ok", y=1.02)
 plt.show()
 
 fail_perlin = run_lab("s3_perlin_mu_fail")
-print("perlin mu=0.55:", fail_perlin["result"]["terminated"], fail_perlin["result"]["distance_m"])
+r = fail_perlin["result"]
+print("perlin mu=0.55:", r.get("terminated"), "min_z=", round(r.get("min_z", 0), 3))
 """),
         md("""## Phase 4 — 5 kph × 凸凹坂
 
 [Phase 4 — 5 kph × 凸凹坂](../MPC_TUNING_JOURNEY.md#phase-4-speed-bumpy)
-
-| 地形 | GIF | meta |
-|------|-----|------|
-| flat | ![](../assets/demo_s04_flat.gif) | demo_s04_flat.meta.json |
-| uphill | ![](../assets/demo_s04_uphill.gif) | demo_s04_uphill.meta.json |
-| downhill | ![](../assets/demo_s04_downhill.gif) | demo_s04_downhill.meta.json |
 """),
+        *gif_gallery(["s04_flat", "s04_uphill", "s04_downhill"], "Phase 4 — 凸凹坂デモ GIF"),
         code("""\
 import json
 # 全試行ログの可視化
@@ -1266,20 +1265,13 @@ fail_s4 = run_lab("s4_no_fall_fail")
 print("no-fall 5kph:", fail_s4["result"])
 """),
         code("""\
-# ✅ resilient 勝ちパラメータ（時間がかかる — 1 地形だけ実行例）
-# 全 3 地形は Notebook 05 または tuning_labs.py --lab s4_resilient_* で
+# 勝者パラメータ（再 sim 不要 — JSON + GIF で確認）
+from pympc_lab import load_speed_winners
 
-win = run_lab("s4_resilient_flat_win")
-print(win["result"]["distance_m"], "m", "falls=", win["result"].get("falls"))
-fig, ax = plt.subplots(figsize=(9, 3))
-m = win["metrics"]
-ax.plot(m["x"], m["vx"] * 3.6, lw=1.5)
-ax.axhline(5.0, ls="--", color="k", alpha=0.4)
-ax.set_xlabel("cumulative distance [m]")
-ax.set_ylabel("vx [kph]")
-ax.set_title("Phase 4 success: bumpy_flat resilient 20m")
-ax.grid(True, alpha=0.3)
-plt.show()
+winners = load_speed_winners()
+for scene, w in winners.items():
+    r = w["result"]
+    print(f"{scene}: {r['distance_m']:.1f} m, falls={r.get('falls')}, mean_kph={r.get('mean_kph',0):.2f}")
 """),
         md("""## Step 7 — あなたの手で 1 パラメータ変更
 
@@ -1389,31 +1381,19 @@ display(pd.DataFrame(scenario_table()))
 """
     if sc.fail_kwargs and sc.success_kwargs:
         if sc.run_fn == "speed_resilient":
+            scene = sc.fail_kwargs.get("scene", "bumpy_flat") if sc.fail_kwargs else "bumpy_flat"
             return f"""\
-# resilient は時間がかかる → 短距離 A/B + Session 4 勝者キャッシュ参照
-from scenario_labs import SCENARIO_BY_ID
-from pympc_lab import apply_preset, compare_runs, load_speed_winners, run_speed_terrain_sim_resilient
+# resilient 20 m は数分かかる → 勝者 JSON を表示（GIF は Part 冒頭）
+from pympc_lab import load_speed_winners
 
-sc = SCENARIO_BY_ID["{sc.id}"]
 winners = load_speed_winners()
-scene = sc.fail_kwargs.get("scene", "bumpy_flat")
-if scene in winners:
-    print("Session 4 winner cache:", winners[scene]["result"])
-
-apply_preset(sc.preset)
-fail_kw = dict(sc.fail_kwargs)
-fail_kw["min_distance_m"] = min(8, fail_kw.get("min_distance_m", 8))
-fail_kw["max_seconds"] = min(50, fail_kw.get("max_seconds", 50))
-ok_kw = dict(sc.success_kwargs)
-ok_kw["min_distance_m"] = min(10, ok_kw.get("min_distance_m", 10))
-ok_kw["max_seconds"] = min(60, ok_kw.get("max_seconds", 60))
-fail = run_speed_terrain_sim_resilient(**fail_kw)
-ok = run_speed_terrain_sim_resilient(**ok_kw)
-print(f"FAIL: {{fail.get('distance_m', 0):.1f}} m, falls={{fail.get('falls')}}")
-print(f"OK:   {{ok.get('distance_m', 0):.1f}} m, falls={{ok.get('falls')}}")
-fig = compare_runs([("FAIL", fail), ("OK", ok)])
-plt.suptitle("Scenario {sc.num:02d}: {sc.title}", y=1.02)
-plt.show()
+if "{scene}" in winners:
+    w = winners["{scene}"]
+    print("Winner params:", {{k: w[k] for k in ("mu", "step_freq", "duty_factor", "speed_ramp_s") if k in w}})
+    print("Result:", w["result"])
+else:
+    print("No cached winner for {scene}")
+print("Full sim: python scripts/scenario_labs.py --scenario {sc.id}")
 """
         return f"""\
 from scenario_labs import run_scenario_pair
@@ -1435,10 +1415,19 @@ for k in ("distance_m", "mean_kph", "success", "terminated", "falls", "mean_vx",
 """
 
 
+SCENARIO_GIFS = {
+    1: (["s01_flat", "s02_tune"], "平坦・摩擦（Session 1–2）"),
+    2: (["s03_boxes", "s03_perlin"], "不整地（Session 3）"),
+    3: (["s04_flat", "s04_uphill", "s04_downhill"], "勾配・凸凹（Session 4）"),
+    4: (["s04_flat", "s04_uphill", "s04_downhill"], "遷移・限界（Session 4）"),
+}
+
+
 def scenario_part_notebook(part: int, filename: str, title: str, nums: list[int]) -> dict:
     from scenario_labs import SCENARIO_LABS
 
     scenarios = [s for s in SCENARIO_LABS if s.num in nums]
+    gif_tags, gif_title = SCENARIO_GIFS[part]
     cells = [
         md(f"""# {filename.replace('.ipynb', '').replace('_', ' ')} — {title}
 
@@ -1455,6 +1444,7 @@ python scripts/scenario_labs.py --scenario {scenarios[0].id}
 ```
 """),
         code(SCENARIO_SETUP),
+        *gif_gallery(gif_tags, gif_title),
     ]
     for sc in scenarios:
         cells.append(md(_scenario_header_md(sc)))
@@ -1528,6 +1518,10 @@ def qa_master_notebook() -> dict:
 ---
 """),
         code(SCENARIO_SETUP),
+        *gif_gallery(
+            ["s01_flat", "s02_tune", "s03_boxes", "s03_perlin", "s04_flat", "s04_uphill", "s04_downhill"],
+            "全セッション デモ GIF 索引",
+        ),
         md("## 全 20 シナリオ索引"),
         code("""\
 import pandas as pd
