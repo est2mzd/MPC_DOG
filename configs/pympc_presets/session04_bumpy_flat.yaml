@@ -1,0 +1,36 @@
+# Session 4a: bumpy flat @ 5 kph target (resilient 20 m winner)
+session_id: session04_bumpy_flat
+description: Perlin bumps, no global slope. Resilient mode tuned params.
+
+patches:
+  robot: go2
+  mpc_params.type: nominal
+  mpc_params.mu: 0.42
+  mpc_params.use_foothold_optimization: true
+  mpc_params.solver_mode: balance
+  simulation_params.scene: bumpy_flat
+  simulation_params.gait: trot
+  simulation_params.mode: human
+  simulation_params.mpc_frequency: 100
+  simulation_params.visual_foothold_adaptation: blind
+
+optional_patches:
+  - mpc_params.use_foothold_constraints
+
+gait_patches:
+  trot:
+    step_freq: 1.20
+    duty_factor: 0.76
+
+ref_z_scale: 1.07
+
+runtime:
+  target_speed_kph: 5.0
+  speed_ramp_s: 18.0
+  min_distance_m: 20.0
+  mode: resilient
+  max_falls: 22
+
+notes: |
+  Winner: 20 m cumulative, 17 falls. No-fall 5 kph failed (~3.7 m).
+  Use run_speed_terrain_sim_resilient(scene='bumpy_flat', ...).

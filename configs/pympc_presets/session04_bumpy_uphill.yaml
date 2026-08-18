@@ -1,0 +1,35 @@
+# Session 4b: bumpy uphill @ 5 kph target (resilient 20 m winner)
+session_id: session04_bumpy_uphill
+description: Perlin + pitch +0.08 rad uphill. Resilient mode tuned params.
+
+patches:
+  robot: go2
+  mpc_params.type: nominal
+  mpc_params.mu: 0.38
+  mpc_params.use_foothold_optimization: true
+  mpc_params.solver_mode: balance
+  simulation_params.scene: bumpy_uphill
+  simulation_params.gait: trot
+  simulation_params.mode: human
+  simulation_params.mpc_frequency: 100
+  simulation_params.visual_foothold_adaptation: blind
+
+optional_patches:
+  - mpc_params.use_foothold_constraints
+
+gait_patches:
+  trot:
+    step_freq: 1.10
+    duty_factor: 0.78
+
+ref_z_scale: 1.08
+
+runtime:
+  target_speed_kph: 5.0
+  speed_ramp_s: 20.0
+  min_distance_m: 20.0
+  mode: resilient
+  max_falls: 21
+
+notes: |
+  Winner: 20 m cumulative, 16 falls. Lower mu + slower step_freq vs flat.

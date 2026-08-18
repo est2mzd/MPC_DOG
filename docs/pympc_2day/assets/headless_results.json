@@ -1,0 +1,18 @@
+{
+  "session01_flat_smoke": {
+    "log": "/home/takuya/work/mpc_dog/logs/pympc_sessions/session01_flat_smoke/headless_sim.log",
+    "ok": true
+  },
+  "session02_flat_tune": {
+    "log": "/home/takuya/work/mpc_dog/logs/pympc_sessions/session02_flat_tune/headless_sim.log",
+    "ok": true
+  },
+  "session03_rough_boxes": {
+    "log": "/home/takuya/work/mpc_dog/logs/pympc_sessions/session03_rough_boxes/headless_sim.log",
+    "ok": true
+  },
+  "session03_rough_perlin": {
+    "log": "/home/takuya/work/mpc_dog/logs/pympc_sessions/session03_rough_perlin/headless_sim.log",
+    "ok": true
+  }
+}

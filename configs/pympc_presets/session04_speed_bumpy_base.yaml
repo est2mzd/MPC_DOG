@@ -1,0 +1,31 @@
+# Session 4: 5 kph on bumpy terrains (flat / uphill / downhill)
+session_id: session04_speed_bumpy_base
+description: |
+  Target 5 kph (≈1.39 m/s), foothold ON, conservative gait for rough+slope.
+  Scene is selected at runtime (bumpy_flat / bumpy_uphill / bumpy_downhill).
+
+patches:
+  robot: go2
+  mpc_params.type: nominal
+  mpc_params.mu: 0.42
+  mpc_params.use_foothold_optimization: true
+  mpc_params.solver_mode: balance
+  simulation_params.scene: perlin
+  simulation_params.gait: trot
+  simulation_params.mode: human
+  simulation_params.mpc_frequency: 100
+  simulation_params.visual_foothold_adaptation: blind
+
+optional_patches:
+  - mpc_params.use_foothold_constraints
+
+gait_patches:
+  trot:
+    step_freq: 1.35
+    duty_factor: 0.74
+
+ref_z_scale: 1.08
+
+notes: |
+  Use scripts/run_speed_terrain_benchmark.py to tune per-terrain scene + speed.
+  Custom scenes: bumpy_flat, bumpy_uphill, bumpy_downhill (workshop_terrain.py).

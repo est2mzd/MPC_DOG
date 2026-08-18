@@ -1,0 +1,39 @@
+# Session 2: 平坦チューニング用ベースライン
+session_id: session02_flat_tune
+description: |
+  Session2 の出発点。mu/step_freq/gain を触る前の baseline。
+
+patches:
+  robot: go2
+  mpc_params.type: nominal
+  mpc_params.verbose: false
+  mpc_params.horizon: 12
+  mpc_params.dt: 0.02
+  mpc_params.mu: 0.5
+  mpc_params.grf_max: null  # mass * g を apply 時に計算
+  mpc_params.use_foothold_optimization: false
+  mpc_params.solver_mode: balance
+  simulation_params.scene: flat
+  simulation_params.gait: trot
+  simulation_params.mode: human
+  simulation_params.mpc_frequency: 100
+  simulation_params.swing_position_gain_fb: 500
+  simulation_params.swing_velocity_gain_fb: 10
+  simulation_params.impedence_joint_position_gain: 10.0
+  simulation_params.impedence_joint_velocity_gain: 2.0
+
+gait_patches:
+  trot:
+    step_freq: 1.4
+    duty_factor: 0.65
+
+tuning_hints:
+  - param: mpc_params.mu
+    try: [0.4, 0.6]
+  - param: gait_patches.trot.step_freq
+    try: [1.2, 1.6]
+  - param: simulation_params.swing_position_gain_fb
+    try: [300, 700]
+
+notes: |
+  03_sessions_runbook.md のチューニング表を参照。

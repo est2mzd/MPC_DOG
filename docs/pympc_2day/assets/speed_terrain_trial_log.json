@@ -1,0 +1,147 @@
+[
+  {
+    "mode": "no_fall",
+    "scene": "bumpy_flat",
+    "kph": 4.5,
+    "distance_m": 4.323547947185498,
+    "mean_kph": 0.7672667164481798,
+    "success": false,
+    "terminated": true
+  },
+  {
+    "mode": "no_fall",
+    "scene": "bumpy_flat",
+    "kph": 4.0,
+    "distance_m": 4.799485343333106,
+    "mean_kph": 1.1698136246444963,
+    "success": false,
+    "terminated": true
+  },
+  {
+    "mode": "no_fall",
+    "scene": "bumpy_flat",
+    "kph": 3.5,
+    "distance_m": 5.556387096164762,
+    "mean_kph": 1.1132565419742406,
+    "success": false,
+    "terminated": true
+  },
+  {
+    "mode": "no_fall",
+    "scene": "bumpy_flat",
+    "kph": 5.0,
+    "distance_m": 3.745204893247605,
+    "mean_kph": 1.1040564703317512,
+    "success": false,
+    "terminated": true
+  },
+  {
+    "mode": "resilient",
+    "scene": "bumpy_flat",
+    "kph": 5.0,
+    "distance_m": 20.000314967135584,
+    "mean_kph": 1.1214431169660466,
+    "success": true,
+    "falls": 17
+  },
+  {
+    "mode": "no_fall",
+    "scene": "bumpy_uphill",
+    "kph": 4.5,
+    "distance_m": 3.4514386824005348,
+    "mean_kph": 1.0406347786132268,
+    "success": false,
+    "terminated": true
+  },
+  {
+    "mode": "no_fall",
+    "scene": "bumpy_uphill",
+    "kph": 4.0,
+    "distance_m": 5.180118940974943,
+    "mean_kph": 0.9775858768877019,
+    "success": false,
+    "terminated": true
+  },
+  {
+    "mode": "no_fall",
+    "scene": "bumpy_uphill",
+    "kph": 3.5,
+    "distance_m": 6.456410888288295,
+    "mean_kph": 0.9793982470014305,
+    "success": false,
+    "terminated": true
+  },
+  {
+    "mode": "no_fall",
+    "scene": "bumpy_uphill",
+    "kph": 5.0,
+    "distance_m": 4.268743325424941,
+    "mean_kph": 1.163321421009069,
+    "success": false,
+    "terminated": true
+  },
+  {
+    "mode": "resilient",
+    "scene": "bumpy_uphill",
+    "kph": 5.0,
+    "distance_m": 20.00156034872587,
+    "mean_kph": 1.0571338822476009,
+    "success": true,
+    "falls": 16
+  },
+  {
+    "mode": "no_fall",
+    "scene": "bumpy_downhill",
+    "kph": 4.5,
+    "distance_m": 3.9933388728518966,
+    "mean_kph": 0.6306931623351265,
+    "success": false,
+    "terminated": true
+  },
+  {
+    "mode": "no_fall",
+    "scene": "bumpy_downhill",
+    "kph": 4.0,
+    "distance_m": 3.4627802914006716,
+    "mean_kph": 0.8728475738021562,
+    "success": false,
+    "terminated": true
+  },
+  {
+    "mode": "no_fall",
+    "scene": "bumpy_downhill",
+    "kph": 3.5,
+    "distance_m": 3.7766660970078503,
+    "mean_kph": 0.9176564490569827,
+    "success": false,
+    "terminated": true
+  },
+  {
+    "mode": "no_fall",
+    "scene": "bumpy_downhill",
+    "kph": 5.0,
+    "distance_m": 3.1249794961028026,
+    "mean_kph": 0.9646652534702532,
+    "success": false,
+    "terminated": true
+  },
+  {
+    "mode": "resilient",
+    "scene": "bumpy_downhill",
+    "kph": 5.0,
+    "distance_m": 11.979878077848472,
+    "mean_kph": 0.6562010391471205,
+    "success": false,
+    "falls": 21
+  },
+  {
+    "mode": "resilient",
+    "scene": "bumpy_downhill",
+    "kph": 5.0,
+    "distance_m": 20.000048377677235,
+    "mean_kph": 0.47261575224254304,
+    "success": true,
+    "falls": 24,
+    "note": "mu=0.35 step_freq=1.05 duty=0.82 ref_z=1.10 ramp=22s max_falls=25"
+  }
+]

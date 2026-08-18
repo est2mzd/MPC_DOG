@@ -1,0 +1,9 @@
+external/
+logs/
+__pycache__/
+*.pyc
+.venv/
+.env
+.env.workshop
+*.egg-info/
+.pytest_cache/

@@ -1,0 +1,26 @@
+# Session 3a: 不整地 — random_boxes（難度中）
+session_id: session03_rough_boxes
+description: 段差・箱 terrain。足場 opt ON。
+
+patches:
+  robot: go2
+  mpc_params.type: nominal
+  mpc_params.mu: 0.48
+  mpc_params.use_foothold_optimization: true
+  mpc_params.solver_mode: balance
+  simulation_params.scene: random_boxes
+  simulation_params.gait: trot
+  simulation_params.mode: human
+  simulation_params.mpc_frequency: 100
+  simulation_params.visual_foothold_adaptation: blind
+
+optional_patches:
+  - mpc_params.use_foothold_constraints
+
+gait_patches:
+  trot:
+    step_freq: 1.2
+    duty_factor: 0.72
+
+notes: |
+  perlin より先に試す。↑ は短く押す（低速前進）。

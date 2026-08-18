@@ -1,0 +1,57 @@
+{
+  "bumpy_flat": {
+    "mu": 0.42,
+    "step_freq": 1.2,
+    "duty_factor": 0.76,
+    "ref_z_scale": 1.07,
+    "speed_ramp_s": 18.0,
+    "target_speed_kph": 5.0,
+    "mode": "resilient",
+    "result": {
+      "mode": "resilient",
+      "scene": "bumpy_flat",
+      "kph": 5.0,
+      "distance_m": 20.000314967135584,
+      "mean_kph": 1.1214431169660466,
+      "success": true,
+      "falls": 17
+    }
+  },
+  "bumpy_uphill": {
+    "mu": 0.38,
+    "step_freq": 1.1,
+    "duty_factor": 0.78,
+    "ref_z_scale": 1.08,
+    "speed_ramp_s": 20.0,
+    "target_speed_kph": 5.0,
+    "mode": "resilient",
+    "result": {
+      "mode": "resilient",
+      "scene": "bumpy_uphill",
+      "kph": 5.0,
+      "distance_m": 20.00156034872587,
+      "mean_kph": 1.0571338822476009,
+      "success": true,
+      "falls": 16
+    }
+  },
+  "bumpy_downhill": {
+    "mu": 0.35,
+    "step_freq": 1.05,
+    "duty_factor": 0.82,
+    "ref_z_scale": 1.1,
+    "speed_ramp_s": 22.0,
+    "target_speed_kph": 5.0,
+    "mode": "resilient",
+    "max_falls": 25,
+    "result": {
+      "mode": "resilient",
+      "scene": "bumpy_downhill",
+      "kph": 5.0,
+      "distance_m": 20.000048377677235,
+      "mean_kph": 0.47261575224254304,
+      "success": true,
+      "falls": 24
+    }
+  }
+}
