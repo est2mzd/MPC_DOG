@@ -9,6 +9,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 ASSETS = ROOT / "docs" / "pympc_2day" / "assets"
+MIN_GIF_PLAYBACK_S = 10.0
 
 
 def _require(path: Path, errors: list[str]) -> bool:
@@ -50,6 +51,17 @@ def _read_sidecar(png: Path) -> dict | None:
     return None
 
 
+def _gif_playback_s(path: Path) -> float:
+    from PIL import Image
+
+    im = Image.open(path)
+    n = getattr(im, "n_frames", 1)
+    dur = im.info.get("duration", 100)
+    if isinstance(dur, (list, tuple)):
+        return sum(dur) / 1000.0
+    return n * dur / 1000.0
+
+
 def verify() -> int:
     errors: list[str] = []
     warnings: list[str] = []
@@ -65,7 +77,11 @@ def verify() -> int:
         "demo_s04_downhill.gif",
     ]
     for name in required_gifs:
-        _require(ASSETS / name, errors)
+        gif = ASSETS / name
+        if _require(gif, errors):
+            pb = _gif_playback_s(gif)
+            if pb + 0.05 < MIN_GIF_PLAYBACK_S:
+                errors.append(f"{name}: GIF playback {pb:.1f}s < {MIN_GIF_PLAYBACK_S}s")
 
     for name in ["demo_s01_flat.mp4", "demo_s03_boxes.mp4", "demo_s03_perlin.mp4"]:
         if not (ASSETS / name).is_file():
@@ -87,8 +103,8 @@ def verify() -> int:
 
     # --- Capture metadata sidecars ---
     checks = [
-        ("s03_boxes", "demo_s03_boxes.png", "random_boxes", 1.0, None),
-        ("s03_perlin", "demo_s03_perlin.png", "perlin", 1.0, None),
+        ("s03_boxes", "demo_s03_boxes.png", "random_boxes", 4.5, None),
+        ("s03_perlin", "demo_s03_perlin.png", "perlin", 4.5, None),
         ("s04_flat", "demo_s04_flat.png", "bumpy_flat", None, 19.5),
         ("s04_uphill", "demo_s04_uphill.png", "bumpy_uphill", None, 19.5),
         ("s04_downhill", "demo_s04_downhill.png", "bumpy_downhill", None, 19.5),
@@ -111,6 +127,9 @@ def verify() -> int:
             errors.append(
                 f"{tag}: final_dist_m={meta.get('final_dist_m')} < {min_dist} (GIF shows start only?)"
             )
+        pb = meta.get("gif_playback_s")
+        if pb is not None and float(pb) + 0.05 < MIN_GIF_PLAYBACK_S:
+            errors.append(f"{tag}: meta gif_playback_s={pb} < {MIN_GIF_PLAYBACK_S}")
         gstd = _ground_std(png)
         if tag.startswith("s03") and gstd < s01_std * 0.8 and float(meta.get("final_x_m", 0)) < 2.0:
             warnings.append(f"{tag}: low ground variance at low x — may still be on flat approach")

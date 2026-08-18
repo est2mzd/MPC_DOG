@@ -17,6 +17,8 @@ RESULTS = ASSETS / "speed_terrain_results.json"
 sys.path.insert(0, str(ROOT / "scripts"))
 sys.path.insert(0, str(PYMPC))
 
+from demo_capture_common import GIF_FRAME_MS, GIF_N_FRAMES, save_gif_and_mp4
+
 
 @dataclass
 class SpeedCaptureProfile:
@@ -32,7 +34,8 @@ class SpeedCaptureProfile:
     max_seconds: float = 180.0
     max_falls: int = 30
     distance_milestones: tuple[float, ...] = (0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20)
-    max_gif_frames: int = 50
+    sim_capture_stride: int = 120  # ~2.4 s sim between time-based frames (dt=0.02)
+    max_gif_frames: int = GIF_N_FRAMES
     distance: float = 6.0
     elevation: float = -38.0
     azimuth: float = 92.0
@@ -82,12 +85,9 @@ def _try_mujoco_gl() -> str:
 
 
 def _pick_frames(saved: list[Path], n: int = 50) -> list[Path]:
-    if len(saved) <= n:
-        return saved
-    import numpy as np
+    from demo_capture_common import pick_frames
 
-    idx = np.linspace(0, len(saved) - 1, n, dtype=int)
-    return [saved[i] for i in idx]
+    return pick_frames(saved, n=n)
 
 
 def _draw_overlay(img, lines: list[str]):
@@ -185,6 +185,7 @@ def capture(profile: SpeedCaptureProfile) -> Path:
     session_start = float(env.base_pos[0])
     next_milestone = 0
     last_capture_dist = -1.0
+    last_time_capture_step = -profile.sim_capture_stride
 
     def reset_segment() -> None:
         nonlocal session_start
@@ -205,7 +206,7 @@ def capture(profile: SpeedCaptureProfile) -> Path:
         saved.append(path)
 
     def maybe_capture(step_i: int, dist_m: float, *, reason: str = "dist") -> None:
-        nonlocal next_milestone, last_capture_dist
+        nonlocal next_milestone, last_capture_dist, last_time_capture_step
         while (
             next_milestone < len(profile.distance_milestones)
             and dist_m >= profile.distance_milestones[next_milestone]
@@ -213,9 +214,18 @@ def capture(profile: SpeedCaptureProfile) -> Path:
             render_frame(step_i, dist_m, reason=f"m{profile.distance_milestones[next_milestone]:.0f}")
             next_milestone += 1
             last_capture_dist = dist_m
-        # Also capture on large fall events (reset storytelling)
+            last_time_capture_step = step_i
         if reason == "fall" and dist_m - last_capture_dist >= 0.5:
             render_frame(step_i, dist_m, reason="fall")
+            last_capture_dist = dist_m
+            last_time_capture_step = step_i
+
+    def maybe_time_capture(step_i: int, dist_m: float) -> None:
+        nonlocal last_time_capture_step
+        if step_i - last_time_capture_step >= profile.sim_capture_stride:
+            render_frame(step_i, dist_m, reason=f"t{step_i}")
+            last_time_capture_step = step_i
+            nonlocal last_capture_dist
             last_capture_dist = dist_m
 
     maybe_capture(0, 0.0)
@@ -272,6 +282,7 @@ def capture(profile: SpeedCaptureProfile) -> Path:
         dist_m = cumulative_m + max(seg_x, 0.0)
 
         maybe_capture(step_i, dist_m)
+        maybe_time_capture(step_i, dist_m)
 
         if term or trunc:
             cumulative_m += max(seg_x, 0.0)
@@ -294,25 +305,8 @@ def capture(profile: SpeedCaptureProfile) -> Path:
     gif_path = ASSETS / f"demo_{profile.tag}.gif"
     png_path = ASSETS / f"demo_{profile.tag}.png"
     meta_path = ASSETS / f"demo_{profile.tag}.meta.json"
-    gif_frames = _pick_frames(saved, n=profile.max_gif_frames)
-    frames = [Image.open(p).convert("RGB") for p in gif_frames]
-    frames[0].save(
-        gif_path,
-        save_all=True,
-        append_images=frames[1:],
-        duration=130,
-        loop=0,
-        optimize=True,
-    )
-    try:
-        import imageio.v3 as iio
-
-        mp4_path = ASSETS / f"demo_{profile.tag}.mp4"
-        stack = np.stack([np.array(Image.open(p).convert("RGB")) for p in gif_frames])
-        iio.imwrite(mp4_path, stack, fps=8, codec="libx264")
-        print(f"mp4: {mp4_path}")
-    except Exception as exc:
-        print(f"mp4 skip: {exc}")
+    gif_frames, playback_s = save_gif_and_mp4(saved, gif_path, n_gif=profile.max_gif_frames)
+    print(f"mp4: {gif_path.with_suffix('.mp4')}")
 
     last_frame = saved[-1]
     Image.open(last_frame).convert("RGB").save(png_path)
@@ -325,9 +319,14 @@ def capture(profile: SpeedCaptureProfile) -> Path:
         "falls": falls,
         "n_saved_frames": len(saved),
         "n_gif_frames": len(gif_frames),
+        "gif_playback_s": round(playback_s, 2),
+        "gif_frame_ms": GIF_FRAME_MS,
     }
     meta_path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
-    print(f"saved {len(saved)} frames ({len(gif_frames)} in GIF), dist={cumulative_m:.2f} m falls={falls} -> {gif_path}")
+    print(
+        f"saved {len(saved)} frames ({len(gif_frames)} in GIF, {playback_s:.1f}s playback), "
+        f"dist={cumulative_m:.2f} m falls={falls} -> {gif_path}"
+    )
     return gif_path
 
 

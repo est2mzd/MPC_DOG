@@ -134,7 +134,7 @@ MuJoCo / 実機
 
 **デモの見せ方**
 
-1. [demo_s03_boxes.gif](./assets/demo_s03_boxes.gif) — 約 9 秒で箱エリアに進入
+1. [demo_s03_boxes.gif](./assets/demo_s03_boxes.gif) — **10 秒 GIF** で箱エリア（x≈6 m 以降）まで進入
 2. intro カメラ（ワイド）→ 追従カメラの切替を指す
 3. S1/S2 との **地形の違い** を強調
 

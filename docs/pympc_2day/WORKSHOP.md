@@ -319,7 +319,7 @@ def compute_actions(...):
 | **GIF** | demo_s01_flat | demo_s02_tune | demo_s03_boxes | demo_s03_perlin | demo_s04_{flat,uphill,downhill} |
 
 > **S1 と S2 は地形とも平坦**です。GIF の違いは **歩調（S2 は速い trot）** と **Notebook 内の実験内容** です。  
-> **旧 GIF が全部平坦に見えた原因:** 600 step（≈1.2 s）では S3 の障害物エリア（x≈1 m 以降）に到達する前に終了していた。現行 GIF は S3 を **約 9 s 走行**＋**画面左上ラベル**＋**ワイド intro カメラ** で撮り直しています。
+> **旧 GIF が全部平坦に見えた原因:** 走行距離不足 + 再生 6 s 以下。現行 GIF は **10 秒再生**、S3 は **x≈6 m 以降**まで走行＋**画面左上ラベル**＋**ワイド intro カメラ** で撮り直しています。
 
 各 Notebook 冒頭にも同じ比較表があります（[01](./notebooks/01_demo_session01_flat_smoke.ipynb) / [02](./notebooks/02_demo_session02_flat_tune.ipynb) / [03a](./notebooks/03_demo_session03a_rough_boxes.ipynb) / [03b](./notebooks/04_demo_session03b_rough_perlin.ipynb)）。
 
@@ -428,7 +428,7 @@ def compute_actions(...):
 
 **Notebook:** [03_demo_session03a_rough_boxes.ipynb](./notebooks/03_demo_session03a_rough_boxes.ipynb)
 
-**ビジュアル:** 約 9 s 走行で箱エリア（x≈1 m 以降）に進入。[`demo_s03_boxes.gif`](./assets/demo_s03_boxes.gif) / [`demo_s03_boxes.mp4`](./assets/demo_s03_boxes.mp4)
+**ビジュアル:** **10 秒 GIF** で箱エリア（x≈6 m 以降）まで進入。[`demo_s03_boxes.gif`](./assets/demo_s03_boxes.gif) / [`demo_s03_boxes.mp4`](./assets/demo_s03_boxes.mp4)
 
 ![Session 3a boxes](./assets/demo_s03_boxes.gif)
 

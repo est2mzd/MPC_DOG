@@ -1,8 +1,10 @@
 {
   "tag": "s01_flat",
   "scene": "flat",
-  "final_x_m": 0.538,
-  "n_saved_frames": 80,
-  "n_gif_frames": 50,
-  "n_steps": 1200
+  "final_x_m": 1.267,
+  "n_saved_frames": 167,
+  "n_gif_frames": 100,
+  "n_steps": 2500,
+  "gif_playback_s": 10.0,
+  "gif_frame_ms": 100
 }

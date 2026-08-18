@@ -20,7 +20,7 @@ SESSION_COMPARE = """\
 | **GIF** | demo_s01_flat | demo_s02_tune | demo_s03_boxes | demo_s03_perlin |
 
 > **S1 と S2 は地形とも平坦**です。GIFの違いは **歩調（S2は step_freq=1.75 Hz の速い trot）** と **Notebook内の実験内容** です。  
-> **S3a/S3b は約9秒走行**して箱・起伏地形に入るようキャプチャしています（旧GIFは短すぎて全部平坦に見えていました）。
+> **S3a/S3b のデモ GIF は 10 秒再生**し、箱/起伏エリア（x≈6 m 以降）まで走行してキャプチャしています。
 """
 
 
@@ -837,7 +837,7 @@ def demo_s3a_notebook() -> dict:
 
 - **地形:** `scene=random_boxes` — x≈1 m 以降に **MuJoCo の箱ジオメトリ** が並ぶ（平坦スタート→障害物エリアへ進入）
 - **足場最適化:** ON — 着地点を MPC が計画
-- **デモGIF:** 約9秒走行＋ワイドショット intro で **箱がはっきり見える**。左上 `Session 3a | scene=random_boxes`
+- **デモGIF:** **10 秒再生**＋ワイド intro で箱エリア（x≈6 m 以降）まで進入。左上 `Session 3a | scene=random_boxes`
 - **旧GIFが平坦に見えた理由:** 600 step（≈1.2 s）では箱エリア（x≈1 m）に到達する前に終了していた
 
 ![Session 3a demo](../assets/demo_s03_boxes.gif)
@@ -917,7 +917,7 @@ def demo_s3b_notebook() -> dict:
 - **地形:** `scene=perlin` — **height field** による連続的なうねり（箱のような段差ではない）
 - **足場最適化:** ON（S3a と同様）
 - **チューニング:** step_freq=1.15 / duty=0.75 / mu=0.45 と **S3a より保守的**
-- **デモGIF:** 低めカメラ＋約9秒走行で **地面の起伏** が見える。左上 `Session 3b | scene=perlin`
+- **デモGIF:** **10 秒再生**＋低めカメラで **地面の起伏**（x≈6 m 以降）。左上 `Session 3b | scene=perlin`
 - **S3a との違い:** boxes=離散障害、perlin=連続起伏（難易度・見た目・調整方針が異なる）
 
 ![Session 3b demo](../assets/demo_s03_perlin.gif)

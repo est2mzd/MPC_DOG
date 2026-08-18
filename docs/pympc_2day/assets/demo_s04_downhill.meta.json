@@ -4,7 +4,9 @@
   "target_speed_kph": 5.0,
   "final_dist_m": 20.0,
   "final_x_m": 20.0,
-  "falls": 28,
-  "n_saved_frames": 27,
-  "n_gif_frames": 27
+  "falls": 23,
+  "n_saved_frames": 346,
+  "n_gif_frames": 100,
+  "gif_playback_s": 10.0,
+  "gif_frame_ms": 100
 }

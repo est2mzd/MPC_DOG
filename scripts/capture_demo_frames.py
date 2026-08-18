@@ -13,7 +13,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 PYMPC = ROOT / "external" / "Quadruped-PyMPC"
 ASSETS = ROOT / "docs" / "pympc_2day" / "assets"
+sys.path.insert(0, str(ROOT / "scripts"))
 sys.path.insert(0, str(PYMPC))
+
+from demo_capture_common import GIF_FRAME_MS, GIF_N_FRAMES, GIF_TARGET_DURATION_S, save_gif_and_mp4
 
 
 @dataclass
@@ -31,14 +34,18 @@ class CaptureProfile:
     intro_distance: float = 7.0
     intro_elevation: float = -28.0
     intro_azimuth: float = 110.0
+    capture_stride: int = 15  # sim steps between PNG saves
+    vel_lin_scale: float = 1.0  # multiply ref forward speed for demo capture
+    min_final_x_m: float = 0.0  # warn/fail if robot does not reach terrain
 
 
 PROFILES: list[CaptureProfile] = [
     CaptureProfile(
         preset="session01_flat_smoke",
         tag="s01_flat",
-        n_steps=1200,
+        n_steps=2500,
         step_freq=1.4,
+        vel_lin_scale=1.4,
         overlay_lines=["Session 1 | scene=flat", "foothold OFF | step_freq=1.4 Hz"],
         distance=3.0,
         elevation=-20.0,
@@ -47,8 +54,9 @@ PROFILES: list[CaptureProfile] = [
     CaptureProfile(
         preset="session02_flat_tune",
         tag="s02_tune",
-        n_steps=1200,
+        n_steps=2500,
         step_freq=1.75,  # faster trot — visually distinct from S1
+        vel_lin_scale=1.4,
         overlay_lines=["Session 2 | scene=flat", "foothold OFF | step_freq=1.75 Hz (fast trot)"],
         distance=3.0,
         elevation=-18.0,
@@ -57,12 +65,15 @@ PROFILES: list[CaptureProfile] = [
     CaptureProfile(
         preset="session03_rough_boxes",
         tag="s03_boxes",
-        n_steps=4500,  # ~9 s — walk into box field (boxes start at x≈1 m)
+        n_steps=10000,
+        vel_lin_scale=2.4,
+        min_final_x_m=4.5,
+        capture_stride=12,
         overlay_lines=["Session 3a | scene=random_boxes", "foothold ON | discrete box obstacles"],
         distance=4.5,
         elevation=-32.0,
         azimuth=95.0,
-        intro_frames=3,
+        intro_frames=4,
         intro_lookat=(2.5, -1.5, 0.2),
         intro_distance=9.0,
         intro_elevation=-35.0,
@@ -71,13 +82,16 @@ PROFILES: list[CaptureProfile] = [
     CaptureProfile(
         preset="session03_rough_perlin",
         tag="s03_perlin",
-        n_steps=4500,
+        n_steps=10000,
         step_freq=1.15,
+        vel_lin_scale=2.4,
+        min_final_x_m=4.5,
+        capture_stride=12,
         overlay_lines=["Session 3b | scene=perlin", "foothold ON | continuous height field"],
         distance=5.5,
         elevation=-38.0,
         azimuth=88.0,
-        intro_frames=3,
+        intro_frames=4,
         intro_lookat=(1.5, 0.0, 0.25),
         intro_distance=10.0,
         intro_elevation=-40.0,
@@ -119,13 +133,10 @@ def _draw_overlay(img, lines: list[str]):
 
 
 def _pick_frames(saved: list[Path], n: int = 50) -> list[Path]:
-    """Evenly sample frames so GIF spans the full run (not just the first 1–2 s)."""
-    if len(saved) <= n:
-        return saved
-    import numpy as np
+    """Deprecated — use demo_capture_common.pick_frames."""
+    from demo_capture_common import pick_frames
 
-    idx = np.linspace(0, len(saved) - 1, n, dtype=int)
-    return [saved[i] for i in idx]
+    return pick_frames(saved, n=n)
 
 
 def capture(profile: CaptureProfile) -> Path:
@@ -166,7 +177,7 @@ def capture(profile: CaptureProfile) -> Path:
         robot=cfg.robot,
         scene=scene,
         sim_dt=sim_dt,
-        ref_base_lin_vel=np.array([0.5, 0.8]) * hip,
+        ref_base_lin_vel=np.array([0.5, 0.8]) * hip * profile.vel_lin_scale,
         ref_base_ang_vel=(-0.2, 0.2),
         ground_friction_coeff=(0.5, 1.0),
         base_vel_command_type="forward",
@@ -239,38 +250,26 @@ def capture(profile: CaptureProfile) -> Path:
             action[getattr(env.legs_tau_idx, leg)] = tau[leg].flatten()
         env.step(action=action)
 
-        if i % 15 != 0:
+        if i % profile.capture_stride != 0:
             continue
-        intro = i // 15 < profile.intro_frames
+        intro = (i // profile.capture_stride) < profile.intro_frames
         render_frame(i, intro=intro)
 
     final_x = float(env.base_pos[0])
     env.close()
     if not saved:
         raise RuntimeError(f"No frames captured for {profile.tag}")
+    if profile.min_final_x_m > 0 and final_x < profile.min_final_x_m:
+        raise RuntimeError(
+            f"{profile.tag}: final_x={final_x:.2f}m < min {profile.min_final_x_m}m — "
+            "obstacle area not reached; increase n_steps or vel_lin_scale"
+        )
 
     gif_path = ASSETS / f"demo_{profile.tag}.gif"
     png_path = ASSETS / f"demo_{profile.tag}.png"
     meta_path = ASSETS / f"demo_{profile.tag}.meta.json"
-    gif_frames = _pick_frames(saved, n=50)
-    frames = [Image.open(p).convert("RGB") for p in gif_frames]
-    frames[0].save(
-        gif_path,
-        save_all=True,
-        append_images=frames[1:],
-        duration=120,
-        loop=0,
-        optimize=True,
-    )
-    try:
-        import imageio.v3 as iio
-
-        mp4_path = ASSETS / f"demo_{profile.tag}.mp4"
-        stack = np.stack([np.array(Image.open(p).convert("RGB")) for p in gif_frames])
-        iio.imwrite(mp4_path, stack, fps=8, codec="libx264")
-        print(f"mp4: {mp4_path}")
-    except Exception as exc:
-        print(f"mp4 skip: {exc}")
+    gif_frames, playback_s = save_gif_and_mp4(saved, gif_path)
+    print(f"mp4: {gif_path.with_suffix('.mp4')}")
 
     # PNG + metadata from **last** captured frame (end of run)
     last_frame = saved[-1]
@@ -282,15 +281,31 @@ def capture(profile: CaptureProfile) -> Path:
         "n_saved_frames": len(saved),
         "n_gif_frames": len(gif_frames),
         "n_steps": profile.n_steps,
+        "gif_playback_s": round(playback_s, 2),
+        "gif_frame_ms": GIF_FRAME_MS,
     }
     meta_path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
-    print(f"saved {len(saved)} frames ({len(gif_frames)} in GIF), final x={final_x:.2f} -> {gif_path}")
+    print(
+        f"saved {len(saved)} frames ({len(gif_frames)} in GIF, {playback_s:.1f}s playback), "
+        f"final x={final_x:.2f} -> {gif_path}"
+    )
     return gif_path
 
 
 def main() -> int:
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Capture workshop demo GIFs")
+    parser.add_argument("--tag", help="capture single tag e.g. s03_boxes")
+    args = parser.parse_args()
+
     ASSETS.mkdir(parents=True, exist_ok=True)
-    for profile in PROFILES:
+    profiles = PROFILES
+    if args.tag:
+        profiles = [p for p in PROFILES if p.tag == args.tag or p.tag == args.tag.removeprefix("demo_")]
+        if not profiles:
+            raise SystemExit(f"Unknown tag {args.tag!r}")
+    for profile in profiles:
         capture(profile)
     return 0
 
