@@ -11,3 +11,4 @@ __pycache__/
 # Workshop capture intermediates (regenerate via scripts)
 docs/pympc_2day/assets/frames_*/
 docs/pympc_2day/assets/tuning_lab_results.json
+docs/pympc_2day/assets/scenario_lab_results.json

@@ -119,6 +119,16 @@ plt.rcParams["figure.figsize"] = (9, 4)
 print(f"repo: {ROOT}")
 """
 
+SCENARIO_SETUP = SETUP + """
+from scenario_labs import (
+    SCENARIO_LABS,
+    compare_preset_table,
+    run_scenario,
+    run_scenario_pair,
+    scenario_table,
+)
+"""
+
 
 def theory_notebook() -> dict:
     cells = [
@@ -1314,7 +1324,347 @@ python scripts/verify_workshop_assets.py
     return nb(cells, "06")
 
 
+SCENARIO_PARTS = [
+    (1, "07_scenarios_flat_foundation.ipynb", "平坦・摩擦・gait 基礎", list(range(1, 6))),
+    (2, "08_scenarios_rough_speed.ipynb", "不整地・凸凹速度", list(range(6, 11))),
+    (3, "09_scenarios_slope_ramp.ipynb", "勾配・上り下り・ランプ", list(range(11, 16))),
+    (4, "10_scenarios_transition_limits.ipynb", "遷移・限界・resilient", list(range(16, 21))),
+]
+
+
+def _scenario_header_md(sc) -> str:
+    return f"""## Scenario {sc.num:02d} — {sc.title}
+
+| 項目 | 内容 |
+|------|------|
+| **ID** | `{sc.id}` |
+| **分類** | {sc.category} / {sc.difficulty} |
+| **路面** | {sc.terrain} |
+| **速度** | {sc.speed_kph or '—'} kph |
+| **勾配** | {sc.slope} |
+| **preset** | `{sc.preset}` |
+
+### シナリオ
+
+{sc.narrative}
+
+### 理論（Layer 2–3）
+
+{sc.theory}
+
+{sc.equations}
+
+### パラメータ焦点
+
+{sc.params_focus}
+
+**実装:** {sc.impl_note}
+
+### ノウハウ
+
+{sc.knowhow}
+
+### 議論用 Q&A
+
+{sc.qa}
+"""
+
+
+def _scenario_code(sc) -> str:
+    if sc.run_fn == "compare_presets":
+        presets = sc.kwargs["presets"]
+        return f"""\
+from scenario_labs import compare_preset_table
+import pandas as pd
+
+df = pd.DataFrame(compare_preset_table({presets!r}))
+display(df)
+"""
+    if sc.run_fn == "theory_only":
+        return """\
+from scenario_labs import scenario_table
+import pandas as pd
+
+display(pd.DataFrame(scenario_table()))
+"""
+    if sc.fail_kwargs and sc.success_kwargs:
+        if sc.run_fn == "speed_resilient":
+            return f"""\
+# resilient は時間がかかる → 短距離 A/B + Session 4 勝者キャッシュ参照
+from scenario_labs import SCENARIO_BY_ID
+from pympc_lab import apply_preset, compare_runs, load_speed_winners, run_speed_terrain_sim_resilient
+
+sc = SCENARIO_BY_ID["{sc.id}"]
+winners = load_speed_winners()
+scene = sc.fail_kwargs.get("scene", "bumpy_flat")
+if scene in winners:
+    print("Session 4 winner cache:", winners[scene]["result"])
+
+apply_preset(sc.preset)
+fail_kw = dict(sc.fail_kwargs)
+fail_kw["min_distance_m"] = min(8, fail_kw.get("min_distance_m", 8))
+fail_kw["max_seconds"] = min(50, fail_kw.get("max_seconds", 50))
+ok_kw = dict(sc.success_kwargs)
+ok_kw["min_distance_m"] = min(10, ok_kw.get("min_distance_m", 10))
+ok_kw["max_seconds"] = min(60, ok_kw.get("max_seconds", 60))
+fail = run_speed_terrain_sim_resilient(**fail_kw)
+ok = run_speed_terrain_sim_resilient(**ok_kw)
+print(f"FAIL: {{fail.get('distance_m', 0):.1f}} m, falls={{fail.get('falls')}}")
+print(f"OK:   {{ok.get('distance_m', 0):.1f}} m, falls={{ok.get('falls')}}")
+fig = compare_runs([("FAIL", fail), ("OK", ok)])
+plt.suptitle("Scenario {sc.num:02d}: {sc.title}", y=1.02)
+plt.show()
+"""
+        return f"""\
+from scenario_labs import run_scenario_pair
+from pympc_lab import compare_runs
+
+pair = run_scenario_pair("{sc.id}")
+fig = compare_runs(pair)
+plt.suptitle("Scenario {sc.num:02d}: {sc.title}", y=1.02)
+plt.show()
+"""
+    return f"""\
+from scenario_labs import run_scenario
+
+r = run_scenario("{sc.id}")
+res = r.get("result", {{}})
+for k in ("distance_m", "mean_kph", "success", "terminated", "falls", "mean_vx", "max_roll_deg"):
+    if k in res:
+        print(f"{{k}}: {{res[k]}}")
+"""
+
+
+def scenario_part_notebook(part: int, filename: str, title: str, nums: list[int]) -> dict:
+    from scenario_labs import SCENARIO_LABS
+
+    scenarios = [s for s in SCENARIO_LABS if s.num in nums]
+    cells = [
+        md(f"""# {filename.replace('.ipynb', '').replace('_', ' ')} — {title}
+
+**対象:** お客様（MPC 設計経験者）との **理論・数式・パラメータ** ディスカッション  
+**Part {part}/4** — Scenario {nums[0]:02d}–{nums[-1]:02d}
+
+各シナリオは **路面 · 速度 · 勾配 · 実装** を結びつけています。  
+理論の前提: [00_theory_grf_mpc_wbc.ipynb](./00_theory_grf_mpc_wbc.ipynb)  
+QA 索引: [11_qa_discussion_master.ipynb](./11_qa_discussion_master.ipynb)
+
+```bash
+python scripts/scenario_labs.py --list
+python scripts/scenario_labs.py --scenario {scenarios[0].id}
+```
+"""),
+        code(SCENARIO_SETUP),
+    ]
+    for sc in scenarios:
+        cells.append(md(_scenario_header_md(sc)))
+        cells.append(code(_scenario_code(sc)))
+    cells.append(md(f"""---
+
+## Part {part} チェックリスト
+
+- [ ] Scenario {nums[0]:02d}–{nums[-1]:02d} それぞれ **数式 → パラメータ → 結果** を説明できる  
+- [ ] fail / OK の差が **摩擦円錐 · gait · 指令 ramp** のどれか特定できる  
+- [ ] `configs/pympc_presets/` の YAML と対応づけられる  
+
+**次:** {"[11_qa_discussion_master.ipynb](./11_qa_discussion_master.ipynb)" if part == 4 else f"[{SCENARIO_PARTS[part][1]}](./{SCENARIO_PARTS[part][1]})"}
+"""))
+    return nb(cells, f"07_part{part}")
+
+
+def qa_master_notebook() -> dict:
+    cells = [
+        md("""# 11 — QA ディスカッション・マスター（20 シナリオ索引）
+
+**目的:** お客様との技術 QA に耐える **シナリオ × 理論 × 数式 × パラメータ × 実装** の索引。
+
+---
+
+## 使い方
+
+1. 下の **全 20 シナリオ表** で論点を特定  
+2. **症状 → パラメータ** トリアージで第一アクションを決める  
+3. 詳細は Part Notebook（07–10）の各 Scenario へ  
+4. 数式の前提は [00_theory](./00_theory_grf_mpc_wbc.ipynb)
+
+---
+
+## 3 層 × 数式（おさらい）
+
+| Layer | 変数 | 代表式 |
+|-------|------|--------|
+| L1 Gait | $s_i(k)$, $v^{ref}$ | $T_{stance}=duty/f_{step}$ |
+| L2 MPC | $\\mathbf{u}=[F_1,\\ldots,F_4]$ | $m\\dot{v}=\\sum F_i+mg$, $\\|F_t\\|\\le\\mu F_z$ |
+| L3 WBC | $\\boldsymbol{\\tau}$ | $\\boldsymbol{\\tau}=J^\\top F^*$ (stance) |
+
+---
+
+## 路面 × 勾配 × 速度 — 難易度マトリクス
+
+| 路面 | 勾配 | 3 kph | 5 kph | 7 kph |
+|------|------|-------|-------|-------|
+| flat | 0 | ◎ | ◎ | ○ |
+| boxes / perlin | 0 | ○ | △ | ✕ |
+| bumpy_flat | 0 | ○ | △ (resilient) | ✕ |
+| bumpy_uphill | +0.08 rad | △ | △ (resilient) | ✕ |
+| bumpy_downhill | −0.08 rad | △ | ✕→△ (resilient) | ✕ |
+
+◎=容易 △=要チューニング ✕=本 workshop 範囲外
+
+---
+
+## 上り → 下り パラメータ切替（Scenario 16）
+
+| パラメータ | bumpy_flat | bumpy_uphill | bumpy_downhill |
+|------|------------|--------------|----------------|
+| mu | 0.42 | 0.38 | **0.35** |
+| step_freq | 1.20 | 1.10 | **1.05** |
+| duty | 0.76 | 0.78 | **0.82** |
+| ref_z_scale | 1.07 | 1.08 | **1.10** |
+| speed_ramp_s | 18 | 20 | **22** |
+
+**反対方向の誤適用 (Sc13):** 下り preset を上りに使う → 加速不足。上り preset を下りに → 制動不足・転倒増。
+
+---
+"""),
+        code(SCENARIO_SETUP),
+        md("## 全 20 シナリオ索引"),
+        code("""\
+import pandas as pd
+from scenario_labs import scenario_table
+
+df = pd.DataFrame(scenario_table())
+display(df[["num", "id", "title", "category", "terrain", "speed_kph", "slope", "difficulty"]])
+"""),
+        md("""## 症状 → 第一パラメータ（トリアージ）
+
+| 症状 | 数式上の意味 | 第一 | 第二 | 第三 |
+|------|-------------|------|------|------|
+| 即転倒（数 step） | $F_z$ / 支持不足 | ref_z↑ | step_freq↓ | μ↓ |
+| 横滑り・足刺さり | $\\|F_t\\|>\\mu F_z$ | μ↓ | duty↑ | grf_max↓ |
+| 加速しない | $\\sum F_{ix}$ 不足 | μ↑※ | speed_ramp↓ | grf_max↑ |
+| 跳ね・関節飽和 | $F_z^{max}$ 過大 | grf_max↓ | ref_z↓ | swing gain↓ |
+| 上りで停滞 | $F_{ix}<mg\\sin\\theta$ | μ↑※ | freq↓ | ramp↑ |
+| 下りで加速暴走 | 制動 $F_{ix}$ 不足 | duty↑ | μ↓ | ramp↑ |
+| 不整地で変な足 | foothold 不一致 | opt OFF で比較 | 地形推定 | freq↓ |
+
+※ μ↑ は転倒リスクとトレードオフ
+
+---
+
+## よくある QA（20 シナリオ横断）
+
+### Q1. MPC の μ と sim 地面摩擦の違いは？
+**A:** MPC μ は **計画時の摩擦円錐**（Layer 2 制約）。sim 摩擦は MuJoCo 接触。不一致だと「計画通りに蹴れない」。
+
+### Q2. なぜ GRF を直接 MPC するのか？
+**A:** 12 関節より **12D GRF** の方が $\\|F_t\\|\\le\\mu F_z$ を自然に入れられる（Scenario 01, 07）。
+
+### Q3. resilient 20 m の意味は？
+**A:** no-fall 不可でも **gait/μ/ramp の学習** に有効。falls 数も必ず報告（Sc19）。
+
+### Q4. 5 kph は何が厳しいのか？
+**A:** $v^{ref}$↑ → $|F_{ix}|$ 要求↑。凸凹で $F_z^{min}$ 違反しやすい（Sc09–12）。
+
+### Q5. 下りが最難な理由は？
+**A:** $mg\\sin\\theta$ が加速方向 + 制動 GRF も摩擦円錐内 → duty↑ μ↓ ramp↑（Sc12, 14）。
+
+### Q6. 上りから下りへ preset をそのまま使える？
+**A:** **不可**。θ 符号で必要 $F_{ix}$ が逆（Sc13, 16）。
+
+### Q7. step_freq と duty の使い分けは？
+**A:** freq↓=MPC 解の時間的余裕。duty↑=支持時間・$F_z$ 配分（Sc04, 14）。
+
+### Q8. speed_ramp_s の理論的効果は？
+**A:** $dv^{ref}/dt$ のピーク↓ → $|F_{ix}|$ スパイク↓（Sc15）。
+
+### Q9. ref_z はいつ上げる？
+**A:** 勾配変化・ toe collision 時（Sc18）。下りは 1.10 まで。
+
+### Q10. ADAS 操舵 MPC との対応は？
+**A:** SRB≈車両、GRF≈タイヤ力、μ≈路面、WBC≈ステア/サス下位（Sc20）。
+
+---
+
+## Notebook 相互参照
+
+| Part | Notebook | Scenarios |
+|------|----------|-----------|
+| 0 | [00_theory](./00_theory_grf_mpc_wbc.ipynb) | 数式基礎 |
+| 1 | [07_scenarios_flat_foundation](./07_scenarios_flat_foundation.ipynb) | 01–05 |
+| 2 | [08_scenarios_rough_speed](./08_scenarios_rough_speed.ipynb) | 06–10 |
+| 3 | [09_scenarios_slope_ramp](./09_scenarios_slope_ramp.ipynb) | 11–15 |
+| 4 | [10_scenarios_transition_limits](./10_scenarios_transition_limits.ipynb) | 16–20 |
+| — | [06_mpc_tuning_journey](./06_mpc_tuning_journey.ipynb) | Phase 1–4 labs |
+"""),
+        code("""\
+# Session 4 勝者パラメータ（Sc11–12, 19 と対応）
+import pandas as pd
+from pympc_lab import load_speed_winners
+
+winners = load_speed_winners()
+rows = []
+for scene, w in winners.items():
+    r = w["result"]
+    rows.append({
+        "scene": scene,
+        "mu": w["mu"],
+        "step_freq": w["step_freq"],
+        "duty": w["duty_factor"],
+        "ramp_s": w["speed_ramp_s"],
+        "distance_m": round(r["distance_m"], 1),
+        "falls": r["falls"],
+        "mean_kph": round(r["mean_kph"], 2),
+    })
+display(pd.DataFrame(rows))
+"""),
+        code("""\
+# preset YAML 3 地形比較（Sc16）
+from scenario_labs import compare_preset_table
+import pandas as pd
+
+display(pd.DataFrame(compare_preset_table([
+    "session04_bumpy_uphill",
+    "session04_bumpy_flat",
+    "session04_bumpy_downhill",
+])))
+"""),
+        code("""\
+# 摩擦円錐: μ の違い（議論用）
+fig, axes = plt.subplots(1, 3, figsize=(12, 4))
+for ax, mu in zip(axes, [0.28, 0.42, 0.55]):
+    plot_friction_cone(mu=mu, f_max=120, ax=ax)
+    ax.set_title(f"mu={mu}")
+fig.suptitle("QA: mu shifts feasible Fx for fixed Fz", y=1.02)
+plt.tight_layout()
+"""),
+        md("""## ディスカッション進行案（90 分）
+
+| 時間 | 内容 |
+|------|------|
+| 0–15 | 00_theory おさらい + 本表で Sc 選定 |
+| 15–45 | Part 07–08 から 4 シナリオ深掘り（お客様関心順） |
+| 45–70 | Part 09–10 勾配・遷移（Sc13, 16 必須） |
+| 70–90 | QA 10 問 + 勝ち YAML diff |
+
+---
+
+## 修了チェック
+
+- [ ] 20 シナリオから **任意 3 つ** を数式付きで説明できる  
+- [ ] 上り→下りで **変えるパラメータリスト** を即答できる  
+- [ ] fail 症状から **第一パラメータ** を 3 つ提案できる  
+- [ ] `scenario_labs.py` / `tuning_labs.py` CLI で再現できる  
+"""),
+    ]
+    return nb(cells, "11")
+
+
 def main() -> None:
+    import sys
+    sys.path.insert(0, str(ROOT / "scripts"))
+    from scenario_labs import SCENARIO_LABS  # noqa: F401 — used by scenario_part_notebook
+
     OUT.mkdir(parents=True, exist_ok=True)
     notebooks = [
         ("00_theory_grf_mpc_wbc.ipynb", theory_notebook()),
@@ -1325,6 +1675,9 @@ def main() -> None:
         ("05_demo_session04_speed_bumpy.ipynb", demo_s4_notebook()),
         ("06_mpc_tuning_journey.ipynb", tuning_journey_notebook()),
     ]
+    for part, fname, title, nums in SCENARIO_PARTS:
+        notebooks.append((fname, scenario_part_notebook(part, fname, title, nums)))
+    notebooks.append(("11_qa_discussion_master.ipynb", qa_master_notebook()))
     for name, content in notebooks:
         path = OUT / name
         path.write_text(json.dumps(content, ensure_ascii=False, indent=1), encoding="utf-8")

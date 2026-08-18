@@ -83,6 +83,7 @@ def run_flat_sim(
     scene: str = "flat",
     use_foothold_optimization: bool | None = None,
     ref_z_scale: float | None = None,
+    grf_max: float | None = None,
     vel_cmd: str = "forward",
 ) -> dict:
     """Run headless flat/rough sim and return metrics + time series."""
@@ -102,6 +103,8 @@ def run_flat_sim(
         cfg.simulation_params["gait_params"][gait]["duty_factor"] = duty_factor
     if use_foothold_optimization is not None:
         cfg.mpc_params["use_foothold_optimization"] = use_foothold_optimization
+    if grf_max is not None:
+        cfg.mpc_params["grf_max"] = grf_max
     cfg.simulation_params["scene"] = scene
     if ref_z_scale is not None:
         cfg.simulation_params["ref_z"] = cfg.hip_height * ref_z_scale
@@ -199,6 +202,7 @@ def run_speed_terrain_sim(
     duty_factor: float | None = None,
     use_foothold_optimization: bool | None = None,
     ref_z_scale: float | None = None,
+    grf_max: float | None = None,
     preset: str | None = "session04_speed_bumpy_base",
     speed_ramp_s: float = 4.0,
 ) -> dict:
@@ -232,6 +236,8 @@ def run_speed_terrain_sim(
         cfg.simulation_params["gait_params"][gait]["duty_factor"] = duty_factor
     if use_foothold_optimization is not None:
         cfg.mpc_params["use_foothold_optimization"] = use_foothold_optimization
+    if grf_max is not None:
+        cfg.mpc_params["grf_max"] = grf_max
     cfg.simulation_params["ref_z"] = cfg.hip_height * (ref_z_scale if ref_z_scale else 1.06)
 
     sim_dt = cfg.simulation_params["dt"]
@@ -390,6 +396,7 @@ def run_speed_terrain_sim_resilient(
     duty_factor: float | None = None,
     use_foothold_optimization: bool | None = None,
     ref_z_scale: float | None = None,
+    grf_max: float | None = None,
     preset: str | None = "session04_speed_bumpy_base",
     speed_ramp_s: float = 12.0,
 ) -> dict:
@@ -422,6 +429,8 @@ def run_speed_terrain_sim_resilient(
         cfg.simulation_params["gait_params"][gait]["duty_factor"] = duty_factor
     if use_foothold_optimization is not None:
         cfg.mpc_params["use_foothold_optimization"] = use_foothold_optimization
+    if grf_max is not None:
+        cfg.mpc_params["grf_max"] = grf_max
     cfg.simulation_params["ref_z"] = cfg.hip_height * (ref_z_scale if ref_z_scale else 1.06)
 
     sim_dt = cfg.simulation_params["dt"]

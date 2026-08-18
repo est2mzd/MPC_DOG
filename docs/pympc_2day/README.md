@@ -38,6 +38,8 @@
 | 04 | [04_demo_session03b_rough_perlin.ipynb](./notebooks/04_demo_session03b_rough_perlin.ipynb) | 不整地：連続起伏 |
 | 05 | [05_demo_session04_speed_bumpy.ipynb](./notebooks/05_demo_session04_speed_bumpy.ipynb) | 5 kph × 凸凹坂道（20 m） |
 | **06** | **[06_mpc_tuning_journey.ipynb](./notebooks/06_mpc_tuning_journey.ipynb)** | **MPC 調整ジャーニー統合（fail/success 体験）** |
+| **07–10** | **[07–10 高度シナリオ](./notebooks/07_scenarios_flat_foundation.ipynb)** | **20 シナリオ（路面·速度·勾配·遷移）— お客様 QA 用** |
+| **11** | **[11_qa_discussion_master.ipynb](./notebooks/11_qa_discussion_master.ipynb)** | **QA ディスカッション索引（全 20 シナリオ横断）** |
 
 ### デモ映像・計算結果
 
@@ -69,7 +71,12 @@ docs/pympc_2day/
 │   ├── 03_demo_session03a_rough_boxes.ipynb  # S3a 箱障害
 │   ├── 04_demo_session03b_rough_perlin.ipynb # S3b 連続起伏
 │   ├── 05_demo_session04_speed_bumpy.ipynb   # S4 5 kph × 凸凹坂
-│   └── 06_mpc_tuning_journey.ipynb           # MPC 調整ジャーニー統合
+│   ├── 06_mpc_tuning_journey.ipynb           # MPC 調整ジャーニー統合
+│   ├── 07_scenarios_flat_foundation.ipynb    # 高度シナリオ 01–05（平坦基礎）
+│   ├── 08_scenarios_rough_speed.ipynb        # 高度シナリオ 06–10（不整地·速度）
+│   ├── 09_scenarios_slope_ramp.ipynb         # 高度シナリオ 11–15（勾配·ランプ）
+│   ├── 10_scenarios_transition_limits.ipynb  # 高度シナリオ 16–20（遷移·限界）
+│   └── 11_qa_discussion_master.ipynb         # QA 索引（お客様ディスカッション用）
 │
 └── assets/                            # 計算結果・デモ映像
     ├── demo_*.gif / *.meta.json       #   デモ + 検証メタデータ
@@ -97,6 +104,15 @@ docs/pympc_2day/
 ---
 
 ## クイックスタート
+
+```bash
+source .venv/bin/activate && . .env.workshop
+jupyter lab docs/pympc_2day/notebooks/
+
+# 高度シナリオ（お客様 QA 用）
+python scripts/scenario_labs.py --list
+python scripts/scenario_labs.py --scenario sc11_bumpy_uphill_gravity
+```
 
 ```bash
 # 初回セットアップ

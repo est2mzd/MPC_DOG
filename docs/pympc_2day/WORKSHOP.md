@@ -487,7 +487,27 @@ python scripts/run_speed_terrain_benchmark.py   # 追加チューニング
 
 ---
 
-### 7.7 アセット再生成
+### 7.8 高度シナリオ（20 件）— お客様 QA 用
+
+MPC 設計経験者との **数式・理論ディスカッション** 用。各シナリオは **路面 · 速度 · 勾配 · パラメータ · 実装** を結びつけています。
+
+| Part | Notebook | Scenarios | テーマ |
+|------|----------|-----------|--------|
+| — | [11_qa_discussion_master.ipynb](./notebooks/11_qa_discussion_master.ipynb) | 全 20 索引 | QA・トリアージ・preset 比較 |
+| 1 | [07_scenarios_flat_foundation.ipynb](./notebooks/07_scenarios_flat_foundation.ipynb) | 01–05 | μ / gait / ref_z / duty / grf_max |
+| 2 | [08_scenarios_rough_speed.ipynb](./notebooks/08_scenarios_rough_speed.ipynb) | 06–10 | boxes / perlin / 3–5 kph |
+| 3 | [09_scenarios_slope_ramp.ipynb](./notebooks/09_scenarios_slope_ramp.ipynb) | 11–15 | 上り / 下り / ramp / 誤 preset |
+| 4 | [10_scenarios_transition_limits.ipynb](./notebooks/10_scenarios_transition_limits.ipynb) | 16–20 | 上り→下り / 7 kph / resilient |
+
+```bash
+python scripts/scenario_labs.py --list
+python scripts/scenario_labs.py --scenario sc13_uphill_wrong_preset
+python scripts/generate_workshop_notebooks.py   # Notebook 07–11 再生成
+```
+
+---
+
+### 7.9 アセット再生成
 
 ```bash
 source .venv/bin/activate && . .env.workshop
