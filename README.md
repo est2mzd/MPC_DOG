@@ -36,6 +36,44 @@
 
 ---
 
+## 活用している論文・技術
+
+**mpc_dog 自身が論文アルゴリズムを新規実装しているわけではありません。**  
+ワークショップで実際に sim を回しているのは `external/Quadruped-PyMPC` のコードであり、以下がその技術的出所です。
+
+### ワークショップ sim で **実際に使っている** 技術
+
+| 層 | 技術 | 論文・出典 | 本 repo での使い方 |
+|----|------|------------|-------------------|
+| **MPC（主経路）** | SRB **centroidal NMPC**（acados 勾配法） | Elobaid et al., **RAL 2025** — [Adaptive Non-linear Centroidal MPC with Stability Guarantees](https://arxiv.org/abs/2409.01144)（IIT DLS Lab + Honda R&D） | preset の `mpc_params.type: nominal`（Session 1–4 の既定）。最適化変数 = **GRF 12 次元** + 摩擦円錐 |
+| **足場計画** | 足場最適化（foothold optimization） | Katz, Di Carlo & Kim, **IROS 2019** — [Footstep and GRF simultaneous optimization](https://doi.org/10.1109/IROS40897.2019.8968031)（MIT Cheetah 系） | Session 3–4 で `use_foothold_optimization: true` |
+| **下位制御（WBC 相当）** | Swing / Stance Leg Control | **GRF-MPC + 下位トルク変換** の定番構成（Di Carlo et al., **IROS 2018** — [MIT Cheetah 3 Convex MPC](https://doi.org/10.1109/IROS.2018.8594448) が源流） | PyMPC の stance 制御が GRF→関節τ。フル QP WBC 論文の再実装ではない |
+| **求解器** | **acados**（RTI / SQP） | Houska et al. — acados プラットフォーム | PyMPC が centroidal モデルを codegen |
+| **シミュレータ** | **MuJoCo** | DeepMind MuJoCo | Go2 モデル + 地形（flat / boxes / perlin / 本 repo 追加の `bumpy_*`） |
+
+**ワークショップの説明軸:** 「Di Carlo 2018 系の **GRF を MPC で計画 → 下位で関節トルクへ**」という 3 層パイプラインを、**2024–2025 の centroidal NMPC 実装（Quadruped-PyMPC）** で触る、という位置づけです。
+
+### PyMPC に含まれるが、**ワークショップ既定 preset では使っていない** 技術
+
+| 技術 | 論文 | 切り替え方 |
+|------|------|------------|
+| **GPU Sample-Based Stochastic MPC**（JAX / MPPI・CEM） | Turrisi et al., **IROS 2024** — [On the Benefits of GPU Sample-Based Stochastic Predictive Controllers](https://arxiv.org/abs/2403.11383) | `mpc_params.type: sampling`（[WORKSHOP.md](docs/pympc_2day/WORKSHOP.md) 参照） |
+
+### **文献・比較用**（`external/` に clone、本 repo の sim パイプラインでは未実行）
+
+| スタック | 代表論文 | 用途 |
+|----------|----------|------|
+| MuJoCo MPC + iLQR | Zhang et al., **2025** — [Whole-Body MPC with MuJoCo](https://arxiv.org/abs/2503.04613) | Phase 2 比較（GRF 層を省略した全身 MPC） |
+| OCS2 Perceptive NMPC | Grandia et al. 系 — elevation map 統合 NMPC | Phase 3 拡張候補（ROS2） |
+
+### mpc_dog 独自コードに対応する論文
+
+**なし。** `workshop_terrain.py`・`pympc_lab.py`・Notebook / GIF / preset は **教材・評価ラッパー** であり、査読論文の新規アルゴリズム実装ではありません。
+
+**詳細サーベイ:** [docs/quadruped_mpc_rl_survey.md](docs/quadruped_mpc_rl_survey.md) · **2 スタック比較:** [docs/top2_stack_comparison.md](docs/top2_stack_comparison.md)
+
+---
+
 ## 概要
 
 | 項目 | 内容 |
