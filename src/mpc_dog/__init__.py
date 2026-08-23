@@ -1,3 +1,3 @@
-"""Reusable quadruped control blocks. Import from notebooks; keep algorithms here."""
+"""Plot and plant helpers for curriculum notebooks. Control math stays in the notebooks."""
 
 __version__ = "0.1.0"

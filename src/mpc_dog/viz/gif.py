@@ -1,4 +1,4 @@
-"""Render a plant rollout to a GIF with force arrows. Used by notebooks via import."""
+"""Render a plant rollout to a GIF with force arrows. Plot helper only; control stays in notebooks."""
 
 from __future__ import annotations
 
@@ -52,14 +52,9 @@ def render_rollout_gif(
     width: int = DEFAULT_WIDTH,
     height: int = DEFAULT_HEIGHT,
 ) -> Path:
-    """Step torques, overlay actual GRF + net contact + weight, write GIF.
-
-    ``tau_fn(plant) -> (12,)`` is used when given. ``command_grf`` is drawn white.
-    """
+    """Step the plant and write a GIF. ``tau_fn`` is supplied by the notebook."""
     ensure_mujoco_gl()
     import mujoco
-
-    from mpc_dog.joint.clip import clip_torque
 
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -78,13 +73,12 @@ def render_rollout_gif(
     try:
         for k in range(n_steps):
             u = tau_fn(plant) if tau_fn is not None else u_const
-            u = clip_torque(u, plant.model.actuator_ctrlrange)
-            plant.step(u)
+            plant.step(np.asarray(u, dtype=np.float64).reshape(12))
             if k % capture_every != 0:
                 continue
             feet = plant.feet_pos_world()
             grf = plant.contact_forces_world()
-            net = plant.net_contact_force_world()
+            net = grf.sum(axis=0)
             weight = plant.gravity_force_world()
             com = plant.com_world()
             cmd = command_grf(plant) if callable(command_grf) else command_grf
@@ -96,7 +90,7 @@ def render_rollout_gif(
                 com,
                 net,
                 weight,
-                command_forces=cmd,
+                command_forces=None if cmd is None else np.asarray(cmd, dtype=np.float64).reshape(4, 3),
             )
             rgb = renderer.render()
             fz = grf[:, 2]

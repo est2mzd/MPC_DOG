@@ -18,7 +18,7 @@ uv pip install -e .
 ```
 
 `--extra workshop` は Jupyter、`imageio`、カーネル用である。学習 Notebook に使う。  
-`-e .` は `src/mpc_dog` を import できるようにする。
+`-e .` は plot / 環境の共通項（`mpc_dog.plant`, `mpc_dog.viz`）を import できるようにする。制御の式は Notebook に書く。
 
 確認:
 
@@ -36,9 +36,6 @@ export MUJOCO_GL=egl
 
 ## 3. Notebook の実行
 
-```text
-cd notebook
-uv run jupyter nbconvert --to notebook --execute 00_mujoco_go2_demo.ipynb --inplace
-```
+リポジトリ根の `notebook/` を JupyterLab で開き、セルを順に実行する。制御の試行錯誤はセルに残す。失敗も消さない。
 
-または JupyterLab でセルを順に実行する。成功したら [00](00_README.md) §7 どおり origin の `main` に push する。
+ある段が成功したら [00](00_README.md) §7 どおり origin の `main` に push する。

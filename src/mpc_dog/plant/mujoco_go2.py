@@ -50,12 +50,26 @@ class MujocoGo2:
     def base_pos(self) -> np.ndarray:
         return np.asarray(self.data.qpos[0:3], dtype=np.float64).copy()
 
+    def base_rpy(self) -> np.ndarray:
+        return np.asarray(self.env.base_ori_euler_xyz, dtype=np.float64).copy()
+
+    def base_lin_vel_world(self) -> np.ndarray:
+        return np.asarray(self.data.qvel[0:3], dtype=np.float64).copy()
+
+    def contact_on(self) -> np.ndarray:
+        state, _ = self.env.feet_contact_state()
+        return np.array([1.0 if state[leg] else 0.0 for leg in LEG_ORDER], dtype=np.float64)
+
     def com_world(self) -> np.ndarray:
         return np.asarray(self.data.subtree_com[1], dtype=np.float64).copy()
 
     def feet_pos_world(self) -> np.ndarray:
         pos = self.env.feet_pos(frame="world")
         return np.stack([np.asarray(pos[leg], dtype=np.float64) for leg in LEG_ORDER], axis=0)
+
+    def feet_vel_world(self) -> np.ndarray:
+        vel = self.env.feet_vel(frame="world", relative=False)
+        return np.stack([np.asarray(vel[leg], dtype=np.float64) for leg in LEG_ORDER], axis=0)
 
     def contact_forces_world(self) -> np.ndarray:
         """Actual MuJoCo ground reaction on each foot, world frame, shape (4, 3)."""
