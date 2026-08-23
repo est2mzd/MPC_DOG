@@ -181,10 +181,12 @@ ADAS 操舵 MPC 経験者向けの対応: 車両モデル → SRB、タイヤ力
 | 段 | 連続時間 | 歩行 | ゲイト |
 |---|---|---|---|
 | `notebook/00`–`04` | \(\ge 5.0\,\mathrm{s}\) | 求めない | — |
-| `notebook/05` その場足踏み | \(\ge 10.0\,\mathrm{s}\) | その場 | PyMPC trot \(1.35\,\mathrm{Hz}/0.74\)、高さ \(5.6\)–\(8\,\mathrm{cm}\) の窓 |
-| `notebook/06` 以降の歩く段 | \(\ge 10.0\,\mathrm{s}\) | \(\ge 10.0\,\mathrm{m}\) | 同上。窓から外れた duty 上げ・低周波数は不合格 |
+| `notebook/05` その場足踏み | \(\ge 20.0\,\mathrm{s}\) | その場 | PyMPC trot \(1.35\,\mathrm{Hz}/0.74\)、高さ \(5.6\)–\(8\,\mathrm{cm}\) の窓 |
+| `notebook/06` 以降の歩く段 | \(\ge 20.0\,\mathrm{s}\) | \(\ge 10.0\,\mathrm{m}\) | 同上。窓から外れた duty 上げ・低周波数は不合格 |
 
 duty \(0.96\) の直立や数 mm リフトは、hold が長くても不合格である。数字の正本は各 Notebook の背景。
+
+**1試行のサイクル:** 仮説を一つ変えた走行が終わったら、数値ログと新しいファイル名の GIF（接地反力・合力）を残し、成功でも失敗でも `origin/main` に push する。複数試行を溜めない。次の番号へ進むのは背景数値を満たしたあとだけ。フェーズ 3 の最後までこの順を止めない。詳細は [docs/block-curriculum/00_README.md](docs/block-curriculum/00_README.md) §3.8.1。
 
 ---
 
@@ -274,7 +276,7 @@ mpc_dog/
 │
 ├── notebook/                          # ★ 学習本体（進め方は docs/block-curriculum/00_README.md）
 │   ├── 00_mujoco_go2_demo.ipynb … 04_height_p.ipynb   # 5.0 s 判定（プラント〜高さ P）
-│   ├── 05_inplace_trot.ipynb …                        # 05 以降は 10.0 s。歩く段は 10 m
+│   ├── 05_inplace_trot.ipynb …                        # 05 以降は 20.0 s。歩く段は 10 m
 │   └── assets/                        # 接地反力つき GIF
 │
 ├── docs/

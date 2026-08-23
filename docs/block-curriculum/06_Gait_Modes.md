@@ -41,7 +41,7 @@ LC も trot 等の名前を端末から送るが、本体は OCS2 の mode 列�
 
 1. S3 の \(\tau\)（`notebook/05` の瞬間 wrench + `MapJT` + swing）は変えない
 2. yaml または dataclass で gait 名を切る
-3. 歩くモードは上流の freq / duty / 遊脚高さで **10 s かつ 10 m**。`full_stance` は 10 s 静止。duty を上げて直立に見せるのは完了ではない。数字の正本は `notebook/06` の背景
+3. 歩くモードは上流の freq / duty / 遊脚高さで **20 s かつ 10 m**。`full_stance` は 20 s 静止。duty を上げて直立に見せるのは完了ではない。数字の正本は `notebook/06` の背景
 4. グラフは接地の4本線を必ず出す（どれが上がっているか）
 
 制御の if 文に `if gait == "trot"` を書かない。offset が全部やる。
