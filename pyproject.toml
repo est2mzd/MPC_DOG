@@ -21,6 +21,13 @@ dependencies = [
   "tqdm>=4.66",
 ]
 
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
 [project.optional-dependencies]
 workshop = [
   "jupyter>=1.0",

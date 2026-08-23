@@ -428,4 +428,5 @@ LC の既定は、着地点の長い先送りも地形の平面推定も薄い�
 | [07_Understand_Then_Harder.md](07_Understand_Then_Harder.md) | 次へ進む前に自分に出す質問 |
 | [08](08_Speed_Ladder.md)–[11](11_Difficulty_Map.md) | フェーズ 3 |
 | [12_Block_Performance_Comparison.md](12_Block_Performance_Comparison.md) | 同じ関数の中身だけ変えて測る |
-| [`notebook/`](notebook/) | 学習用 `.ipynb`。連番。セルを実行しながら進む。まだ無い |
+| [13_uv_environment.md](13_uv_environment.md) | uv で実装環境を作る手順 |
+| [`notebook/`](notebook/) | 学習用 `.ipynb`。連番。セルを実行しながら進む |
