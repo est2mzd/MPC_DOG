@@ -37,7 +37,7 @@ export MUJOCO_GL=egl
 ## 3. Notebook の実行
 
 ```text
-cd docs/block-curriculum/notebook
+cd notebook
 uv run jupyter nbconvert --to notebook --execute 00_mujoco_go2_demo.ipynb --inplace
 ```
 

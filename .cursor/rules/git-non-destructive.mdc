@@ -1,0 +1,27 @@
+---
+description: Allow non-destructive git (status, diff, log, add, commit, push without --force)
+alwaysApply: true
+---
+
+# Git: non-destructive commands are allowed
+
+This project records each successful curriculum notebook on `origin/main`. Do not treat ordinary git as forbidden.
+
+Allowed without asking again:
+
+- `git status`, `diff`, `log`, `show`, `fetch`
+- `git add` of project files (never secrets)
+- `git commit`
+- `git push` / `git push -u origin HEAD` / `git push origin main` **without** `--force` or `--force-with-lease`
+- `git pull` (prefer fast-forward)
+
+If Auto-review blocks a non-destructive push to `origin/main`, retry the **same** command with `request_smart_mode_approval` and the original block reason. Do not skip the push.
+
+Not allowed unless the user explicitly asks in that message:
+
+- force push (`--force`, `--force-with-lease`)
+- `git reset --hard`
+- `git rebase -i` or other interactive git
+- `git commit --amend` except when the user's amend conditions are all met
+- skipping hooks (`--no-verify`)
+- changing `git config`

@@ -7,7 +7,7 @@ from pathlib import Path
 from mpc_dog.plant.mujoco_go2 import MujocoGo2
 from mpc_dog.viz.gif import render_rollout_gif
 
-ASSETS = Path(__file__).resolve().parents[3] / "docs" / "block-curriculum" / "notebook" / "assets"
+ASSETS = Path(__file__).resolve().parents[3] / "notebook" / "assets"
 
 
 def run_gravity_demo(out_gif: Path | None = None) -> Path:
