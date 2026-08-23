@@ -39,9 +39,9 @@ LC も trot 等の名前を端末から送るが、本体は OCS2 の mode 列�
 
 ## 4. 方針 — S4 のやり方
 
-1. `EqualShare` + `MapJT` + swing は S3 のまま
+1. S3 の \(\tau\)（`notebook/05` の瞬間 wrench + `MapJT` + swing）は変えない
 2. yaml または dataclass で gait 名を切る
-3. 各名前について、その場 5 s を1本残す
+3. 各名前について、その場 5 s を1本残す。duty を上げて直立に見せるのは完了ではない。数字の正本は `notebook/06` の背景
 4. グラフは接地の4本線を必ず出す（どれが上がっているか）
 
 制御の if 文に `if gait == "trot"` を書かない。offset が全部やる。
