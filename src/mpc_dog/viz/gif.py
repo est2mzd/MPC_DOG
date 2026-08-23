@@ -46,7 +46,8 @@ def render_rollout_gif(
     capture_every: int = 30,
     tau: np.ndarray | None = None,
     tau_fn=None,
-    command_grf: np.ndarray | None = None,
+    command_grf=None,
+    extra_lines=None,
     title: str = "",
     width: int = DEFAULT_WIDTH,
     height: int = DEFAULT_HEIGHT,
@@ -86,6 +87,7 @@ def render_rollout_gif(
             net = plant.net_contact_force_world()
             weight = plant.gravity_force_world()
             com = plant.com_world()
+            cmd = command_grf(plant) if callable(command_grf) else command_grf
             renderer.update_scene(plant.data, camera=cam)
             overlay_contact_and_net(
                 renderer.scene,
@@ -94,7 +96,7 @@ def render_rollout_gif(
                 com,
                 net,
                 weight,
-                command_forces=command_grf,
+                command_forces=cmd,
             )
             rgb = renderer.render()
             fz = grf[:, 2]
@@ -104,6 +106,9 @@ def render_rollout_gif(
                 f"actual GRF Fz [N] FL={fz[0]:.0f} FR={fz[1]:.0f} RL={fz[2]:.0f} RR={fz[3]:.0f}",
                 f"net contact={net[2]:.0f} N  mg={weight[2]:.0f} N  white=command GRF",
             ]
+            if extra_lines is not None:
+                more = extra_lines(plant) if callable(extra_lines) else extra_lines
+                lines.extend(more)
             frames.append(_caption(rgb, lines))
     finally:
         renderer.close()
