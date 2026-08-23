@@ -18,6 +18,7 @@ LEG_RGBA = {
 }
 NET_RGBA = np.array([0.95, 0.15, 0.15, 0.95], dtype=np.float32)
 WEIGHT_RGBA = np.array([0.45, 0.45, 0.45, 0.80], dtype=np.float32)
+CMD_RGBA = np.array([1.0, 1.0, 1.0, 0.85], dtype=np.float32)
 
 
 def _add_arrow(scene, start: np.ndarray, vec: np.ndarray, rgba: np.ndarray) -> None:
@@ -53,6 +54,7 @@ def overlay_contact_and_net(
     com: np.ndarray,
     net_force: np.ndarray,
     weight: np.ndarray | None = None,
+    command_forces: np.ndarray | None = None,
     *,
     scale: float = FORCE_SCALE_M_PER_N,
 ) -> None:
@@ -60,7 +62,11 @@ def overlay_contact_and_net(
 
     ``contact_forces`` and ``net_force`` are Newtons in world frame.
     Weight is ``m * g`` (already a force). Caption gravity inclusion in the Notebook.
+    Command GRF (if given) is white and must not be mixed into the actual colors.
     """
+    if command_forces is not None:
+        for i in range(4):
+            _add_arrow(scene, feet_pos[i], command_forces[i] * scale, CMD_RGBA)
     for i, leg in enumerate(LEG_ORDER):
         _add_arrow(scene, feet_pos[i], contact_forces[i] * scale, LEG_RGBA[leg])
     _add_arrow(scene, com, net_force * scale, NET_RGBA)

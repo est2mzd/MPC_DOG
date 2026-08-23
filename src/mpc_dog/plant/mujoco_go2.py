@@ -74,3 +74,7 @@ class MujocoGo2:
     def gravity_force_world(self) -> np.ndarray:
         g = float(self.model.opt.gravity[2])
         return np.array([0.0, 0.0, self.mass_kg * g], dtype=np.float64)
+
+    def foot_geom_ids(self) -> np.ndarray:
+        ids = self.env._feet_geom_id
+        return np.array([ids.FL, ids.FR, ids.RL, ids.RR], dtype=np.int32)

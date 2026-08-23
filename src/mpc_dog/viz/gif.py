@@ -45,17 +45,24 @@ def render_rollout_gif(
     n_steps: int = 1500,
     capture_every: int = 30,
     tau: np.ndarray | None = None,
+    tau_fn=None,
+    command_grf: np.ndarray | None = None,
     title: str = "",
     width: int = DEFAULT_WIDTH,
     height: int = DEFAULT_HEIGHT,
 ) -> Path:
-    """Step ``tau`` (default zeros), overlay actual GRF + net contact + weight, write GIF."""
+    """Step torques, overlay actual GRF + net contact + weight, write GIF.
+
+    ``tau_fn(plant) -> (12,)`` is used when given. ``command_grf`` is drawn white.
+    """
     ensure_mujoco_gl()
     import mujoco
 
+    from mpc_dog.joint.clip import clip_torque
+
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    u = np.zeros(12, dtype=np.float64) if tau is None else np.asarray(tau, dtype=np.float64)
+    u_const = np.zeros(12, dtype=np.float64) if tau is None else np.asarray(tau, dtype=np.float64)
 
     renderer = mujoco.Renderer(plant.model, height=height, width=width)
     cam = mujoco.MjvCamera()
@@ -69,6 +76,8 @@ def render_rollout_gif(
     frames: list[Image.Image] = []
     try:
         for k in range(n_steps):
+            u = tau_fn(plant) if tau_fn is not None else u_const
+            u = clip_torque(u, plant.model.actuator_ctrlrange)
             plant.step(u)
             if k % capture_every != 0:
                 continue
@@ -85,6 +94,7 @@ def render_rollout_gif(
                 com,
                 net,
                 weight,
+                command_forces=command_grf,
             )
             rgb = renderer.render()
             fz = grf[:, 2]
@@ -92,7 +102,7 @@ def render_rollout_gif(
                 title or "MuJoCo Go2",
                 f"t={plant.data.time:.2f}s  z_base={plant.base_pos()[2]:.3f} m",
                 f"actual GRF Fz [N] FL={fz[0]:.0f} FR={fz[1]:.0f} RL={fz[2]:.0f} RR={fz[3]:.0f}",
-                f"net contact={net[2]:.0f} N  mg={weight[2]:.0f} N  (arrows: feet=GRF, red=net, gray=mg)",
+                f"net contact={net[2]:.0f} N  mg={weight[2]:.0f} N  white=command GRF",
             ]
             frames.append(_caption(rgb, lines))
     finally:
