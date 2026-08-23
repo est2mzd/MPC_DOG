@@ -174,6 +174,18 @@ ADAS 操舵 MPC 経験者向けの対応: 車両モデル → SRB、タイヤ力
 
 **非目標:** 実機 ROS2 デプロイ、RL 実装、acados 内部モデル編集（参考リンクのみ）
 
+### 学習 Notebook（`notebook/`）の合否
+
+進め方の正本は [docs/block-curriculum/00_README.md](docs/block-curriculum/00_README.md) §3.8 である。ワークショップ教材（`docs/pympc_2day/`）とは別系列。
+
+| 段 | 連続時間 | 歩行 | ゲイト |
+|---|---|---|---|
+| `notebook/00`–`04` | \(\ge 5.0\,\mathrm{s}\) | 求めない | — |
+| `notebook/05` その場足踏み | \(\ge 10.0\,\mathrm{s}\) | その場 | PyMPC trot \(1.35\,\mathrm{Hz}/0.74\)、高さ \(5.6\)–\(8\,\mathrm{cm}\) の窓 |
+| `notebook/06` 以降の歩く段 | \(\ge 10.0\,\mathrm{s}\) | \(\ge 10.0\,\mathrm{m}\) | 同上。窓から外れた duty 上げ・低周波数は不合格 |
+
+duty \(0.96\) の直立や数 mm リフトは、hold が長くても不合格である。数字の正本は各 Notebook の背景。
+
 ---
 
 ## 結論
@@ -260,8 +272,14 @@ mpc_dog/
 │       ├── session03_rough_*.yaml     # S3 不整地（boxes / perlin）
 │       └── session04_*.yaml           # S4 5 kph × 凸凹坂
 │
+├── notebook/                          # ★ 学習本体（進め方は docs/block-curriculum/00_README.md）
+│   ├── 00_mujoco_go2_demo.ipynb … 04_height_p.ipynb   # 5.0 s 判定（プラント〜高さ P）
+│   ├── 05_inplace_trot.ipynb …                        # 05 以降は 10.0 s。歩く段は 10 m
+│   └── assets/                        # 接地反力つき GIF
+│
 ├── docs/
-│   ├── pympc_2day/                    # ★ 2 日間ワークショップ教材（→ 詳細は下記）
+│   ├── block-curriculum/              # ★ 学習の順番・成功条件（§3.8）
+│   ├── pympc_2day/                    # 2 日間ワークショップ教材（→ 詳細は下記）
 │   │   ├── README.md                  #   教材インデックス
 │   │   ├── LEARNER_GUIDE.md           #   受講者向けガイド
 │   │   ├── INSTRUCTOR_GUIDE.md        #   講師向けガイド
@@ -320,6 +338,8 @@ mpc_dog/
 | [docs/stack_selection.md](docs/stack_selection.md) | OSS 選定の評価軸と Phase 1–3 結論 |
 | [docs/top2_stack_comparison.md](docs/top2_stack_comparison.md) | PyMPC vs MuJoCo iLQR の比較（コンサル説明用） |
 | [docs/quadruped_mpc_rl_survey.md](docs/quadruped_mpc_rl_survey.md) | 論文・技術サーベイ（GRF/MPC/WBC/RL の位置づけ） |
+| [docs/block-curriculum/00_README.md](docs/block-curriculum/00_README.md) | **学習の進め方の正本。** リポジトリ根 `notebook/` で式を書き、一段ずつ動かす |
+| [notebook/](notebook/) | 学習用 `.ipynb`（00 プラント → 14 ハイブリッド関節）。失敗セルと GIF を残す |
 
 ### スクリプト
 
