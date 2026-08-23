@@ -116,7 +116,7 @@ mg/n_s & c_i=1\\
 
 - 対角脚が交互に上がる（trot）。各脚の実測空中と遊脚リフトが背景の下限以上（空中 \(0.15\,\mathrm{s}\) や数 mm のリフトでは不合格）
 - 胴体 xy が大きく歩かない
-- 連続 20.0 s（数字の正本は `notebook/05` の背景）。「数歩」では不合格
+- 連続 10.0 s（`notebook/05` は完了）。「数歩」では不合格
 - 周波数・duty・遊脚高さは PyMPC trot（\(1.35\,\mathrm{Hz}/0.74/5.6\,\mathrm{cm}\)）と LC `swingHeight=8\,\mathrm{cm}\) から大きく外さない。duty を上げて直立に見せるのは完了ではない
 - EqualShare のまま 2 脚の実遊脚が倒れれば、立脚分配を瞬間 wrench にしてよい（ホライズン NMPC はまだ呼ばない）
 
@@ -138,7 +138,7 @@ mg/n_s & c_i=1\\
 
 offset が脚の組を決める。式は S3 と同じ \(\phi, d, c_i\)。
 
-**完了:** 歩くモード（trot / crawl / pace / bound）は上流の freq / duty / 遊脚高さを使い、**20.0 s 以上かつ 10 m 以上**進む。`full_stance` は静止のまま 20.0 s。比較軸は **ゲイトだけ**。脚力は S3 と同じ。数字の正本は `notebook/06` の背景。
+**完了:** 歩くモード（trot / crawl / pace / bound）は上流の freq / duty / 遊脚高さを使い、**20.0 s 以上かつ 10 m 以上**進む。`full_stance` は静止のまま **10.0 s**（非制御）。比較軸は **ゲイトだけ**。脚力は S3 と同じ。数字の正本は `notebook/06` の背景。
 
 **理解すること:** トロットとペースの違いは予測最適化ではない。位相オフセットである。詳細は[06](06_Gait_Modes.md)。
 
@@ -162,8 +162,8 @@ offset が脚の組を決める。式は S3 と同じ \(\phi, d, c_i\)。
 |---|---|
 | S0 プラント | 5.0 s、全ステップ `qpos` 有限。\(\tau=0\) で倒れてもよい |
 | S1 静止 | 5.0 s、\(\lvert z-z_0\rvert < 3\,\mathrm{cm}\)、\(\lvert\mathrm{roll}\rvert,\lvert\mathrm{pitch}\rvert<0.10\,\mathrm{rad}\)、\(\lVert v\rVert<0.15\,\mathrm{m/s}\) |
-| S3 足踏み | 20.0 s。xy・姿勢・リフト・空中。\(f,d,h_{\mathrm{step}}\) は上流 trot。正本は `notebook/05` |
-| S4 以降の歩行 | 20.0 s かつ 10 m。ゲイト数字は上流表。正本は当該 Notebook |
+| S3 足踏み | 10.0 s で完了。xy・姿勢・リフト・空中。正本は `notebook/05` |
+| S4 以降の歩行（制御） | 20.0 s かつ 10 m。`full_stance` は 10 s。正本は当該 Notebook |
 | フェーズ 3 の速さ | 目標 \(v\) を 20.0 s 以上かつ 10 m。地形は flat 固定 |
 | フェーズ 3 の地形 | 速度は遅く固定。20.0 s 以上。転倒・欠け落ち・滑りを分ける |
 

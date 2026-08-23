@@ -180,9 +180,10 @@ ADAS 操舵 MPC 経験者向けの対応: 車両モデル → SRB、タイヤ力
 
 | 段 | 連続時間 | 歩行 | ゲイト |
 |---|---|---|---|
-| `notebook/00`–`04` | \(\ge 5.0\,\mathrm{s}\) | 求めない | — |
-| `notebook/05` その場足踏み | \(\ge 20.0\,\mathrm{s}\) | その場 | PyMPC trot \(1.35\,\mathrm{Hz}/0.74\)、高さ \(5.6\)–\(8\,\mathrm{cm}\) の窓 |
-| `notebook/06` 以降の歩く段 | \(\ge 20.0\,\mathrm{s}\) | \(\ge 10.0\,\mathrm{m}\) | 同上。窓から外れた duty 上げ・低周波数は不合格 |
+| `notebook/00`–`04` | \(\ge 5.0\,\mathrm{s}\)（完了） | 求めない | — |
+| `notebook/05` その場足踏み | \(\ge 10.0\,\mathrm{s}\)（完了） | その場 | PyMPC trot 窓 |
+| 非制御（`full_stance` など） | \(\ge 10.0\,\mathrm{s}\) | 求めない | 足は上げない |
+| `notebook/06` 以降の歩く（制御） | \(\ge 20.0\,\mathrm{s}\) | \(\ge 10.0\,\mathrm{m}\) | 上流ゲイト窓。duty 上げは不合格 |
 
 duty \(0.96\) の直立や数 mm リフトは、hold が長くても不合格である。数字の正本は各 Notebook の背景。
 
@@ -276,7 +277,7 @@ mpc_dog/
 │
 ├── notebook/                          # ★ 学習本体（進め方は docs/block-curriculum/00_README.md）
 │   ├── 00_mujoco_go2_demo.ipynb … 04_height_p.ipynb   # 5.0 s 判定（プラント〜高さ P）
-│   ├── 05_inplace_trot.ipynb …                        # 05 以降は 20.0 s。歩く段は 10 m
+│   ├── 05_inplace_trot.ipynb …                        # 05 完了（10 s）。歩く制御は 20 s / 10 m
 │   └── assets/                        # 接地反力つき GIF
 │
 ├── docs/
