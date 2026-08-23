@@ -87,7 +87,7 @@ $$
 **完了（数値。連続 5.0 秒以上、全ステップ）:**
 
 - A: 公称高さ $z_0$ で $\lvert z-z_0\rvert<1.5\,\mathrm{cm}$ を 5.0 s、続けて $z_0-3\,\mathrm{cm}$ で $\lvert z-(z_0-3\,\mathrm{cm})\rvert<1.5\,\mathrm{cm}$ を 5.0 s。$\lvert\mathrm{roll}\rvert,\lvert\mathrm{pitch}\rvert<0.10\,\mathrm{rad}$。数字の正本は `notebook/03` の背景
-- B または高さ P: 指令 $z$ に遅れてついていくグラフが1枚ある。合格の秒数は当該 Notebook 背景
+- B または高さ P: 公称 5.0 s のあと $z^{ref}=z_0-3\,\mathrm{cm}$ で $\lvert z-z^{ref}\rvert<1.5\,\mathrm{cm}$ を連続 5.0 s。関節補間は足さない。数字の正本は `notebook/04` の背景
 
 **まだ呼ばない:** 遊脚、予測のホライズン。
 
