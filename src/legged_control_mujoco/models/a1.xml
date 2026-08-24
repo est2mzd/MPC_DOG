@@ -1,0 +1,154 @@
+<mujoco model="qiayuanl_legged_control_a1">
+  <!--
+    Self-contained A1 model transcribed from upstream commit a7f381c:
+      legged_unitree_description/urdf/a1/const.xacro
+      legged_unitree_description/urdf/common/leg.xacro
+      legged_unitree_description/urdf/robot.xacro
+    Meshes are intentionally replaced by primitive geoms; dimensions, link
+    masses/inertias, COMs, joint axes/limits, and attachment offsets are kept.
+  -->
+  <compiler angle="radian" inertiafromgeom="false"/>
+  <option timestep="0.002" gravity="0 0 -9.81" integrator="implicitfast"
+          cone="pyramidal" iterations="50"/>
+  <default>
+    <joint damping="0" frictionloss="0" armature="0.01"/>
+    <geom rgba="0.22 0.25 0.28 1" condim="3"/>
+    <default class="visual">
+      <geom contype="0" conaffinity="0"/>
+    </default>
+    <default class="foot">
+      <geom friction="0.6 0.01 0.001" solref="0.004 1"/>
+    </default>
+    <motor ctrllimited="true" ctrlrange="-33.5 33.5"/>
+  </default>
+
+  <worldbody>
+    <light pos="0 0 2.5" dir="0 0 -1"/>
+    <geom name="floor" type="plane" size="3 3 0.1" rgba="0.75 0.77 0.80 1"
+          friction="0.6 0.01 0.001"/>
+    <body name="trunk" pos="0 0 0.32">
+      <freejoint name="floating_base"/>
+      <inertial pos="0 0.0041 -0.0005" mass="6.0"
+                fullinertia="0.0158533 0.0377999 0.0456542 -0.0000366 -0.0000611 -0.0000275"/>
+      <geom name="trunk_geom" type="box" size="0.1335 0.097 0.057"
+            rgba="0.12 0.14 0.17 1"/>
+      <site name="imu" pos="0 0 0" size="0.005"/>
+
+      <!-- LF: robot.xacro leg origin (+0.1805,+0.047,0), mirror=+1. -->
+      <body name="LF_hip" pos="0.1805 0.047 0">
+        <joint name="LF_HAA" axis="1 0 0" range="-0.802851456 0.802851456"/>
+        <inertial pos="-0.003875 0.001622 0.000042" mass="0.595"
+                  fullinertia="0.000402747 0.000691123 0.000487919 -0.000008709 -0.000000297 -0.000000545"/>
+        <geom class="visual" type="cylinder" size="0.046 0.02" euler="1.5707963 0 0"
+              rgba="0.90 0.43 0.08 1"/>
+        <body name="LF_thigh" pos="0 0.0838 0">
+          <joint name="LF_HFE" axis="0 1 0" range="-1.047197551 4.188790205"/>
+          <inertial pos="-0.003574 -0.019529 -0.030323" mass="0.888"
+                    fullinertia="0.005251806 0.005000475 0.001110200 -0.000002168 0.000346889 -0.000028174"/>
+          <geom class="visual" type="capsule" fromto="0 0 0 0 0 -0.2" size="0.018"
+                rgba="0.90 0.43 0.08 1"/>
+          <body name="LF_calf" pos="0 0 -0.2">
+            <joint name="LF_KFE" axis="0 1 0" range="-2.696533694 -0.916297857"/>
+            <inertial pos="0.007105 -0.000239 -0.096933" mass="0.151"
+                      fullinertia="0.002344758 0.002360755 0.000031158 0 -0.000141275 0"/>
+            <geom class="visual" type="capsule" fromto="0 0 0 0 0 -0.2" size="0.01"/>
+            <body name="LF_FOOT" pos="0 0 -0.2">
+              <inertial pos="0 0 0" mass="0.06" diaginertia="0.0000096 0.0000096 0.0000096"/>
+              <geom name="LF_foot_geom" class="foot" type="sphere" size="0.02"/>
+              <site name="LF_FOOT" size="0.012" rgba="1 0.1 0.1 1"/>
+            </body>
+          </body>
+        </body>
+      </body>
+
+      <!-- LH: robot.xacro leg origin (-0.1805,+0.047,0), mirror=+1. -->
+      <body name="LH_hip" pos="-0.1805 0.047 0">
+        <joint name="LH_HAA" axis="1 0 0" range="-0.802851456 0.802851456"/>
+        <inertial pos="0.003875 0.001622 0.000042" mass="0.595"
+                  fullinertia="0.000402747 0.000691123 0.000487919 0.000008709 0.000000297 -0.000000545"/>
+        <geom class="visual" type="cylinder" size="0.046 0.02" euler="1.5707963 0 0"
+              rgba="0.90 0.43 0.08 1"/>
+        <body name="LH_thigh" pos="0 0.0838 0">
+          <joint name="LH_HFE" axis="0 1 0" range="-1.047197551 4.188790205"/>
+          <inertial pos="-0.003574 -0.019529 -0.030323" mass="0.888"
+                    fullinertia="0.005251806 0.005000475 0.001110200 -0.000002168 0.000346889 -0.000028174"/>
+          <geom class="visual" type="capsule" fromto="0 0 0 0 0 -0.2" size="0.018"
+                rgba="0.90 0.43 0.08 1"/>
+          <body name="LH_calf" pos="0 0 -0.2">
+            <joint name="LH_KFE" axis="0 1 0" range="-2.696533694 -0.916297857"/>
+            <inertial pos="0.007105 -0.000239 -0.096933" mass="0.151"
+                      fullinertia="0.002344758 0.002360755 0.000031158 0 -0.000141275 0"/>
+            <geom class="visual" type="capsule" fromto="0 0 0 0 0 -0.2" size="0.01"/>
+            <body name="LH_FOOT" pos="0 0 -0.2">
+              <inertial pos="0 0 0" mass="0.06" diaginertia="0.0000096 0.0000096 0.0000096"/>
+              <geom name="LH_foot_geom" class="foot" type="sphere" size="0.02"/>
+              <site name="LH_FOOT" size="0.012" rgba="1 0.1 0.1 1"/>
+            </body>
+          </body>
+        </body>
+      </body>
+
+      <!-- RF: robot.xacro leg origin (+0.1805,-0.047,0), mirror=-1. -->
+      <body name="RF_hip" pos="0.1805 -0.047 0">
+        <joint name="RF_HAA" axis="1 0 0" range="-0.802851456 0.802851456"/>
+        <inertial pos="-0.003875 -0.001622 0.000042" mass="0.595"
+                  fullinertia="0.000402747 0.000691123 0.000487919 0.000008709 -0.000000297 0.000000545"/>
+        <geom class="visual" type="cylinder" size="0.046 0.02" euler="1.5707963 0 0"
+              rgba="0.90 0.43 0.08 1"/>
+        <body name="RF_thigh" pos="0 -0.0838 0">
+          <joint name="RF_HFE" axis="0 1 0" range="-1.047197551 4.188790205"/>
+          <inertial pos="-0.003574 0.019529 -0.030323" mass="0.888"
+                    fullinertia="0.005251806 0.005000475 0.001110200 0.000002168 0.000346889 0.000028174"/>
+          <geom class="visual" type="capsule" fromto="0 0 0 0 0 -0.2" size="0.018"
+                rgba="0.90 0.43 0.08 1"/>
+          <body name="RF_calf" pos="0 0 -0.2">
+            <joint name="RF_KFE" axis="0 1 0" range="-2.696533694 -0.916297857"/>
+            <inertial pos="0.007105 -0.000239 -0.096933" mass="0.151"
+                      fullinertia="0.002344758 0.002360755 0.000031158 0 -0.000141275 0"/>
+            <geom class="visual" type="capsule" fromto="0 0 0 0 0 -0.2" size="0.01"/>
+            <body name="RF_FOOT" pos="0 0 -0.2">
+              <inertial pos="0 0 0" mass="0.06" diaginertia="0.0000096 0.0000096 0.0000096"/>
+              <geom name="RF_foot_geom" class="foot" type="sphere" size="0.02"/>
+              <site name="RF_FOOT" size="0.012" rgba="1 0.1 0.1 1"/>
+            </body>
+          </body>
+        </body>
+      </body>
+
+      <!-- RH: robot.xacro leg origin (-0.1805,-0.047,0), mirror=-1. -->
+      <body name="RH_hip" pos="-0.1805 -0.047 0">
+        <joint name="RH_HAA" axis="1 0 0" range="-0.802851456 0.802851456"/>
+        <inertial pos="0.003875 -0.001622 0.000042" mass="0.595"
+                  fullinertia="0.000402747 0.000691123 0.000487919 -0.000008709 0.000000297 0.000000545"/>
+        <geom class="visual" type="cylinder" size="0.046 0.02" euler="1.5707963 0 0"
+              rgba="0.90 0.43 0.08 1"/>
+        <body name="RH_thigh" pos="0 -0.0838 0">
+          <joint name="RH_HFE" axis="0 1 0" range="-1.047197551 4.188790205"/>
+          <inertial pos="-0.003574 0.019529 -0.030323" mass="0.888"
+                    fullinertia="0.005251806 0.005000475 0.001110200 0.000002168 0.000346889 0.000028174"/>
+          <geom class="visual" type="capsule" fromto="0 0 0 0 0 -0.2" size="0.018"
+                rgba="0.90 0.43 0.08 1"/>
+          <body name="RH_calf" pos="0 0 -0.2">
+            <joint name="RH_KFE" axis="0 1 0" range="-2.696533694 -0.916297857"/>
+            <inertial pos="0.007105 -0.000239 -0.096933" mass="0.151"
+                      fullinertia="0.002344758 0.002360755 0.000031158 0 -0.000141275 0"/>
+            <geom class="visual" type="capsule" fromto="0 0 0 0 0 -0.2" size="0.01"/>
+            <body name="RH_FOOT" pos="0 0 -0.2">
+              <inertial pos="0 0 0" mass="0.06" diaginertia="0.0000096 0.0000096 0.0000096"/>
+              <geom name="RH_foot_geom" class="foot" type="sphere" size="0.02"/>
+              <site name="RH_FOOT" size="0.012" rgba="1 0.1 0.1 1"/>
+            </body>
+          </body>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+
+  <!-- LeggedController.cpp lines 54-55 joint order. -->
+  <actuator>
+    <motor name="LF_HAA" joint="LF_HAA"/><motor name="LF_HFE" joint="LF_HFE"/><motor name="LF_KFE" joint="LF_KFE"/>
+    <motor name="LH_HAA" joint="LH_HAA"/><motor name="LH_HFE" joint="LH_HFE"/><motor name="LH_KFE" joint="LH_KFE"/>
+    <motor name="RF_HAA" joint="RF_HAA"/><motor name="RF_HFE" joint="RF_HFE"/><motor name="RF_KFE" joint="RF_KFE"/>
+    <motor name="RH_HAA" joint="RH_HAA"/><motor name="RH_HFE" joint="RH_HFE"/><motor name="RH_KFE" joint="RH_KFE"/>
+  </actuator>
+</mujoco>
