@@ -1,0 +1,40 @@
+{
+  "terminalAllowlist": [
+    "git status",
+    "git diff",
+    "git log",
+    "git show",
+    "git fetch",
+    "git pull --ff-only",
+    "git push origin main",
+    "git push -u origin HEAD",
+    "git clone",
+    "rg",
+    "ls",
+    "pwd",
+    "command -v",
+    "uv sync",
+    "uv run",
+    ".venv/bin/python",
+    ".venv/bin/jupyter",
+    ".venv/bin/pytest",
+    "set -a && source .env.workshop && set +a && .venv/bin/python scripts/run_pympc_long_gif_benchmark.py",
+    "set -a && source .env.workshop && set +a && .venv/bin/python scripts/run_pympc_curriculum_benchmark.py"
+  ],
+  "mcpAllowlist": [],
+  "autoRun": {
+    "allow_instructions": [
+      "Allow non-destructive commands that inspect, test, build, simulate, benchmark, execute notebooks, or generate GIFs and other derived artifacts inside the current workspace.",
+      "Allow commands that source .env.workshop and run project-owned Python scripts with the workspace .venv.",
+      "Allow creation or overwrite of generated benchmark, notebook output, plot, GIF, log, cache, and temporary files inside this workspace.",
+      "Allow dependency installation into the workspace-local virtual environment and non-destructive downloads or clones into the workspace.",
+      "Allow ordinary non-force Git fetch, fast-forward pull, commit, and push operations."
+    ],
+    "block_instructions": [
+      "Require approval for file or directory deletion commands, recursive removal, destructive overwrite of source files, or commands targeting paths outside the current workspace.",
+      "Require approval for destructive Git operations including reset --hard, clean, force push, force checkout, rebase, amend, and history rewriting.",
+      "Require approval for sudo, system-wide package installation, service management, system configuration changes, device access, or Docker and database mutations.",
+      "Require approval for commands that send credentials, messages, or data other than ordinary Git commits to external services."
+    ]
+  }
+}
