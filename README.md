@@ -280,6 +280,11 @@ mpc_dog/
 │   ├── 05_inplace_trot.ipynb …                        # 05 完了（10 s）。歩く制御は 20 s / 10 m
 │   └── assets/                        # 接地反力つき GIF
 │
+├── notebook_pympc/                    # ★ PyMPC 理論・コード学習（00–16）
+│   ├── README.md                      #   起動方法・学習原則
+│   ├── 00_curriculum_map.ipynb        #   指令→Gait→MPC→GRF→Torque の地図
+│   └── 01_*.ipynb … 16_*.ipynb       #   小実験から tuning・数式変更まで
+│
 ├── docs/
 │   ├── block-curriculum/              # ★ 学習の順番・成功条件（§3.8）
 │   ├── pympc_2day/                    # 2 日間ワークショップ教材（→ 詳細は下記）
@@ -343,6 +348,7 @@ mpc_dog/
 | [docs/quadruped_mpc_rl_survey.md](docs/quadruped_mpc_rl_survey.md) | 論文・技術サーベイ（GRF/MPC/WBC/RL の位置づけ） |
 | [docs/block-curriculum/00_README.md](docs/block-curriculum/00_README.md) | **学習の進め方の正本。** リポジトリ根 `notebook/` で式を書き、一段ずつ動かす |
 | [notebook/](notebook/) | 学習用 `.ipynb`（00 プラント → 14 ハイブリッド関節）。失敗セルと GIF を残す |
+| [notebook_pympc/README.md](notebook_pympc/README.md) | **PyMPC 理論・コード実行教材の入口。** 00–16を順に進め、最終的にチューニングと数式変更を扱う |
 
 ### スクリプト
 
