@@ -1,0 +1,44 @@
+{
+  "scenario": {
+    "id": "E03",
+    "difficulty": "easy",
+    "description": "Flat 0.60 m/s, long stance",
+    "scene": "flat",
+    "vx": 0.6,
+    "yaw_rate": 0.0,
+    "ground_mu": 0.8,
+    "mpc_mu": 0.42,
+    "step_freq": 1.25,
+    "duty_factor": 0.78,
+    "ref_z_scale": 1.08,
+    "foothold_optimization": true,
+    "speed_ramp_s": 4.0,
+    "min_duration_s": 20.0,
+    "min_distance_m": 10.0,
+    "max_duration_s": 60.0,
+    "max_falls": 20
+  },
+  "metrics": {
+    "task_completed": true,
+    "strict_success": true,
+    "simulated_s": 21.076,
+    "gif_playback_s": 21.19,
+    "cumulative_distance_m": 10.00066057624981,
+    "falls": 0,
+    "speed_rmse_mps": 0.11059946453927168,
+    "min_height_m": 0.28982615539123635,
+    "max_abs_roll_deg": 0.6932565579106613,
+    "max_abs_pitch_deg": 4.694410426852991,
+    "torque_saturation_rate": 0.006990573796419308,
+    "max_abs_raw_torque_nm": 39.94581064267105,
+    "mpc_solve_mean_ms": 1.5513695445920306,
+    "mpc_solve_p95_ms": 2.192549999999999,
+    "control_mean_ms": 2.247794356966578,
+    "wall_s": 31.769167307997122,
+    "realtime_factor": 0.6634105261768893,
+    "solver_status_histogram": {
+      "2": 2108
+    },
+    "gif_path": "benchmark_results_long/gifs/E03.gif"
+  }
+}

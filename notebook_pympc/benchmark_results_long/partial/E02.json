@@ -1,0 +1,44 @@
+{
+  "scenario": {
+    "id": "E02",
+    "difficulty": "easy",
+    "description": "Flat 0.55 m/s, slow gait",
+    "scene": "flat",
+    "vx": 0.55,
+    "yaw_rate": 0.0,
+    "ground_mu": 0.8,
+    "mpc_mu": 0.42,
+    "step_freq": 1.15,
+    "duty_factor": 0.76,
+    "ref_z_scale": 1.08,
+    "foothold_optimization": true,
+    "speed_ramp_s": 4.0,
+    "min_duration_s": 20.0,
+    "min_distance_m": 10.0,
+    "max_duration_s": 60.0,
+    "max_falls": 20
+  },
+  "metrics": {
+    "task_completed": true,
+    "strict_success": true,
+    "simulated_s": 21.874,
+    "gif_playback_s": 21.97,
+    "cumulative_distance_m": 10.000206249131772,
+    "falls": 0,
+    "speed_rmse_mps": 0.07656458158746969,
+    "min_height_m": 0.2898261558597302,
+    "max_abs_roll_deg": 0.9525300323969822,
+    "max_abs_pitch_deg": 3.4181198016872503,
+    "torque_saturation_rate": 0.0004038279845173875,
+    "max_abs_raw_torque_nm": 36.295201353319015,
+    "mpc_solve_mean_ms": 1.4768583180987203,
+    "mpc_solve_p95_ms": 2.074,
+    "control_mean_ms": 2.2548952367201727,
+    "wall_s": 32.82465451200551,
+    "realtime_factor": 0.6663893443874529,
+    "solver_status_histogram": {
+      "2": 2188
+    },
+    "gif_path": "benchmark_results_long/gifs/E02.gif"
+  }
+}

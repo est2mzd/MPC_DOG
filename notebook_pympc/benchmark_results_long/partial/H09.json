@@ -1,0 +1,44 @@
+{
+  "scenario": {
+    "id": "H09",
+    "difficulty": "hard",
+    "description": "Bumpy downhill 0.60 m/s",
+    "scene": "bumpy_downhill",
+    "vx": 0.6,
+    "yaw_rate": 0.0,
+    "ground_mu": 0.8,
+    "mpc_mu": 0.35,
+    "step_freq": 1.05,
+    "duty_factor": 0.82,
+    "ref_z_scale": 1.1,
+    "foothold_optimization": true,
+    "speed_ramp_s": 10.0,
+    "min_duration_s": 20.0,
+    "min_distance_m": 10.0,
+    "max_duration_s": 60.0,
+    "max_falls": 20
+  },
+  "metrics": {
+    "task_completed": true,
+    "strict_success": false,
+    "simulated_s": 32.502,
+    "gif_playback_s": 32.63,
+    "cumulative_distance_m": 10.000915012379092,
+    "falls": 1,
+    "speed_rmse_mps": 0.38406701019644696,
+    "min_height_m": 0.4412006463720155,
+    "max_abs_roll_deg": 77.79713092958038,
+    "max_abs_pitch_deg": 24.19697533280872,
+    "torque_saturation_rate": 0.023337025413820687,
+    "max_abs_raw_torque_nm": 200.78886602825176,
+    "mpc_solve_mean_ms": 1.5978219009535528,
+    "mpc_solve_p95_ms": 2.4825,
+    "control_mean_ms": 2.0351905627726614,
+    "wall_s": 45.45496262300003,
+    "realtime_factor": 0.7150374375966183,
+    "solver_status_histogram": {
+      "2": 3251
+    },
+    "gif_path": "benchmark_results_long/gifs/H09.gif"
+  }
+}

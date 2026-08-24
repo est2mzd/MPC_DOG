@@ -1,0 +1,44 @@
+{
+  "scenario": {
+    "id": "H06",
+    "difficulty": "hard",
+    "description": "Perlin 0.70 m/s, low friction",
+    "scene": "perlin",
+    "vx": 0.7,
+    "yaw_rate": 0.0,
+    "ground_mu": 0.45,
+    "mpc_mu": 0.35,
+    "step_freq": 1.15,
+    "duty_factor": 0.78,
+    "ref_z_scale": 1.08,
+    "foothold_optimization": true,
+    "speed_ramp_s": 6.0,
+    "min_duration_s": 20.0,
+    "min_distance_m": 10.0,
+    "max_duration_s": 60.0,
+    "max_falls": 20
+  },
+  "metrics": {
+    "task_completed": true,
+    "strict_success": false,
+    "simulated_s": 32.662,
+    "gif_playback_s": 32.76,
+    "cumulative_distance_m": 10.001066352006951,
+    "falls": 0,
+    "speed_rmse_mps": 0.47014305128164435,
+    "min_height_m": 0.6409999588358526,
+    "max_abs_roll_deg": 42.77710248055322,
+    "max_abs_pitch_deg": 21.56993562864974,
+    "torque_saturation_rate": 0.022365439960810727,
+    "max_abs_raw_torque_nm": 71.43359118616596,
+    "mpc_solve_mean_ms": 1.6773143556779921,
+    "mpc_solve_p95_ms": 2.491499999999999,
+    "control_mean_ms": 2.124770648097064,
+    "wall_s": 46.396610205003526,
+    "realtime_factor": 0.7039738432545585,
+    "solver_status_histogram": {
+      "2": 3267
+    },
+    "gif_path": "benchmark_results_long/gifs/H06.gif"
+  }
+}

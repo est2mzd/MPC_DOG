@@ -1,0 +1,44 @@
+{
+  "scenario": {
+    "id": "N01",
+    "difficulty": "normal",
+    "description": "Flat 0.80 m/s",
+    "scene": "flat",
+    "vx": 0.8,
+    "yaw_rate": 0.0,
+    "ground_mu": 0.8,
+    "mpc_mu": 0.42,
+    "step_freq": 1.25,
+    "duty_factor": 0.76,
+    "ref_z_scale": 1.08,
+    "foothold_optimization": true,
+    "speed_ramp_s": 4.0,
+    "min_duration_s": 20.0,
+    "min_distance_m": 10.0,
+    "max_duration_s": 60.0,
+    "max_falls": 20
+  },
+  "metrics": {
+    "task_completed": true,
+    "strict_success": false,
+    "simulated_s": 25.416,
+    "gif_playback_s": 25.48,
+    "cumulative_distance_m": 10.000040327965305,
+    "falls": 0,
+    "speed_rmse_mps": 0.5104596028499712,
+    "min_height_m": 0.27330613384628993,
+    "max_abs_roll_deg": 35.43284333148207,
+    "max_abs_pitch_deg": 25.194793935805222,
+    "torque_saturation_rate": 0.032643479173224216,
+    "max_abs_raw_torque_nm": 91.93133427504694,
+    "mpc_solve_mean_ms": 1.804344217151849,
+    "mpc_solve_p95_ms": 2.7469499999999996,
+    "control_mean_ms": 2.2581951967235527,
+    "wall_s": 37.70277423899097,
+    "realtime_factor": 0.6741148499814003,
+    "solver_status_histogram": {
+      "2": 2542
+    },
+    "gif_path": "benchmark_results_long/gifs/N01.gif"
+  }
+}

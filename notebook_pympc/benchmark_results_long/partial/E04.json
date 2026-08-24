@@ -1,0 +1,44 @@
+{
+  "scenario": {
+    "id": "E04",
+    "difficulty": "easy",
+    "description": "Flat 0.60 m/s, conservative MPC friction",
+    "scene": "flat",
+    "vx": 0.6,
+    "yaw_rate": 0.0,
+    "ground_mu": 0.8,
+    "mpc_mu": 0.38,
+    "step_freq": 1.25,
+    "duty_factor": 0.76,
+    "ref_z_scale": 1.08,
+    "foothold_optimization": true,
+    "speed_ramp_s": 4.0,
+    "min_duration_s": 20.0,
+    "min_distance_m": 10.0,
+    "max_duration_s": 60.0,
+    "max_falls": 20
+  },
+  "metrics": {
+    "task_completed": true,
+    "strict_success": true,
+    "simulated_s": 20.442,
+    "gif_playback_s": 20.54,
+    "cumulative_distance_m": 10.000696246639594,
+    "falls": 0,
+    "speed_rmse_mps": 0.09064908036777763,
+    "min_height_m": 0.2898242158798517,
+    "max_abs_roll_deg": 0.7533527489046151,
+    "max_abs_pitch_deg": 2.8179603477851076,
+    "torque_saturation_rate": 0.0006848644946678407,
+    "max_abs_raw_torque_nm": 37.574590444127274,
+    "mpc_solve_mean_ms": 1.526436185819071,
+    "mpc_solve_p95_ms": 2.0942,
+    "control_mean_ms": 2.261005776149499,
+    "wall_s": 30.710965337988455,
+    "realtime_factor": 0.6656254459938424,
+    "solver_status_histogram": {
+      "2": 2045
+    },
+    "gif_path": "benchmark_results_long/gifs/E04.gif"
+  }
+}

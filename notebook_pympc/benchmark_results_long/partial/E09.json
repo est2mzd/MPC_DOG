@@ -1,0 +1,44 @@
+{
+  "scenario": {
+    "id": "E09",
+    "difficulty": "easy",
+    "description": "Flat 0.60 m/s, lower body reference",
+    "scene": "flat",
+    "vx": 0.6,
+    "yaw_rate": 0.0,
+    "ground_mu": 0.8,
+    "mpc_mu": 0.42,
+    "step_freq": 1.25,
+    "duty_factor": 0.76,
+    "ref_z_scale": 1.06,
+    "foothold_optimization": true,
+    "speed_ramp_s": 4.0,
+    "min_duration_s": 20.0,
+    "min_distance_m": 10.0,
+    "max_duration_s": 60.0,
+    "max_falls": 20
+  },
+  "metrics": {
+    "task_completed": true,
+    "strict_success": true,
+    "simulated_s": 20.518,
+    "gif_playback_s": 20.54,
+    "cumulative_distance_m": 10.000649405486726,
+    "falls": 0,
+    "speed_rmse_mps": 0.09532744338180288,
+    "min_height_m": 0.2897815911565358,
+    "max_abs_roll_deg": 0.8917375785437224,
+    "max_abs_pitch_deg": 6.20727737529033,
+    "torque_saturation_rate": 0.0011534587516652045,
+    "max_abs_raw_torque_nm": 37.44993919739046,
+    "mpc_solve_mean_ms": 1.495796783625731,
+    "mpc_solve_p95_ms": 2.09,
+    "control_mean_ms": 2.2467196673342156,
+    "wall_s": 30.686735791008687,
+    "realtime_factor": 0.6686276487579966,
+    "solver_status_histogram": {
+      "2": 2052
+    },
+    "gif_path": "benchmark_results_long/gifs/E09.gif"
+  }
+}

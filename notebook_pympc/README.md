@@ -16,7 +16,8 @@ uv run --extra workshop jupyter lab
 
 `00_curriculum_map.ipynb` から番号順に進めます。`00` で背景・目的・結論と
 ASCIIデータフローを把握し、`01`–`12` で処理ブロックの式とコメント付きコードを対応させます。
-`16` の最後には実リポジトリをEasy / Normal / Hard各10条件で動かした性能評価があります。
+`16` の最後には実リポジトリをEasy / Normal / Hard各10条件で動かした長時間性能評価と、
+各シナリオのGIFがあります。全30条件を20秒以上、累積10 m以上まで実行しています。
 
 ## 原則
 
@@ -30,11 +31,12 @@ ASCIIデータフローを把握し、`01`–`12` で処理ブロックの式と
 ## 30シナリオ性能評価
 
 集計結果は `16_equation_modification_capstone.ipynb` の後半、機械可読な実測値は
-`benchmark_results/scenario_results.json` にあります。
+`benchmark_results_long/scenario_results.json`、GIFは
+`benchmark_results_long/gifs/` にあります。
 
 ```bash
-source .env.workshop
-.venv/bin/python scripts/run_pympc_curriculum_benchmark.py
+set -a && source .env.workshop && set +a
+.venv/bin/python scripts/run_pympc_long_gif_benchmark.py
 ```
 
 ## 対応する詳細資料

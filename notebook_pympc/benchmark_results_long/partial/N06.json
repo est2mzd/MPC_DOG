@@ -1,0 +1,44 @@
+{
+  "scenario": {
+    "id": "N06",
+    "difficulty": "normal",
+    "description": "Perlin 0.50 m/s",
+    "scene": "perlin",
+    "vx": 0.5,
+    "yaw_rate": 0.0,
+    "ground_mu": 0.8,
+    "mpc_mu": 0.42,
+    "step_freq": 1.25,
+    "duty_factor": 0.76,
+    "ref_z_scale": 1.08,
+    "foothold_optimization": true,
+    "speed_ramp_s": 4.0,
+    "min_duration_s": 20.0,
+    "min_distance_m": 10.0,
+    "max_duration_s": 60.0,
+    "max_falls": 20
+  },
+  "metrics": {
+    "task_completed": true,
+    "strict_success": true,
+    "simulated_s": 23.578,
+    "gif_playback_s": 23.66,
+    "cumulative_distance_m": 10.000458694012377,
+    "falls": 0,
+    "speed_rmse_mps": 0.06180058159756182,
+    "min_height_m": 0.6846818824558332,
+    "max_abs_roll_deg": 3.8962719750732586,
+    "max_abs_pitch_deg": 9.551800740382784,
+    "torque_saturation_rate": 2.8274945570729776e-05,
+    "max_abs_raw_torque_nm": 24.342859832539038,
+    "mpc_solve_mean_ms": 1.3232065309584393,
+    "mpc_solve_p95_ms": 1.8114500000000002,
+    "control_mean_ms": 2.1020308968945662,
+    "wall_s": 33.201582528010476,
+    "realtime_factor": 0.710146872671158,
+    "solver_status_histogram": {
+      "2": 2358
+    },
+    "gif_path": "benchmark_results_long/gifs/N06.gif"
+  }
+}

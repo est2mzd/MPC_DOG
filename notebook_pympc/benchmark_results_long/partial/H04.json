@@ -1,0 +1,44 @@
+{
+  "scenario": {
+    "id": "H04",
+    "difficulty": "hard",
+    "description": "Random boxes 0.70 m/s",
+    "scene": "random_boxes",
+    "vx": 0.7,
+    "yaw_rate": 0.0,
+    "ground_mu": 0.8,
+    "mpc_mu": 0.42,
+    "step_freq": 1.15,
+    "duty_factor": 0.78,
+    "ref_z_scale": 1.08,
+    "foothold_optimization": true,
+    "speed_ramp_s": 6.0,
+    "min_duration_s": 20.0,
+    "min_distance_m": 10.0,
+    "max_duration_s": 60.0,
+    "max_falls": 20
+  },
+  "metrics": {
+    "task_completed": true,
+    "strict_success": false,
+    "simulated_s": 33.818,
+    "gif_playback_s": 33.93,
+    "cumulative_distance_m": 10.00100248043224,
+    "falls": 8,
+    "speed_rmse_mps": 0.5766022141356414,
+    "min_height_m": 0.23050533768231887,
+    "max_abs_roll_deg": 82.0071659895862,
+    "max_abs_pitch_deg": 49.27132901006653,
+    "torque_saturation_rate": 0.03689356752814083,
+    "max_abs_raw_torque_nm": 1275.6585531302376,
+    "mpc_solve_mean_ms": 1.7330496747486694,
+    "mpc_solve_p95_ms": 2.6338999999999997,
+    "control_mean_ms": 2.1604155931456472,
+    "wall_s": 48.58268768599373,
+    "realtime_factor": 0.6960915834582293,
+    "solver_status_histogram": {
+      "2": 3382
+    },
+    "gif_path": "benchmark_results_long/gifs/H04.gif"
+  }
+}

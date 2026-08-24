@@ -1,0 +1,44 @@
+{
+  "scenario": {
+    "id": "H07",
+    "difficulty": "hard",
+    "description": "Bumpy flat 0.80 m/s",
+    "scene": "bumpy_flat",
+    "vx": 0.8,
+    "yaw_rate": 0.0,
+    "ground_mu": 0.8,
+    "mpc_mu": 0.42,
+    "step_freq": 1.15,
+    "duty_factor": 0.78,
+    "ref_z_scale": 1.08,
+    "foothold_optimization": true,
+    "speed_ramp_s": 8.0,
+    "min_duration_s": 20.0,
+    "min_distance_m": 10.0,
+    "max_duration_s": 60.0,
+    "max_falls": 20
+  },
+  "metrics": {
+    "task_completed": true,
+    "strict_success": false,
+    "simulated_s": 29.768,
+    "gif_playback_s": 29.77,
+    "cumulative_distance_m": 10.000362110551679,
+    "falls": 1,
+    "speed_rmse_mps": 0.5410817056023817,
+    "min_height_m": 0.3517893460073693,
+    "max_abs_roll_deg": 97.04555675429866,
+    "max_abs_pitch_deg": 28.431780019260245,
+    "torque_saturation_rate": 0.036039819045059575,
+    "max_abs_raw_torque_nm": 2257.5491768041115,
+    "mpc_solve_mean_ms": 1.6328612697346323,
+    "mpc_solve_p95_ms": 2.589,
+    "control_mean_ms": 2.1192081995667236,
+    "wall_s": 42.83075819000078,
+    "realtime_factor": 0.6950145469745527,
+    "solver_status_histogram": {
+      "2": 2977
+    },
+    "gif_path": "benchmark_results_long/gifs/H07.gif"
+  }
+}

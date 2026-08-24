@@ -1,0 +1,44 @@
+{
+  "scenario": {
+    "id": "N05",
+    "difficulty": "normal",
+    "description": "Random boxes 0.60 m/s conservative gait",
+    "scene": "random_boxes",
+    "vx": 0.6,
+    "yaw_rate": 0.0,
+    "ground_mu": 0.8,
+    "mpc_mu": 0.42,
+    "step_freq": 1.15,
+    "duty_factor": 0.78,
+    "ref_z_scale": 1.08,
+    "foothold_optimization": true,
+    "speed_ramp_s": 4.0,
+    "min_duration_s": 20.0,
+    "min_distance_m": 10.0,
+    "max_duration_s": 60.0,
+    "max_falls": 20
+  },
+  "metrics": {
+    "task_completed": true,
+    "strict_success": false,
+    "simulated_s": 32.392,
+    "gif_playback_s": 32.5,
+    "cumulative_distance_m": 10.000199998695372,
+    "falls": 8,
+    "speed_rmse_mps": 0.4129267284995188,
+    "min_height_m": 0.2605369850173071,
+    "max_abs_roll_deg": 151.14709521144283,
+    "max_abs_pitch_deg": 57.37828075798331,
+    "torque_saturation_rate": 0.02801617683378612,
+    "max_abs_raw_torque_nm": 5763.590871127349,
+    "mpc_solve_mean_ms": 1.5997055555555557,
+    "mpc_solve_p95_ms": 2.4459999999999997,
+    "control_mean_ms": 2.132123293710032,
+    "wall_s": 45.970343535998836,
+    "realtime_factor": 0.7046281908821109,
+    "solver_status_histogram": {
+      "2": 3240
+    },
+    "gif_path": "benchmark_results_long/gifs/N05.gif"
+  }
+}
