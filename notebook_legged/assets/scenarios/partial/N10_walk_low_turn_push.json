@@ -1,0 +1,111 @@
+{
+  "adapter_implementation_revision": "c51ef9e",
+  "config": {
+    "base_height": 0.3,
+    "description": "Lower body walk, turn, and forward push",
+    "difficulty": "normal",
+    "friction": 0.6,
+    "gait": "static_walk",
+    "name": "N10_walk_low_turn_push",
+    "payload_mass": 0.0,
+    "push_duration": 0.2,
+    "push_force": [
+      25.0,
+      0.0,
+      0.0
+    ],
+    "push_start": 12.0,
+    "seed": 210,
+    "vx": 0.1,
+    "vy": 0.0,
+    "yaw_rate": 0.15
+  },
+  "implementation_boundary": "qiayuanl/legged_control gait/state/input/WBC/hybrid-command interfaces; deterministic instantaneous friction-constrained force planner and MuJoCo acceleration-level WBC replace ROS/OCS2 SQP; not Quadruped-PyMPC",
+  "metrics": {
+    "control_samples": 2000,
+    "failure_reasons": [
+      "fall detected",
+      "base height below threshold",
+      "height RMSE exceeds threshold",
+      "roll/pitch exceeds threshold",
+      "planar velocity RMSE exceeds threshold",
+      "yaw-rate RMSE exceeds threshold",
+      "torque saturation fraction exceeds threshold",
+      "dynamics residual exceeds threshold",
+      "contact agreement below threshold"
+    ],
+    "fall_time_s": 1.1100000000000008,
+    "fallen": true,
+    "final_base_xyz_m": [
+      0.08385052869826387,
+      -0.4327381240970723,
+      0.16863241219166544
+    ],
+    "gif_frame_count": 200,
+    "gif_path": "gifs/N10_walk_low_turn_push.gif",
+    "gif_playback_duration_s": 20.0,
+    "height_error_rmse_m": 0.13482379070437103,
+    "maximum_abs_height_error_m": 0.24549154548070512,
+    "maximum_abs_roll_pitch_rad": 3.141165381615522,
+    "maximum_abs_torque_nm": 33.5,
+    "maximum_base_height_m": 0.3314,
+    "maximum_dynamics_residual": 400.41535321708085,
+    "minimum_base_height_m": 0.054508454519294876,
+    "net_displacement_xy_m": [
+      0.08385052869826387,
+      -0.4327381240970723
+    ],
+    "net_distance_m": 0.44078701796903175,
+    "passed": false,
+    "path_distance_m": 8.011917313843243,
+    "planned_vs_measured_contact_agreement": 0.509375,
+    "realtime_factor": 7.258638914435146,
+    "requested_duration_s": 20.0,
+    "roll_pitch_rmse_rad": [
+      2.009903701095409,
+      0.7488928621225461
+    ],
+    "simulated_duration_s": 19.999999999999794,
+    "simulation_wall_time_s": 2.755337500013411,
+    "torque_saturation_fraction": 0.11733333333333333,
+    "velocity_tracking_rmse": {
+      "planar_mps": 0.4784912244370236,
+      "vx_mps": 0.3337934104150347,
+      "vy_mps": 0.3428349617917378,
+      "yaw_rate_radps": 2.7569402513249592
+    }
+  },
+  "render": {
+    "camera": "free camera following A1 base; fixed world floor reference",
+    "enabled": true,
+    "fps_requested": 10,
+    "height": 360,
+    "overlay": "scenario, difficulty, time, command, displacement, height, fall status",
+    "width": 480
+  },
+  "schema_version": 1,
+  "threshold_definitions": {
+    "attitude": "maximum absolute roll or pitch at any control sample",
+    "contact_agreement": "fraction of foot/control-sample booleans where planned stance equals measured MuJoCo foot contact",
+    "dynamics_residual": "maximum L2 norm of post-torque-saturation generalized equations-of-motion residual; translational rows are N and rotational rows are N m",
+    "fall": "base height <0.18 m or |roll|/|pitch| >0.9 rad at any control sample",
+    "height": "base z relative to the scenario's commanded base height",
+    "torque": "applied hybrid-command torque; A1 effort limit is 33.5 N m",
+    "velocity": "RMSE of world-frame vx/vy and yaw-rate tracking"
+  },
+  "thresholds": {
+    "fall_allowed": false,
+    "maximum_abs_torque_nm": 33.500001,
+    "maximum_dynamics_residual": 5.0,
+    "maximum_height_rmse_m": 0.1,
+    "maximum_planar_velocity_rmse_mps": 0.35,
+    "maximum_roll_pitch_rad": 0.6,
+    "maximum_torque_saturation_fraction": 0.1,
+    "maximum_yaw_rate_rmse_radps": 0.6,
+    "minimum_base_height_m": 0.18,
+    "minimum_contact_agreement": 0.55,
+    "minimum_gif_playback_duration_s": 20.0,
+    "minimum_simulated_duration_s": 20.0
+  },
+  "upstream_commit": "a7f381c0367e98e31c01336e678eef47e304d40d"
+}

@@ -1,0 +1,101 @@
+{
+  "adapter_implementation_revision": "c51ef9e",
+  "config": {
+    "base_height": 0.32,
+    "description": "Nominal stance",
+    "difficulty": "easy",
+    "friction": 0.6,
+    "gait": "stance",
+    "name": "E01_stance_baseline",
+    "payload_mass": 0.0,
+    "push_duration": 0.0,
+    "push_force": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "push_start": 0.0,
+    "seed": 101,
+    "vx": 0.0,
+    "vy": 0.0,
+    "yaw_rate": 0.0
+  },
+  "implementation_boundary": "qiayuanl/legged_control gait/state/input/WBC/hybrid-command interfaces; deterministic instantaneous friction-constrained force planner and MuJoCo acceleration-level WBC replace ROS/OCS2 SQP; not Quadruped-PyMPC",
+  "metrics": {
+    "control_samples": 2000,
+    "failure_reasons": [],
+    "fall_time_s": null,
+    "fallen": false,
+    "final_base_xyz_m": [
+      -0.017436526665132845,
+      0.00024317630346335455,
+      0.32049228553304565
+    ],
+    "gif_frame_count": 200,
+    "gif_path": "gifs/E01_stance_baseline.gif",
+    "gif_playback_duration_s": 20.0,
+    "height_error_rmse_m": 0.0016604996365176426,
+    "maximum_abs_height_error_m": 0.011399999999999966,
+    "maximum_abs_roll_pitch_rad": 0.002862855176606852,
+    "maximum_abs_torque_nm": 4.982439540499321,
+    "maximum_base_height_m": 0.3314,
+    "maximum_dynamics_residual": 0.0008535627134837856,
+    "minimum_base_height_m": 0.32049228553304565,
+    "net_displacement_xy_m": [
+      -0.017436526665132845,
+      0.00024317630346335455
+    ],
+    "net_distance_m": 0.01743822229639406,
+    "passed": true,
+    "path_distance_m": 0.017447537552801425,
+    "planned_vs_measured_contact_agreement": 0.9995,
+    "realtime_factor": 10.766645304181825,
+    "requested_duration_s": 20.0,
+    "roll_pitch_rmse_rad": [
+      0.0008369292804848895,
+      0.0010393725307816617
+    ],
+    "simulated_duration_s": 19.999999999999794,
+    "simulation_wall_time_s": 1.857588825019775,
+    "torque_saturation_fraction": 0.0,
+    "velocity_tracking_rmse": {
+      "planar_mps": 0.001764710624774829,
+      "vx_mps": 0.001763731790440485,
+      "vy_mps": 5.8768704109996596e-05,
+      "yaw_rate_radps": 7.087124700328368e-05
+    }
+  },
+  "render": {
+    "camera": "free camera following A1 base; fixed world floor reference",
+    "enabled": true,
+    "fps_requested": 10,
+    "height": 360,
+    "overlay": "scenario, difficulty, time, command, displacement, height, fall status",
+    "width": 480
+  },
+  "schema_version": 1,
+  "threshold_definitions": {
+    "attitude": "maximum absolute roll or pitch at any control sample",
+    "contact_agreement": "fraction of foot/control-sample booleans where planned stance equals measured MuJoCo foot contact",
+    "dynamics_residual": "maximum L2 norm of post-torque-saturation generalized equations-of-motion residual; translational rows are N and rotational rows are N m",
+    "fall": "base height <0.18 m or |roll|/|pitch| >0.9 rad at any control sample",
+    "height": "base z relative to the scenario's commanded base height",
+    "torque": "applied hybrid-command torque; A1 effort limit is 33.5 N m",
+    "velocity": "RMSE of world-frame vx/vy and yaw-rate tracking"
+  },
+  "thresholds": {
+    "fall_allowed": false,
+    "maximum_abs_torque_nm": 33.500001,
+    "maximum_dynamics_residual": 5.0,
+    "maximum_height_rmse_m": 0.1,
+    "maximum_planar_velocity_rmse_mps": 0.35,
+    "maximum_roll_pitch_rad": 0.6,
+    "maximum_torque_saturation_fraction": 0.1,
+    "maximum_yaw_rate_rmse_radps": 0.6,
+    "minimum_base_height_m": 0.18,
+    "minimum_contact_agreement": 0.55,
+    "minimum_gif_playback_duration_s": 20.0,
+    "minimum_simulated_duration_s": 20.0
+  },
+  "upstream_commit": "a7f381c0367e98e31c01336e678eef47e304d40d"
+}
