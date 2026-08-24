@@ -51,6 +51,7 @@ def render_rollout_gif(
     title: str = "",
     width: int = DEFAULT_WIDTH,
     height: int = DEFAULT_HEIGHT,
+    follow_base: bool = False,
 ) -> Path:
     """Step the plant and write a GIF. ``tau_fn`` is supplied by the notebook."""
     ensure_mujoco_gl()
@@ -82,6 +83,8 @@ def render_rollout_gif(
             weight = plant.gravity_force_world()
             com = plant.com_world()
             cmd = command_grf(plant) if callable(command_grf) else command_grf
+            if follow_base:
+                cam.lookat[:] = plant.base_pos()
             renderer.update_scene(plant.data, camera=cam)
             overlay_contact_and_net(
                 renderer.scene,
