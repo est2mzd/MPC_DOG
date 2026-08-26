@@ -1,4 +1,6 @@
-external/
+external/*
+!external/legged_control
+!external/Quadruped-PyMPC
 logs/
 __pycache__/
 *.pyc

@@ -1,0 +1,6 @@
+[submodule "external/legged_control"]
+	path = external/legged_control
+	url = https://github.com/qiayuanl/legged_control.git
+[submodule "external/Quadruped-PyMPC"]
+	path = external/Quadruped-PyMPC
+	url = https://github.com/iit-DLSLab/Quadruped-PyMPC.git
