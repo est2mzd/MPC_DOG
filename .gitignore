@@ -12,3 +12,6 @@ __pycache__/
 docs/pympc_2day/assets/frames_*/
 docs/pympc_2day/assets/tuning_lab_results.json
 docs/pympc_2day/assets/scenario_lab_results.json
+
+# LibreOffice lock files
+.~lock.*#

@@ -1,0 +1,49 @@
+{
+  "scenario": {
+    "id": "E02",
+    "difficulty": "easy",
+    "description": "Flat forward 0.10 m/s",
+    "scene": "flat",
+    "duration_s": 5.0,
+    "vx": 0.1,
+    "vy": 0.0,
+    "yaw_rate": 0.0,
+    "ground_mu": 0.8,
+    "mpc_mu": 0.42,
+    "step_freq": 1.35,
+    "duty_factor": 0.74,
+    "ref_z_scale": 1.08,
+    "foothold_optimization": true
+  },
+  "metrics": {
+    "success": true,
+    "stable": true,
+    "tracking_pass": true,
+    "terminated": false,
+    "termination_step": null,
+    "simulated_s": 5.0,
+    "wall_s": 7.086868997997954,
+    "realtime_factor": 0.7055301856733212,
+    "planar_displacement_m": 0.5302800640472839,
+    "speed_rmse_mps": 0.025080910269425036,
+    "speed_tracking_limit_mps": 0.18,
+    "yaw_rate_rmse_radps": 0.02861362364434095,
+    "min_height_m": 0.2898319747610503,
+    "max_height_m": 0.3298282632221225,
+    "max_abs_roll_deg": 0.8258301002989178,
+    "max_abs_pitch_deg": 2.7063881596956016,
+    "torque_saturation_rate": 0.0,
+    "max_abs_raw_torque_nm": 16.94460114564946,
+    "control_mean_ms": 2.2642343072686346,
+    "control_p95_ms": 4.489108499546998,
+    "control_max_ms": 8.727164007723331,
+    "mpc_solve_mean_ms": 1.4021759999999999,
+    "mpc_solve_p95_ms": 1.9011999999999996,
+    "mpc_solve_max_ms": 3.3080000000000003,
+    "mpc_updates": 500,
+    "solver_failures": 0,
+    "solver_status_histogram": {
+      "2": 500
+    }
+  }
+}

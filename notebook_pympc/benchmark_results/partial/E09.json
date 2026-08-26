@@ -1,0 +1,49 @@
+{
+  "scenario": {
+    "id": "E09",
+    "difficulty": "easy",
+    "description": "Flat forward with high physical friction",
+    "scene": "flat",
+    "duration_s": 5.0,
+    "vx": 0.25,
+    "vy": 0.0,
+    "yaw_rate": 0.0,
+    "ground_mu": 1.0,
+    "mpc_mu": 0.42,
+    "step_freq": 1.35,
+    "duty_factor": 0.74,
+    "ref_z_scale": 1.08,
+    "foothold_optimization": true
+  },
+  "metrics": {
+    "success": true,
+    "stable": true,
+    "tracking_pass": true,
+    "terminated": false,
+    "termination_step": null,
+    "simulated_s": 5.0,
+    "wall_s": 7.100265191009385,
+    "realtime_factor": 0.7041990496821419,
+    "planar_displacement_m": 1.214049105085854,
+    "speed_rmse_mps": 0.034647421178301635,
+    "speed_tracking_limit_mps": 0.18,
+    "yaw_rate_rmse_radps": 0.03179345197522695,
+    "min_height_m": 0.2898785753302446,
+    "max_height_m": 0.3323210085142037,
+    "max_abs_roll_deg": 0.7671981807806114,
+    "max_abs_pitch_deg": 2.673009475458017,
+    "torque_saturation_rate": 0.0,
+    "max_abs_raw_torque_nm": 16.571770328632386,
+    "control_mean_ms": 2.265454529353883,
+    "control_p95_ms": 4.511615648516452,
+    "control_max_ms": 7.954347995109856,
+    "mpc_solve_mean_ms": 1.427456,
+    "mpc_solve_p95_ms": 1.9627999999999994,
+    "mpc_solve_max_ms": 2.6319999999999997,
+    "mpc_updates": 500,
+    "solver_failures": 0,
+    "solver_status_histogram": {
+      "2": 500
+    }
+  }
+}

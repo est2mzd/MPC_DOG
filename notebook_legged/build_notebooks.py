@@ -7,8 +7,11 @@ from the inspected upstream implementation but are not required to run them.
 
 from __future__ import annotations
 
+import io
 import json
 import hashlib
+import re
+import tokenize
 from pathlib import Path
 from textwrap import dedent
 
@@ -40,9 +43,125 @@ def code(text: str) -> dict:
     }
 
 
-def notebook(cells: list[dict]) -> dict:
+CHAPTER_CONTEXT = {
+    "00": ("四足制御stackの全体像を境界ごとに学ぶ", "後続章で使う実行環境とデータ契約を確認する"),
+    "01": ("100 Hz計画と500 Hz実行が非同期で進む", "周期・thread・処理順の契約を可視化する"),
+    "02": ("同じ長さでもframe・単位・順序が異なる", "状態・入力vectorの型契約を検査する"),
+    "03": ("速度参照と接地scheduleは別経路で届く", "参照変換とgait生成を数値で追跡する"),
+    "04": ("浮動base並進は直接計測できず推定が必要になる", "Kalman filterの予測・更新を小さい系で確認する"),
+    "05": ("接触力の合力・合momentがcentroidal運動を決める", "力と運動量変化の物理整合を検査する"),
+    "06": ("有限horizonでは追従と入力費用を同時に評価する", "縮約OCPでQ/R変更の因果を確認する"),
+    "07": ("接触modeにより力・速度・摩擦制約が切り替わる", "接触制約と遊脚軌道の実行可能性を確認する"),
+    "08": ("NMPC出力からmotor torqueへ全身力学を介して変換する", "Weighted WBCの42次元QP契約を検査する"),
+    "09": ("WBC torqueは関節feedbackと合成してhardwareへ渡る", "hybrid torque式とlimitを確認する"),
+    "10": ("異なる周期間ではpolicy時刻と鮮度が性能を左右する", "100/500 Hzの補間・遅延を可視化する"),
+    "11": ("制御変更はbaselineと残差を固定しないと原因を識別できない", "一変更ずつ比較する再現可能な手順を作る"),
+    "12": ("上流ROS1 C++のblock境界を実コードから追う", "呼出順・shape・数式の対応を検査する"),
+    "13": ("教育用proxyは上流stackの性能試験ではない", "縮約model内だけの制約・追従指標を比較する"),
+    "14": ("project adapterは上流のOCS2/WBCを別ロジックへ置換する", "保存済みadapter結果の完全性だけを検査する"),
+    "15": ("ROS移行ではmiddleware変更と制御ロジック変更を分離する", "ROS1 baselineを凍結しROS2 parityをfail-closedで判定する"),
+}
+
+
+def _annotation_for_line(chapter: str, line: str) -> str:
+    """Return a deterministic, line-specific Japanese teaching annotation."""
+    context, chapter_purpose = CHAPTER_CONTEXT[chapter]
+    stripped = line.strip()
+    signature = re.sub(r"\s+", " ", stripped)
+    signature = signature[:72] + ("…" if len(signature) > 72 else "")
+    if stripped.startswith(("import ", "from ")):
+        detail = f"`{signature}` の依存を明示して再現可能な実行環境を作る"
+    elif stripped.startswith("def "):
+        name = stripped.split("def ", 1)[1].split("(", 1)[0]
+        detail = f"`{name}` の責務を独立関数として定義する"
+    elif stripped.startswith(("for ", "while ")):
+        detail = f"`{signature}` の反復範囲を固定して各sampleを処理する"
+    elif stripped.startswith(("if ", "elif ", "else:")):
+        detail = f"`{signature}` の条件で安全側の実行分岐を選ぶ"
+    elif stripped.startswith("with "):
+        detail = f"`{signature}` のresource境界を閉じ忘れなく扱う"
+    elif stripped.startswith("return "):
+        detail = f"`{signature}` の値を次の制御境界へ返す"
+    elif stripped.startswith("assert "):
+        detail = f"`{signature}` を不変条件として即時検査する"
+    elif stripped.startswith(("print(", "display(")):
+        detail = f"`{signature}` の観測値を表示して判定根拠を残す"
+    elif "=" in stripped and not stripped.startswith(("==", ">=", "<=", "!=")):
+        lhs = stripped.split("=", 1)[0].strip()
+        detail = f"`{lhs}` を後続計算で使う明示的な中間量として設定する"
+    elif stripped.startswith((")", "]", "}")) or stripped.endswith((",", ")", "]", "}")):
+        detail = f"直前の式・構造へ `{signature}` の要素または終端を対応付ける"
+    else:
+        detail = f"`{signature}` をこの章の処理順に沿って実行する"
+
+    formula_tokens = ("=", "+", "-", "*", "/", "@", "np.", "solve", "clip", "sum(", "mean(", "return ")
+    formula = ""
+    if any(token in stripped for token in formula_tokens):
+        formula = f" 数式: `{signature}` の演算・変換をPythonで評価する。"
+    return f"# 背景: {context}。目的: {chapter_purpose}ため、{detail}。{formula}".rstrip()
+
+
+def executable_line_numbers(source: str) -> set[int]:
+    """Find physical lines containing Python tokens; multiline-string bodies are exempt."""
+    executable: set[int] = set()
+    ignored = {
+        tokenize.ENCODING,
+        tokenize.ENDMARKER,
+        tokenize.INDENT,
+        tokenize.DEDENT,
+        tokenize.NEWLINE,
+        tokenize.NL,
+        tokenize.COMMENT,
+    }
+    for token in tokenize.generate_tokens(io.StringIO(source).readline):
+        if token.type not in ignored:
+            executable.add(token.start[0])
+    return executable
+
+
+def annotate_code_source(source: str, chapter: str) -> tuple[str, int]:
+    """Insert an immediately preceding 背景/目的 comment for each executable line."""
+    lines = source.splitlines()
+    executable = executable_line_numbers(source)
+    annotated: list[str] = []
+    for line_number, line in enumerate(lines, start=1):
+        if line_number in executable:
+            indent = line[: len(line) - len(line.lstrip())]
+            annotated.append(indent + _annotation_for_line(chapter, line))
+        annotated.append(line)
+    result = "\n".join(annotated) + ("\n" if source.endswith("\n") else "")
+    compile(result, f"<notebook-{chapter}>", "exec")
+    return result, len(executable)
+
+
+TRUTH_NOTICE = f"""
+## 検証範囲に関する必須注記
+
+このprojectでは **ROS2 portを作成・compile・実行していない**。したがってROS2 parityは
+**NOT VERIFIED / FAIL-CLOSED** である。上流commit `{UPSTREAM_COMMIT}` はROS1実装であり、
+project所有MuJoCo adapterはOCS2のhorizon SQPを瞬時force plannerへ、
+Pinocchio/qpOASES WBCをMuJoCo acceleration inverse dynamicsへ置換し、
+元のestimator/hardware経路も持たない。保存済み30 scenario dataが示すのはadapter挙動だけで、
+上流 `legged_control` の性能でもROS2移行の検証でもない。
+"""
+
+
+def notebook(cells: list[dict], name: str) -> dict:
+    chapter = name[:2]
+    annotated_cells: list[dict] = []
+    truth_inserted = False
+    for cell in cells:
+        copied = dict(cell)
+        if copied["cell_type"] == "code":
+            copied["source"], coverage = annotate_code_source(copied["source"], chapter)
+            copied["metadata"] = {**copied.get("metadata", {}), "annotation_coverage": coverage}
+            copied["id"] = hashlib.sha1(copied["source"].encode()).hexdigest()[:8]
+        annotated_cells.append(copied)
+        if not truth_inserted and copied["cell_type"] == "markdown":
+            annotated_cells.append(md(TRUTH_NOTICE))
+            truth_inserted = True
     return {
-        "cells": cells,
+        "cells": annotated_cells,
         "metadata": {
             "kernelspec": {
                 "display_name": "Python 3 (ipykernel)",
@@ -132,7 +251,8 @@ NOTEBOOKS["00_learning_map.ipynb"] = [
         11. チューニングと数式変更
         12. 実C++コードの端から端までのwalkthrough
         13. equation-level proxy benchmark（上流性能ではない）
-        14. A1 MuJoCo adapterの30シナリオ実行証拠
+        14. project所有A1 MuJoCo adapterの保存結果検証（上流性能ではない）
+        15. ROS1→ROS2 migrationの制御ロジックparity契約（未検証・fail-closed）
         """
     ),
     code(COMMON),
@@ -1376,7 +1496,7 @@ assert np.all(D_friction @ test_force <= 0)
         4. `HierarchicalWbc`がincludeされても既定で動かない根拠はどこか。
         5. `setCommand(...,0,3,tau)` の位置項が消えることを式で示せるか。
 
-        次のNotebookで、この契約を30 scenarioへ流す。
+        次のNotebookは教育用proxyであり、この上流契約そのものの性能試験ではない。
         """
     ),
 ]
@@ -2073,15 +2193,15 @@ def scenario_gallery_cells() -> list[dict]:
 NOTEBOOKS["14_a1_mujoco_benchmark_30_scenarios.ipynb"] = [
     md(
         f"""
-        # 14 — A1 MuJoCo adapter benchmark: 10 easy + 10 normal + 10 hard
+        # 14 — project adapter validation（保存済み30シナリオ）
 
         ## 背景
         Notebook 13は4秒のequation-level proxyで、robot modelを動かす証拠ではない。
-        最終評価ではUnitree A1 MuJoCo plantを各scenario 20秒以上、転倒後も途中resetせず実行し、
-        定量metricとGIF playback時間を保存する。
+        project所有adapterで過去に保存されたUnitree A1 MuJoCo plantの各scenarioについて、
+        定量metricとGIF playback時間の存在・整合だけを読む。このNotebookは再実行しない。
 
         ## 目的
-        1. `src/legged_control_mujoco` のA1 adapterを30条件で実行した証拠を読む。
+        1. `src/legged_control_mujoco` のA1 adapterについて保存済み30条件の証拠を読む。
         2. easy/normal/hardが各10件、simulation/GIFが各20秒以上か機械検証する。
         3. pass/failだけでなく、失敗理由と物理metricを追って調整箇所へ戻る。
 
@@ -2092,12 +2212,14 @@ NOTEBOOKS["14_a1_mujoco_benchmark_30_scenarios.ipynb"] = [
         - adapterはgait template、24D state/input contract、WBC task構造、hybrid torque式を対応させるが、
           **OCS2 SQPではない**。有限horizon policyを、瞬時friction-constrained force plannerと
           MuJoCo acceleration-level inverse dynamicsで置換する。
-        - したがって結果は「A1 MuJoCo adapter性能」であり、上流ROS1/OCS2 repository性能ではない。
+        - したがって結果は「project adapterの保存済み挙動」であり、上流ROS1/OCS2 repository性能ではない。
+        - estimatorとGazebo/Unitree hardware pathはこのadapter実行経路に存在しない。
+        - ROS2 portは作成・compile・実行されておらず、この結果はROS2検証に一切使えない。
         - この経路は **Quadruped-PyMPCを一切使用しない**。
 
         ## 結論
         保存されたmetricとGIFが揃ったscenarioだけを実行済みとみなす。閾値passはadapterについての
-        再現可能な判定であり、OCS2 SQPや実機A1の性能主張へ外挿しない。
+        保存結果に対する判定であり、OCS2 SQP、元のWBC、実機A1、ROS2 parityの主張へ外挿しない。
         """
     ),
     code(
@@ -2254,6 +2376,238 @@ else:
 ] + scenario_gallery_cells()
 
 
+BASELINE_FILES = {
+    "legged_interface/include/legged_interface/LeggedInterface.h": "c4d9e0ae47b6f087042de79196f32c5c3c0c358a180a18890bf2760899679b8e",
+    "legged_interface/src/LeggedInterface.cpp": "e00071f88163670fe302791cc3c61eb9e2b9a41b7026bbfb613b11f845a16f1b",
+    "legged_interface/include/legged_interface/constraint/EndEffectorLinearConstraint.h": "ecf256ccc7289fe77dddfce405522b75efc8e1f8b048735d8688eb86871df295",
+    "legged_interface/include/legged_interface/constraint/FrictionConeConstraint.h": "e568676134e4c183314e89db233d37d29d4292bd943356b578043a4e2f70c1f0",
+    "legged_interface/include/legged_interface/constraint/LeggedSelfCollisionConstraint.h": "12d5a379d0fd15db8ef9a9799ac7b7167022d63533fdee0d41ea5a3b3f43ef7c",
+    "legged_interface/include/legged_interface/constraint/NormalVelocityConstraintCppAd.h": "997ac13801e02b3465c4cdc54c44ae08c6b87805a052543b69ea96e994b06b4f",
+    "legged_interface/include/legged_interface/constraint/SwingTrajectoryPlanner.h": "cfe591a3a1272332287a7547d90e92b0dfff2ce2b59584a0253f3b72436d169c",
+    "legged_interface/include/legged_interface/constraint/ZeroForceConstraint.h": "24aac12293f67483fa4b6b9d54cb1b425dac20c73e11d68139165f9c1de59d0f",
+    "legged_interface/include/legged_interface/constraint/ZeroVelocityConstraintCppAd.h": "a3086b28278a503a2515c951eb1316b73d7ad4c27148a2e10287a4a8855565c6",
+    "legged_interface/src/constraint/EndEffectorLinearConstraint.cpp": "248959c29d54c7f8fc3560eb37cf223f92be842cfd83ac497788c3ed66b6c79f",
+    "legged_interface/src/constraint/FrictionConeConstraint.cpp": "ecaed4c2da57e6f990c03bf71ff1ee4d27af2b726af4c268b2148611a8fd225e",
+    "legged_interface/src/constraint/NormalVelocityConstraintCppAd.cpp": "39f4b4d09439b68223595fa11fee1813c4f1b00ca2d7f25a43bfd15c0722bdf1",
+    "legged_interface/src/constraint/SwingTrajectoryPlanner.cpp": "15de5861c17edca68a1e7c500ed3ad1c819944936ae65fd60e63e22a9ce27fd0",
+    "legged_interface/src/constraint/ZeroForceConstraint.cpp": "a6fd4efc8511b0dc01926a74a80d78fcb095284c27b03dc554c7771ba242e016",
+    "legged_interface/src/constraint/ZeroVelocityConstraintCppAd.cpp": "fcdd35824fa925a15ffd712dcf88e913d9b4c874c1851cc1bf11c5ecac4c61d3",
+    "legged_estimation/include/legged_estimation/LinearKalmanFilter.h": "5ebc74e8a5658aadd74c0558c9453b2b22369950f30fb6c710f85be51c2e5494",
+    "legged_estimation/src/LinearKalmanFilter.cpp": "83f2d1e8914d3fbd2f177f4b3dddb625cc953de71cea58561ac7ac4a987b982d",
+    "legged_wbc/include/legged_wbc/WbcBase.h": "8a254b20dca9d65147dd608a6aac249dc27eb05491613f6cb18376d6599636f8",
+    "legged_wbc/src/WbcBase.cpp": "67eac97cadb534381bb11b386a6526127f3cb324f3db25bd2608cfdcfe77ad1d",
+    "legged_wbc/include/legged_wbc/WeightedWbc.h": "f6f3d9bfd3fb377b1b2e34bfe091cee0f8eff35509dd5edf5ce50494ee5315b6",
+    "legged_wbc/src/WeightedWbc.cpp": "3480e60dd06dd7985cfaade89433cb98fae37c3ea241ea3518270d7d13ad6edc",
+    "legged_controllers/include/legged_controllers/LeggedController.h": "0c5369a84d67513c1f7ce43b0eaedbbb9d1e2d82e859382a17a5160776414230",
+    "legged_controllers/src/LeggedController.cpp": "64f8787cf32a4092d9301cec822f56e28b2ebf3b6d22a7144247625c16cafa82",
+    "legged_controllers/config/a1/task.info": "2ec8a31d0c05087028b5996a5b5b13cc2646e3c470a1dda2dfa2eadc34220d8a",
+    "legged_controllers/config/a1/reference.info": "ddc885767426f92d1f07290d833723046e75c98b46d411923b5dbc86e215dbb5",
+    "legged_controllers/config/a1/gait.info": "cad4da4ac05edff45f2244feb7b436112f2ed7cf9d456a6650bb120c10e2708f",
+}
+
+BASELINE_MANIFEST = {
+    "schema_version": 1,
+    "repository": "https://github.com/qiayuanliao/legged_control",
+    "commit": UPSTREAM_COMMIT,
+    "hash_algorithm": "sha256",
+    "scope": "ROS1 control-logic baseline only; does not prove ROS2 parity",
+    "files": BASELINE_FILES,
+}
+
+
+NOTEBOOKS["15_ros_migration_logic_parity.ipynb"] = [
+    md(
+        f"""
+        # 15 — ROS migration logic parity（NOT VERIFIED / FAIL-CLOSED）
+
+        ## 背景
+        ROS1からROS2への移行で変更してよいのはmiddleware境界であり、制御器の数式・次元・設定・
+        周期・実行順まで変更すれば「移植」ではなく別controllerになる。このprojectのMuJoCo adapterは
+        OCS2 horizon SQPを瞬時force plannerへ、Pinocchio/qpOASES WBCをMuJoCo acceleration inverse
+        dynamicsへ置換し、estimator/hardware pathも持たないため、ROS migration parityの比較対象ではない。
+
+        ## 目的
+        1. commit `{UPSTREAM_COMMIT}` のROS1制御baselineをSHA-256で凍結する。
+        2. 実在するROS2 portだけを探索し、無ければ必ずpending/failureにする。
+        3. 将来のROS1/ROS2 side-by-side golden traceに必要な境界・次元・許容差・周期・solver statusを固定する。
+
+        ## 結論
+        **ROS2 portは作成・compile・実行されていない。parity statusは NOT VERIFIED / FAIL-CLOSED。**
+        現時点で制御ロジックを保存する最も確実な運用は、original ROS1 Noetic stackをそのまま動かすこと。
+        ROS2を採用できるのは、middleware wrapperがこの章の全parity testを通過した後だけである。
+        """
+    ),
+    code(COMMON + """
+import hashlib
+import json
+import subprocess
+
+MANIFEST_PATH = ROOT / "notebook_legged" / "ros1_logic_baseline_manifest.json"
+EXTERNAL = ROOT / "external" / "legged_control"
+"""),
+    md(
+        """
+        ## ROS1である直接証拠
+
+        commit固定の上流は次のROS1 API/build契約を使う。
+
+        - `legged_controllers/CMakeLists.txt`: `find_package(catkin REQUIRED ...)`, `catkin_package(...)`
+        - `legged_controllers/package.xml`: `<buildtool_depend>catkin</buildtool_depend>` と`roscpp`依存
+        - `legged_controllers/include/legged_controllers/LeggedController.h`:
+          `init(hardware_interface::RobotHW*, ros::NodeHandle&, ros::NodeHandle&)`
+        - 同headerのcontroller plugin: `controller_interface::Controller<...>`
+        - `legged_hw/src/LeggedHWLoop.cpp`: `controller_manager::ControllerManager` と
+          `hardware_interface::RobotHW`、つまりROS1 ros-control read/update/write境界
+
+        `ament_cmake`, `rclcpp::Node`, `controller_interface` のROS2 lifecycle APIへ変換したsource、
+        ROS2 workspace build、ROS2 runtime traceはこのprojectに存在しない。
+
+        ## 境界
+        ```text
+        MUST UNCHANGED: reference/gait/config -> LeggedInterface OCP -> SqpMpc policy
+                                              -> LinearKalmanFilter observation
+                                              -> WeightedWbc[42] -> hybrid torque[12]
+        ------------------------- logic parity boundary -------------------------
+        MAY CHANGE: node lifecycle | pub/sub/service | parameters | controller/HW wrappers
+                    launch files | catkin->ament build metadata
+        ```
+        """
+    ),
+    md(
+        """
+        ## 厳格なmigration matrix
+
+        ### MUST remain unchanged（制御ロジック）
+        - `LeggedInterface`のOCP assembly: dynamics、cost、contact/friction/collision constraints
+        - A1 `task.info`, `reference.info`, `gait.info` とreference/gait semantics
+        - OCS2 `SqpMpc` settings、horizon SQP、state 24D / input 24D contract
+        - `LinearKalmanFilter`の18状態方程式、観測式、接地依存Q/R noise
+        - `WeightedWbc`のtasks/weights、hard constraints、`[qdd18,F12,tau12]` 42D layout
+        - hybrid torque law、`Kp=0`, `Kd=3`、joint/torque limits
+        - 100 Hz MPC / 500 Hz estimator-WBC-hardware ratesと処理順
+
+        ### MAY change only middleware
+        - ROS node lifecycle
+        - publisher/subscriber/service型とQoS wrapper
+        - parameter取得API
+        - controller/hardware API wrapper
+        - launch/build metadata（catkinからament等）
+
+        上記MUST項目を一つでも変えた実装はparity migrationではない。別controllerとして別評価する。
+        """
+    ),
+    code(
+        """
+# ROS1 baseline manifestはadapter結果ではなく、上流source bytesだけを固定する。
+manifest = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
+assert manifest["commit"] == "a7f381c0367e98e31c01336e678eef47e304d40d"
+assert manifest["hash_algorithm"] == "sha256"
+
+baseline_status = "PENDING / FAIL-CLOSED"
+hash_results = {}
+if not EXTERNAL.is_dir():
+    print("PENDING: external/legged_control is absent; ROS1 baseline cannot be checked")
+else:
+    commit = subprocess.run(
+        ["git", "-C", str(EXTERNAL), "rev-parse", "HEAD"],
+        check=True, capture_output=True, text=True,
+    ).stdout.strip()
+    for relative, expected in manifest["files"].items():
+        path = EXTERNAL / relative
+        actual = hashlib.sha256(path.read_bytes()).hexdigest() if path.is_file() else None
+        hash_results[relative] = {"expected": expected, "actual": actual, "match": actual == expected}
+    baseline_status = (
+        "ROS1 BASELINE FROZEN"
+        if commit == manifest["commit"] and all(item["match"] for item in hash_results.values())
+        else "MISMATCH / FAIL-CLOSED"
+    )
+    print("checkout:", commit)
+    print("hash matches:", sum(item["match"] for item in hash_results.values()), "/", len(hash_results))
+print("baseline status:", baseline_status)
+print("NOTE: hash success freezes ROS1 only; it does not prove ROS2 parity")
+"""
+    ),
+    md(
+        """
+        ## 実在ROS2 portの探索条件
+        path名だけでは合格しない。candidate内に`package.xml`があり、`ament_cmake`と`rclcpp`/ROS2
+        controller APIのsource evidenceが必要である。adapter outputやMuJoCo benchmarkを探索対象にも
+        比較対象にも入れない。portが見つかってもbuild/run/golden traceが無ければFAIL-CLOSEDのまま。
+        """
+    ),
+    code(
+        """
+# 明示candidateだけを探索し、project adapterを候補から除外する。
+ros2_candidates = [
+    ROOT / "external" / "legged_control_ros2",
+    ROOT / "src" / "legged_control_ros2",
+    ROOT / "ros2_ws" / "src" / "legged_control",
+]
+actual_ros2_ports = []
+for candidate in ros2_candidates:
+    if not candidate.is_dir():
+        continue
+    package_files = list(candidate.rglob("package.xml"))
+    cmake_files = list(candidate.rglob("CMakeLists.txt"))
+    source_files = list(candidate.rglob("*.cpp")) + list(candidate.rglob("*.hpp")) + list(candidate.rglob("*.h"))
+    metadata = "\\n".join(path.read_text(encoding="utf-8", errors="ignore") for path in package_files + cmake_files)
+    source_text = "\\n".join(path.read_text(encoding="utf-8", errors="ignore") for path in source_files)
+    if "ament_cmake" in metadata and ("rclcpp" in source_text or "ControllerInterface" in source_text):
+        actual_ros2_ports.append(candidate)
+
+parity_status = "NOT VERIFIED / FAIL-CLOSED"
+print("actual ROS2 ports:", [str(path) for path in actual_ros2_ports] or "NONE")
+print("parity status:", parity_status)
+assert parity_status == "NOT VERIFIED / FAIL-CLOSED"
+"""
+    ),
+    md(
+        """
+        ## 将来のside-by-side golden trace contract
+
+        同じsensor trace、clock、A1 config、reference、gait、初期状態をROS1 Noetic原実装とROS2 wrapperへ
+        入れ、timestampを揃えて次の全境界を比較する。
+
+        - reference: state 24D / input 24D、`atol=1e-12`, `rtol=0`
+        - gait: mode完全一致、event time `atol=1e-9 s`
+        - observation: 24D、`atol=1e-9`, `rtol=1e-8`
+        - policy: state 24D + input 24D、`atol=1e-6`, `rtol=1e-5`
+        - WBC: `[qdd18,F12,tau12]` 42D、`atol=1e-5`, `rtol=1e-5`
+        - torque command: 12D、`atol=1e-4 N m`, `rtol=1e-5`、limit完全一致
+        - rate/order: MPC 100 Hz、estimator/WBC/hardware 500 Hz、callbackを含む順序一致
+        - solver: OCS2 SQPとqpOASESのstatus/category、iteration、success/failure系列が完全一致
+
+        trace欠落、dimension違反、NaN、deadline/order違反、solver failure差、許容差超過のどれか一つでも
+        parityをFAILにする。全境界の実traceが揃わない状態をPASSにしてはならない。
+        """
+    ),
+    code(
+        """
+# 将来のtest runnerが要求する機械可読contract。現時点ではtraceが無いため必ず未検証。
+golden_contract = {
+    "reference": {"dimensions": [24, 24], "atol": 1e-12, "rtol": 0.0},
+    "gait": {"exact_mode": True, "event_time_atol_s": 1e-9},
+    "observation": {"dimensions": [24], "atol": 1e-9, "rtol": 1e-8},
+    "policy": {"dimensions": [24, 24], "atol": 1e-6, "rtol": 1e-5},
+    "wbc": {"dimensions": [42], "layout": [18, 12, 12], "atol": 1e-5, "rtol": 1e-5},
+    "torque": {"dimensions": [12], "atol_nm": 1e-4, "rtol": 1e-5, "limit_nm": 33.5},
+    "rates_hz": {"mpc": 100, "estimator_wbc_hardware": 500},
+    "solver_status_exact": True,
+}
+trace_roots = {
+    "ros1": ROOT / "notebook_legged" / "parity_traces" / "ros1",
+    "ros2": ROOT / "notebook_legged" / "parity_traces" / "ros2",
+}
+trace_ready = bool(actual_ros2_ports) and all(path.is_dir() for path in trace_roots.values())
+print("golden contract boundaries:", list(golden_contract))
+print("trace readiness:", trace_ready)
+assert not trace_ready, "Trace presence alone must not mark parity PASS; run the future comparator"
+print("FINAL:", parity_status)
+"""
+    ),
+]
+
+
 README = f"""# legged_control 理論・コード学習Notebook
 
 大学院の初心者が `qiayuanliao/legged_control` を、完成したROSシステムとして眺めるのではなく、
@@ -2263,11 +2617,13 @@ README = f"""# legged_control 理論・コード学習Notebook
 
 ## 特徴
 
-- `00` から `14` まで順番に読む
+- `00` から `15` まで順番に読む
 - NumPy / SciPy / Matplotlibだけで理論実験を再実行可能
 - ROS / OCS2 / Gazebo / Unitreeが必要な実装事実と、教育用縮約実験を明確に区別
 - 背景・目的・結論、ASCIIデータフロー、数式、コメント付きblock codeを接続
-- `13` は4秒のequation-level proxy、`14` はA1 MuJoCo adapterの20秒以上×30 scenario
+- `13` は4秒のequation-level proxy、`14` はproject adapter保存結果の検証だけ
+- `15` はROS1 baseline hashとROS2 migration parityのfail-closed契約
+- 全code cellの各実行行に日本語の `背景:` / `目的:`、式・変換行に `数式:` を自動付与
 - 各章末にチューニング・変更時の観測項目を記載
 - 詳細な実装監査は `../docs/legged_control/` を正本として参照
 
@@ -2278,15 +2634,8 @@ uv sync --extra workshop
 uv run jupyter lab notebook_legged/
 ```
 
-最終benchmarkの厳密な再現command:
-
-```bash
-uv run python scripts/run_legged_control_benchmark.py --all
-```
-
-30本の20秒以上GIFに加えてJSON/CSV/summaryを保存するため、`notebook_legged/assets/scenarios/`
-には数百MB規模の空き容量を見込む。既存の有効なscenarioは既定で再利用され、`--overwrite` を
-明示しない限り一致する出力を置換しない。
+Notebook 14は既存JSON/CSV/GIFを読むだけで、benchmarkを再生成しません。保存済みdataは
+project adapterの挙動だけを示し、上流stackやROS2の性能証拠にはなりません。
 
 ## 章
 
@@ -2306,7 +2655,8 @@ uv run python scripts/run_legged_control_benchmark.py --all
 | 11 | `11_tuning_and_equation_changes.ipynb` | 再現可能な調整・式変更 |
 | 12 | `12_repository_code_walkthrough.ipynb` | 実C++の端から端までのcall graph |
 | 13 | `13_model_benchmark_30_scenarios.ipynb` | 4秒のequation-level proxy benchmark |
-| 14 | `14_a1_mujoco_benchmark_30_scenarios.ipynb` | A1 MuJoCo adapterの30条件・20秒GIF・物理metric |
+| 14 | `14_a1_mujoco_benchmark_30_scenarios.ipynb` | project adapter保存結果の完全性検証 |
+| 15 | `15_ros_migration_logic_parity.ipynb` | ROS1 baseline凍結とROS2 parity fail-closed契約 |
 
 ## 事実の境界
 
@@ -2318,8 +2668,19 @@ OCS2本体はworkspaceに無いため、`LeggedRobotDynamicsAD` の完全な成�
 上流commitはROS1/OCS2原実装です。project所有の `src/legged_control_mujoco/` は
 gait/state/input/WBC/hybrid-command契約をMuJoCoへ接続するadapterですが、
 **OCS2 SQPではありません**。瞬時force plannerとacceleration-level WBCへ置換した実行境界であり、
-Notebook 14の結果は上流ROS1/OCS2や実機A1の性能主張ではありません。
+元のestimator/hardware pathもありません。Notebook 14の結果は上流ROS1/OCS2や実機A1の性能主張ではありません。
 このcurriculumとbenchmarkはQuadruped-PyMPCを使用しません。
+
+**ROS2 portは作成・compile・実行されていません。ROS2 parityは NOT VERIFIED / FAIL-CLOSEDです。**
+制御ロジック保存にはoriginal ROS1 Noetic stackを使い、将来のROS2 wrapperはNotebook 15の
+reference/gait/observation/policy/WBC/torque golden traceを全て通過させる必要があります。
+`ros1_logic_baseline_manifest.json` のhash一致はROS1 baselineを凍結するだけで、ROS2 parityを証明しません。
+
+annotationとNotebook形式の検査:
+
+```bash
+uv run python notebook_legged/validate_notebook_annotations.py
+```
 
 `build_notebooks.py` は教材の再生成用です。Notebookを直接編集した後に実行すると上書きするため、
 生成元を更新してから実行してください。
@@ -2329,10 +2690,14 @@ Notebook 14の結果は上流ROS1/OCS2や実機A1の性能主張ではありま�
 def main() -> None:
     HERE.mkdir(parents=True, exist_ok=True)
     (HERE / "README.md").write_text(README, encoding="utf-8")
+    (HERE / "ros1_logic_baseline_manifest.json").write_text(
+        json.dumps(BASELINE_MANIFEST, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
     for name, cells in NOTEBOOKS.items():
         path = HERE / name
         path.write_text(
-            json.dumps(notebook(cells), ensure_ascii=False, indent=1) + "\n",
+            json.dumps(notebook(cells, name), ensure_ascii=False, indent=1) + "\n",
             encoding="utf-8",
         )
         print(path.relative_to(HERE.parent))

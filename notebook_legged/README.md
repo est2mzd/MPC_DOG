@@ -7,11 +7,13 @@
 
 ## 特徴
 
-- `00` から `14` まで順番に読む
+- `00` から `15` まで順番に読む
 - NumPy / SciPy / Matplotlibだけで理論実験を再実行可能
 - ROS / OCS2 / Gazebo / Unitreeが必要な実装事実と、教育用縮約実験を明確に区別
 - 背景・目的・結論、ASCIIデータフロー、数式、コメント付きblock codeを接続
-- `13` は4秒のequation-level proxy、`14` はA1 MuJoCo adapterの20秒以上×30 scenario
+- `13` は4秒のequation-level proxy、`14` はproject adapter保存結果の検証だけ
+- `15` はROS1 baseline hashとROS2 migration parityのfail-closed契約
+- 全code cellの各実行行に日本語の `背景:` / `目的:`、式・変換行に `数式:` を自動付与
 - 各章末にチューニング・変更時の観測項目を記載
 - 詳細な実装監査は `../docs/legged_control/` を正本として参照
 
@@ -22,15 +24,8 @@ uv sync --extra workshop
 uv run jupyter lab notebook_legged/
 ```
 
-最終benchmarkの厳密な再現command:
-
-```bash
-uv run python scripts/run_legged_control_benchmark.py --all
-```
-
-30本の20秒以上GIFに加えてJSON/CSV/summaryを保存するため、`notebook_legged/assets/scenarios/`
-には数百MB規模の空き容量を見込む。既存の有効なscenarioは既定で再利用され、`--overwrite` を
-明示しない限り一致する出力を置換しない。
+Notebook 14は既存JSON/CSV/GIFを読むだけで、benchmarkを再生成しません。保存済みdataは
+project adapterの挙動だけを示し、上流stackやROS2の性能証拠にはなりません。
 
 ## 章
 
@@ -50,7 +45,8 @@ uv run python scripts/run_legged_control_benchmark.py --all
 | 11 | `11_tuning_and_equation_changes.ipynb` | 再現可能な調整・式変更 |
 | 12 | `12_repository_code_walkthrough.ipynb` | 実C++の端から端までのcall graph |
 | 13 | `13_model_benchmark_30_scenarios.ipynb` | 4秒のequation-level proxy benchmark |
-| 14 | `14_a1_mujoco_benchmark_30_scenarios.ipynb` | A1 MuJoCo adapterの30条件・20秒GIF・物理metric |
+| 14 | `14_a1_mujoco_benchmark_30_scenarios.ipynb` | project adapter保存結果の完全性検証 |
+| 15 | `15_ros_migration_logic_parity.ipynb` | ROS1 baseline凍結とROS2 parity fail-closed契約 |
 
 ## 事実の境界
 
@@ -62,8 +58,19 @@ OCS2本体はworkspaceに無いため、`LeggedRobotDynamicsAD` の完全な成�
 上流commitはROS1/OCS2原実装です。project所有の `src/legged_control_mujoco/` は
 gait/state/input/WBC/hybrid-command契約をMuJoCoへ接続するadapterですが、
 **OCS2 SQPではありません**。瞬時force plannerとacceleration-level WBCへ置換した実行境界であり、
-Notebook 14の結果は上流ROS1/OCS2や実機A1の性能主張ではありません。
+元のestimator/hardware pathもありません。Notebook 14の結果は上流ROS1/OCS2や実機A1の性能主張ではありません。
 このcurriculumとbenchmarkはQuadruped-PyMPCを使用しません。
+
+**ROS2 portは作成・compile・実行されていません。ROS2 parityは NOT VERIFIED / FAIL-CLOSEDです。**
+制御ロジック保存にはoriginal ROS1 Noetic stackを使い、将来のROS2 wrapperはNotebook 15の
+reference/gait/observation/policy/WBC/torque golden traceを全て通過させる必要があります。
+`ros1_logic_baseline_manifest.json` のhash一致はROS1 baselineを凍結するだけで、ROS2 parityを証明しません。
+
+annotationとNotebook形式の検査:
+
+```bash
+uv run python notebook_legged/validate_notebook_annotations.py
+```
 
 `build_notebooks.py` は教材の再生成用です。Notebookを直接編集した後に実行すると上書きするため、
 生成元を更新してから実行してください。
