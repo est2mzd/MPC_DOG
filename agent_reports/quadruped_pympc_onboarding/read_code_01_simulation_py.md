@@ -46,6 +46,8 @@ from quadruped_pympc.quadruped_pympc_wrapper import QuadrupedPyMPC_Wrapper
 
 ## 28〜42行：関数シグネチャとNumPy設定
 
+この関数(`run_simulation`)の役割:MuJoco環境と制御器を組み立て、観測→制御→物理ステップのループを複数エピソード分回す。
+
 ```python
 def run_simulation(
     qpympc_cfg,
@@ -715,6 +717,8 @@ if h5py_writer is not None:
 
 ## 339〜352行：`collate_obs`関数
 
+この関数の役割:1ステップ=1辞書のリストを、キーごとにスタックした配列の辞書へ変換する(H5Writer用の整形)。
+
 ```python
 def collate_obs(list_of_dicts) -> dict[str, np.ndarray]:
     if not list_of_dicts:
@@ -732,6 +736,8 @@ def collate_obs(list_of_dicts) -> dict[str, np.ndarray]:
 ---
 
 ## 355〜365行：`__main__`ブロック
+
+この部分の役割:このファイルを直接実行したときに、既定`config`で`run_simulation`を呼ぶ入口。
 
 ```python
 if __name__ == "__main__":

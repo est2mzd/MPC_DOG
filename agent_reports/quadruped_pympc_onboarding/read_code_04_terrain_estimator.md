@@ -28,6 +28,8 @@ simulation.py (run_simulationのループ)
 
 ## 1〜12行：import とコンストラクタ
 
+この関数の役割:roll/pitch/地形高さ/ロボット高さの推定値を0で初期化する。
+
 ```python
 import numpy as np
 
@@ -57,6 +59,8 @@ class TerrainEstimator:
 ---
 
 ## 14〜37行：`compute_terrain_estimation`の入口
+
+この関数の役割:4脚の位置の差分から、地形のroll/pitch/高さとロボットの高さを推定する。
 
 ```python
 def compute_terrain_estimation(

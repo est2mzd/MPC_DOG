@@ -56,6 +56,8 @@ class FootholdReferenceGenerator:
 
 ## 15〜51行：コンストラクタ
 
+この関数の役割:着地点計算に必要な状態(離地位置・着地位置・速度履歴等)を初期化する。
+
 ```python
 def __init__(
     self, stance_time: float, lift_off_positions: LegsAttr, vel_moving_average_length=20, hip_height: float = None
@@ -123,6 +125,8 @@ self.gravity_constant = cfg.gravity_constant
 ---
 
 ## 53〜85行：`compute_footholds_reference`の入口
+
+この関数の役割:Raibertヒューリスティックで、4脚の目標着地点(world座標系)を計算して返す。
 
 ```python
 def compute_footholds_reference(
@@ -285,6 +289,8 @@ return ref_feet
 
 呼び出し連鎖は冒頭と同じで、`wb_interface.py::update_state_and_reference`の中から、`compute_footholds_reference`より**先に**呼ばれます。
 
+この関数の役割:接地→遊脚に切り替わった脚の離地位置を記録し、遊脚中はworld座標を更新し続ける。
+
 ```python
 def update_lift_off_positions(
     self, previous_contact, current_contact, feet_pos, legs_order, gait_type, base_position, base_ori_euler_xyz
@@ -332,6 +338,8 @@ for leg_id, leg_name in enumerate(legs_order):
 ---
 
 ## 180〜199行：`update_touch_down_positions`(着地位置の追跡、ただし未使用)
+
+この関数の役割:遊脚→接地に切り替わった脚の着地位置を記録する(`update_lift_off_positions`と対称)。
 
 ```python
 def update_touch_down_positions(

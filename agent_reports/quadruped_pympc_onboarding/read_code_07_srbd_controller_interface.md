@@ -43,6 +43,8 @@ class SRBDControllerInterface:
 
 ## 10〜19行：コンストラクタ前半(設定の読み込み)
 
+この関数(`__init__`)の役割:`config.py`からMPC設定を読み込み、`mpc_params['type']`に応じたMPC実装クラスを選んで生成する。
+
 ```python
     def __init__(self):
         self.type = cfg.mpc_params['type']
@@ -93,6 +95,8 @@ class SRBDControllerInterface:
 ---
 
 ## 85〜111行：`compute_control`のシグネチャ
+
+この関数の役割:選ばれたMPC実装を呼んでOCPを解かせ、GRFに接地マスクを掛けて返す。
 
 ```python
     def compute_control(
@@ -223,6 +227,8 @@ class SRBDControllerInterface:
 ---
 
 ## 242〜245行:`compute_RTI`
+
+この関数の役割:acadosソルバーのRTI準備フェーズを実行し、次回の求解を高速化する(既定`use_RTI=False`では未使用)。
 
 ```python
     def compute_RTI(self):

@@ -47,6 +47,8 @@ from quadruped_pympc.helpers.quadruped_utils import GaitType
 
 ## 8〜20行：コンストラクタ
 
+この関数の役割:歩容パラメータを受け取り、4脚の位相を初期状態にリセットする。
+
 ```python
 class PeriodicGaitGenerator:
     def __init__(self, duty_factor, step_freq, gait_type: GaitType, horizon):
@@ -74,6 +76,8 @@ class PeriodicGaitGenerator:
 ---
 
 ## 22〜46行：`reset()`(歩容ごとの位相オフセット表)
+
+この関数の役割:歩容タイプごとの位相オフセット表を選び、位相・接地状態を初期化する。
 
 ```python
 def reset(self):
@@ -118,6 +122,8 @@ def reset(self):
 ---
 
 ## 48〜76行：`run(dt, new_step_freq)`(位相を1ステップ進める)
+
+この関数の役割:各脚の位相を時間刻み分だけ進め、その瞬間の接地状態(0/1)を返す。
 
 ```python
 def run(self, dt, new_step_freq):
@@ -167,6 +173,8 @@ def run(self, dt, new_step_freq):
 
 ## 78〜87行：`set_phase_signal`
 
+この関数の役割:位相と立ち上がりフラグを外部から直接上書きするセッター。
+
 ```python
 def set_phase_signal(self, phase_signal: np.ndarray, init: np.ndarray | None = None):
     assert len(phase_signal) == len(self._phase_signal)
@@ -185,6 +193,8 @@ def set_phase_signal(self, phase_signal: np.ndarray, init: np.ndarray | None = N
 
 ## 89〜91行：`phase_signal`プロパティ
 
+この関数の役割:内部の位相配列を、外部から安全に読めるようコピーして返す。
+
 ```python
 @property
 def phase_signal(self):
@@ -198,6 +208,8 @@ def phase_signal(self):
 ---
 
 ## 93〜118行：`compute_contact_sequence`(未来の接地スケジュールを作る)
+
+この関数の役割:位相を副作用なく先読みし、ホライズン分の接地スケジュールを作って返す。
 
 ```python
 def compute_contact_sequence(self, contact_sequence_dts, contact_sequence_lenghts):
@@ -263,6 +275,8 @@ def restore_previous_gait(self):
 ---
 
 ## 128〜197行：`update_start_and_stop`(エネルギー節約のための自動停止、既定では未使用)
+
+この関数の役割:止まる条件を満たしたら全脚接地へ切り替え、動き出したら歩容を復元する。
 
 ```python
 def update_start_and_stop(

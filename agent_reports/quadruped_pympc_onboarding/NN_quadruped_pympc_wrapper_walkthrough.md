@@ -34,6 +34,8 @@ _DEFAULT_OBS = ("ref_base_height", "ref_base_angles", "nmpc_GRFs", "nmpc_foothol
 
 ## 12〜28行：クラス定義とコンストラクタのシグネチャ
 
+この関数(`__init__`)の役割:MPC・WBCの各インターフェースを生成し、出力用の変数をゼロ初期化する。
+
 ```python
 class QuadrupedPyMPC_Wrapper:
     """A simple class wrapper of all the mpc submodules (swing, contact generator, mpc itself)."""
@@ -112,6 +114,8 @@ self.quadrupedpympc_observables = {}
 ---
 
 ## 50〜79行：`compute_actions`のシグネチャとdocstring
+
+この関数の役割:観測を受け取り、状態集約→MPC(間引き)→トルク変換を順に呼んで、最終的な関節トルクを返す。
 
 ```python
 def compute_actions(
@@ -336,6 +340,8 @@ return tau
 
 ## 247〜253行：`get_obs`
 
+この関数の役割:直前に組み立てた記録・可視化用の観測辞書を、外部へそのまま返す。
+
 ```python
 def get_obs(self) -> dict:
     """Get some user-defined observables from withing the control loop.
@@ -352,6 +358,8 @@ def get_obs(self) -> dict:
 ---
 
 ## 255〜259行：`reset`
+
+この関数の役割:`WBInterface`とacadosソルバー両方の内部状態を、エピソード開始時にリセットする。
 
 ```python
 def reset(self, initial_feet_pos: LegsAttr):

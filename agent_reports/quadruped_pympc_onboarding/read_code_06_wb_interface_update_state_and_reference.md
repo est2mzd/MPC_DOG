@@ -58,6 +58,8 @@ if cfg.simulation_params['visual_foothold_adaptation'] != 'blind':
 
 ## 22〜42行：クラス定義とコンストラクタの前半
 
+この関数(`__init__`)の役割:歩容・着地点・地形推定・速度変調・スイング等のコンポーネントを生成し、束ねる。
+
 ```python
 class WBInterface:
     """
@@ -156,6 +158,8 @@ class WBInterface:
 ---
 
 ## 108〜150行：`update_state_and_reference`の入口
+
+この関数の役割:観測・目標速度・歩容・着地点・地形推定を集約し、MPCが読む`state_current`/`ref_state`/`contact_sequence`を組み立てて返す。
 
 ```python
     def update_state_and_reference(

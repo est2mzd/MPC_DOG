@@ -26,6 +26,8 @@ simulation.py (run_simulationのループ)
 
 ## 1〜16行：import とコンストラクタ
 
+この関数の役割:有効フラグと、脚が伸びきったと判定する許容距離を設定する。
+
 ```python
 import numpy as np
 from quadruped_pympc import config as cfg
@@ -50,6 +52,8 @@ class VelocityModulator:
 ---
 
 ## 18〜45行：`modulate_velocities`
+
+この関数の役割:脚が股関節から伸びきりそうなら、目標速度を強制的にゼロへ書き換える。
 
 ```python
 def modulate_velocities(self, ref_base_lin_vel, ref_base_ang_vel, feet_pos, hip_pos):
