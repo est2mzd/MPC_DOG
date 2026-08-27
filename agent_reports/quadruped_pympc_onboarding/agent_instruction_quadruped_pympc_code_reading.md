@@ -586,3 +586,32 @@ def compute_control(...):
   両方とも省略しない。
 - 1ファイルの中に複数の関数がある場合、**すべての関数の見出しに**この1行を
   つける(主要な関数だけでなく、短い補助関数・プロパティにも同様につける)。
+
+---
+
+## 20. ROS2経路(`external/Quadruped-PyMPC/ros2/`)を読むときの追加ルール(2026-08-28)
+
+ROS2版(`run_controller.py`/`run_simulator.py`/`console.py`)は`simulation.py`から
+一切呼ばれない(17.2の例外に該当する)独立した経路であり、`simulation.py`との
+呼び出し連鎖図は書けない。代わりに次のルールを適用する。
+
+- ROS2シリーズの最初のファイルとして、**通信全体の関係図**
+  (`read_code_16_ros2_communication_overview.md`)を1つ作る。ここには
+  ノード構成(プロセス構成)、トピック名・メッセージ型・pub/sub・頻度の一覧表、
+  実際に使われているメッセージ型の定義を書く。個々のノードのファイルには
+  この節を毎回繰り返さず、必要なら同シリーズ内リンクで参照する(17.3の例外)。
+- 個々のROS2ノードファイル(`run_simulator.py`、`run_controller.py`、`console.py`)は、
+  17.2の1番目のセクション(呼び出し連鎖)の代わりに「**通信上の位置づけ**」
+  (このノードが購読するトピック・配信するトピックを短く列挙)を冒頭に書く。
+  17.2の2番目のセクション(このファイル/クラスの役割)は通常どおり必須。
+- ROS2経路にも、`simulation.py`経路と共通のロジック(`WBInterface`、
+  `SRBDControllerInterface`等、read_code_01〜15で読んだクラス)がそのまま
+  使われている箇所が多い。共通クラスの内部処理を再度詳しく説明する必要はなく、
+  「read_code_NNで読んだ`WBInterface.compute_stance_and_swing_torque`をそのまま
+  呼んでいる」のように直接書けばよい(17.3の同シリーズ参照の例外を使う)。
+  ROS2特有の差分(通信、プロセス分離、スレッド/マルチプロセス版MPC等)にこそ
+  紙面を割く。
+- 既定でOFFのマルチプロセス/マルチスレッドMPC変種(`USE_THREADED_MPC`、
+  `USE_PROCESS_QUEUE_MPC`、`USE_PROCESS_SHARED_MEMORY_MPC`、すべて既定`False`)は、
+  他の「既定OFF機能」と同様に事実確認はするが、深追いしすぎず、既定で
+  実際に動く同期分岐(`else`節)を主軸として厚く説明する。
