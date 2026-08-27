@@ -1,19 +1,28 @@
 # 毎ステップの制約設定 centroidal_nmpc_nominal.py::set_stage_constraint 逐次解説
 
+## 訂正(read_code_11で判明した事実)
+
+`compute_control`(read_code_11)を読んだ結果、この関数の呼び出しは
+`if self.use_foothold_constraints or self.use_stability_constraints:`という条件の
+中にあることが分かった。read_code_09で確認した通りこの2つは**どちらも既定`False`**。
+**つまり既定のトロット歩行では、この`set_stage_constraint`関数自体が一度も呼ばれない**。
+以下の解説は「この関数が呼ばれた場合の動作」として読んでください。
+
 ## simulation.py との結びつき(呼び出し連鎖)
 
 ```text
 simulation.py (run_simulationのループ)
   → quadrupedpympc_wrapper.compute_actions(...)
       → self.srbd_controller_interface.compute_control(...)  (read_code_07)
-          → self.controller.compute_control(...)  (compute_control本体、未読、次章)
-              → self.set_stage_constraint(...)   ← 本ファイル、ホライズンの各ステージに対して呼ばれる
+          → self.controller.compute_control(...)  (read_code_11)
+              → self.set_stage_constraint(...)   ← 本ファイル。
+                 呼び出しは`use_foothold_constraints or use_stability_constraints`が
+                 真のときだけ(read_code_11参照)。既定ではどちらも`False`のため未実行
 ```
 
 read_code_08・read_code_09と違い、この関数は**プロセス起動時の1回だけ**ではなく、
-`compute_control`から**MPCが解かれるたびに**(既定では5シミュレーションステップに1回)
-呼ばれる。read_code_02(歩容)・read_code_03(着地点)・read_code_06(状態集約)と同じ
-「毎回呼ばれる」グループに属する。
+呼ばれる場合は`compute_control`から**MPCが解かれるたびに**(既定では5シミュレーション
+ステップに1回)呼ばれる設計になっている。ただし上記の通り既定では未実行。
 
 ## この関数の役割(全体の中での位置づけ)
 
