@@ -1,0 +1,582 @@
+単体プロセス版① simulation/simulation.py の続き
+
+今回は、run_simulation() 内の「MuJoCo環境の生成」から「制御ループ直前」まで、44〜171行を解説します。対象は現在の simulation/simulation.py です。
+
+44〜49行：設定値を短い変数名に移す
+robot_name = qpympc_cfg.robot
+
+config.pyで選択されたロボット名を取得します。たとえばGo2なら、ロボットモデルを識別する名前が入ります。
+
+hip_height = qpympc_cfg.hip_height
+
+ロボットの基準となる腰高さを取得します。単位はmです。
+
+この値は59行目で、速度指令の範囲をロボットサイズに合わせてスケーリングするために使います。
+
+robot_leg_joints = qpympc_cfg.robot_leg_joints
+robot_feet_geom_names = qpympc_cfg.robot_feet_geom_names
+robot_leg_joints：脚を構成する関節名
+robot_feet_geom_names：MuJoCo上の足先形状の名前
+
+ただし、このsimulation.pyでは以降参照されません。現時点では不要な代入です。過去の実装の名残である可能性があります。
+
+scene_name = qpympc_cfg.simulation_params["scene"]
+
+使用するMuJoCoシーンを取得します。
+
+ここには平坦路、段差、傾斜路などを表すシーン名が入ります。
+
+simulation_dt = qpympc_cfg.simulation_params["dt"]
+
+MuJoCo物理シミュレーションの時間刻みを取得します。単位は秒です。
+
+たとえば、
+
+simulation_dt = 0.002
+
+なら、MuJoCoは1回のenv.step()で2 msだけ時間を進めます。物理計算周波数は、
+
+$$ f_{\mathrm{sim}}=\frac{1}{0.002}=500\ \mathrm{Hz} $$
+
+です。
+
+51〜52行：env.step()から返す観測項目
+# Save all observables available.
+state_obs_names = []
+
+QuadrupedEnvが通常の観測値stateとして返す項目を指定するリストです。
+
+現在は空なので、後の
+
+state, reward, is_terminated, is_truncated, info = env.step(...)
+
+で返されるstateには、基本的に観測項目が登録されません。
+
+重要なのは、MPC制御に必要な状態が取得されないという意味ではないことです。MPC用の値は後で、
+
+env.feet_pos(...)
+env.base_lin_vel(...)
+env.mjData.qpos
+
+のように、envから個別に直接取得します。
+
+コメントアウトされている、
+
+list(QuadrupedEnv.ALL_OBS)
+
+を使えば、環境が提供できる全観測を保存対象にできます。
+
+54〜64行：MuJoCo環境の生成
+env = QuadrupedEnv(
+
+四脚ロボット用のMuJoCo環境を生成します。
+
+このenvが、単体プロセス版における「ロボットの身体＋センサー＋物理シミュレータ」に相当します。
+
+robot=robot_name,
+
+使用するロボットモデルを指定します。
+
+robot_nameに対応するMuJoCo XMLモデルがgym-quadruped側で読み込まれます。
+
+scene=scene_name,
+
+ロボットを置く環境を指定します。ここで地面や障害物などが決まります。
+
+ただし、シーンに凹凸があることと、コントローラが凹凸を認識することは別です。後者にはHeightMapなどが必要です。
+
+sim_dt=simulation_dt,
+
+MuJoCoの物理計算を1回進める時間を設定します。
+
+これはMPCの計算周期とは限りません。
+
+たとえば、
+
+MuJoCo：500 Hz
+MPC：100 Hz
+
+なら、MuJoCoを5ステップ進めるごとにMPCを1回更新できます。この間引き処理はQuadrupedPyMPC_Wrapper側で行われます。
+
+ref_base_lin_vel=np.asarray(ref_base_lin_vel) * hip_height,
+
+胴体の目標並進速度の範囲を設定します。
+
+デフォルト引数は、
+
+ref_base_lin_vel=(0.0, 4.0)
+
+です。これにhip_heightを掛けます。
+
+たとえば、
+
+hip_height = 0.3
+
+なら、
+
+[0.0, 4.0] × 0.3 = [0.0, 1.2]
+
+となり、目標速度範囲は0〜1.2 m/sになります。
+
+ここで渡しているのは必ずしも現在の速度指令そのものではなく、環境が速度指令を生成するときの範囲です。
+
+ref_base_ang_vel=ref_base_ang_vel,
+
+胴体の目標角速度を設定します。デフォルトは、
+
+(-0.4, 0.4)
+
+なので、おおむね−0.4〜0.4 rad/sの範囲です。
+
+主にyaw方向、つまり旋回速度の指令に使われます。
+
+ground_friction_coeff=friction_coeff,
+
+地面の摩擦係数を設定します。
+
+デフォルトは、
+
+(0.5, 1.0)
+
+です。環境の仕様に応じて、この範囲から摩擦係数が選ばれます。
+
+注意点として、これはMuJoCoが使う実際の地面摩擦です。一方、MPC内部にも摩擦円錐制約用の摩擦係数があります。
+
+両者が大きく食い違うと、
+
+MPCは滑らないと予測する
+MuJoCo上では実際に滑る
+
+というモデル誤差が生じます。
+
+す。
+
+base_vel_command_type=base_vel_command_type,
+
+目標速度指令の与え方を選びます。
+
+コメントにある主な種類は、
+
+"forward"：前進指令
+"random"：ランダムな指令
+"forward+rotate"：前進と旋回
+"human"：キーボードなどの人間操作
+
+です。
+
+デフォルトは"human"です。
+
+state_obs_names=tuple(state_obs_names),
+
+52行目で作った空リストをタプルへ変換して渡します。
+
+結果として現在は、
+
+state_obs_names=()
+
+となります。
+
+リストからタプルにするのは、環境側が変更されない観測項目の並びとして扱いやすくするためです。
+
+)
+
+ここでQuadrupedEnvの生成が完了します。
+
+内部では、MuJoCoの、
+
+mjModel：変更されにくいモデル定義
+mjData：時々刻々変化する状態
+
+などが生成されます。
+
+65〜76行：環境の初期設定
+pprint(env.get_hyperparameters())
+
+作成された環境の設定値をターミナルへ表示します。
+
+pprintは、辞書などを読みやすく整形して表示する関数です。制御処理には影響しません。
+
+env.mjModel.opt.gravity[2] = -qpympc_cfg.gravity_constant
+
+MuJoCoのz方向の重力加速度を設定します。
+
+たとえば、
+
+gravity_constant = 9.81
+
+なら、
+
+gravity = [0, 0, -9.81]
+
+となります。
+
+z軸上向きの座標系なので、重力は負方向です。
+
+MPC内部で使う重力加速度と、MuJoCo側の重力加速度を一致させる目的があります。
+
+if qpympc_cfg.qpos0_js is not None:
+
+ロボット固有の初期関節角度が設定されているか確認します。
+
+qpos0_jsのjsはjoint spaceの意味です。
+
+env.mjModel.qpos0 = np.concatenate(
+    (env.mjModel.qpos0[:7], qpympc_cfg.qpos0_js)
+)
+
+MuJoCoの初期姿勢qpos0を作り直します。
+
+前半の、
+
+env.mjModel.qpos0[:7]
+
+は浮遊ベースの状態です。
+
+一般に、
+
+ベース位置：3要素
+ベース姿勢の四元数：4要素
+
+で合計7要素です。
+
+後半の、
+
+qpympc_cfg.qpos0_js
+
+は12関節の初期角度です。
+
+したがって、概念的には、
+
+qpos0 = [ベース位置3, ベース姿勢4, 関節角度12]
+
+を作っています。
+
+env.reset(random=False)
+
+環境を初期状態へ戻します。
+
+random=Falseなので、最初のエピソードでは初期状態をランダム化しません。
+
+後のエピソード再開始時にはrandom=Trueが使われます。
+
+if render:
+
+画面表示が有効な場合だけ、続く描画設定を実行します。
+
+env.render()
+
+MuJoCo Viewerを生成し、最初の画面を表示します。
+
+この最初の呼び出しでenv.viewerが生成されるため、その後でViewerの描画設定を変更できます。
+
+env.viewer.user_scn.flags[
+    mujoco.mjtRndFlag.mjRND_SHADOW
+] = False
+
+影の描画を無効化します。
+
+物理計算ではなく、表示だけに関係します。描画負荷を少し減らせます。
+
+env.viewer.user_scn.flags[
+    mujoco.mjtRndFlag.mjRND_REFLECTION
+] = False
+
+反射表現を無効化します。
+
+これも制御や物理計算には影響しません。
+
+80〜89行：関節トルクと制限値
+tau = LegsAttr(
+    *[np.zeros((env.mjModel.nv, 1)) for _ in range(4)]
+)
+
+4脚分のトルク変数tauをゼロで初期化します。
+
+LegsAttrは、次のように脚名で値へアクセスできる容器です。
+
+tau.FL
+tau.FR
+tau.RL
+tau.RR
+
+脚名は、
+
+FL：Front Left
+FR：Front Right
+RL：Rear Left
+RR：Rear Right
+
+です。
+
+ただし、初期配列のサイズが各脚3要素ではなく、
+
+(env.mjModel.nv, 1)
+
+になっているのは不自然です。nvはロボット全体の一般化速度数だからです。
+
+実際には、最初のcompute_actions()で各脚3関節分のトルクへ置き換えられます。動作上必要というより、型・形状の初期化が粗い実装です。
+
+tau_soft_limits_scalar = 0.9
+
+モーターの最大トルクを100%使わず、90%までに制限する係数です。
+
+tau_limits = LegsAttr(
+
+4脚それぞれのトルク制限を作ります。
+
+FL=env.mjModel.actuator_ctrlrange[
+    env.legs_tau_idx.FL
+] * tau_soft_limits_scalar,
+
+左前脚の3モーターについて、MuJoCoモデルに定義された入力範囲を取得し、0.9倍します。
+
+たとえばモデル上の制限が、
+
+[-40, 40] Nm
+
+なら、実際に使う制限は、
+
+[-36, 36] Nm
+
+です。
+
+86〜88行も、それぞれFR、RL、RRに対して同じ処理をします。
+
+ここではまだトルクを制限しません。制御ループ内でnp.clip()するときに使う上下限を準備しているだけです。
+
+91〜93行：描画用IDと脚順序
+feet_traj_geom_ids, feet_GRF_geom_ids = (
+    None,
+    LegsAttr(FL=-1, FR=-1, RL=-1, RR=-1),
+)
+
+2種類の描画用IDを初期化します。
+
+feet_traj_geom_ids：遊脚軌道を描画する図形のID
+feet_GRF_geom_ids：地面反力ベクトルを描画する図形のID
+
+-1は「まだMuJoCo Viewer上に図形が作られていない」という初期値です。
+
+これは制御計算には使われません。
+
+legs_order = ["FL", "FR", "RL", "RR"]
+
+コード全体で使う脚の並び順を固定します。
+
+この順序は非常に重要です。MPCが返す12個の力も、
+
+FLのFx,Fy,Fz,
+FRのFx,Fy,Fz,
+RLのFx,Fy,Fz,
+RRのFx,Fy,Fz
+
+という順番として解釈されるためです。
+
+95〜117行：HeightMapの生成
+if qpympc_cfg.simulation_params[
+    "visual_foothold_adaptation"
+] != "blind":
+
+着地点補正がblind以外なら、足元の高さ情報を作ります。
+
+blindは、地形を観測せず、平坦路を仮定して歩くモードです。
+
+from gym_quadruped.sensors.heightmap import HeightMap
+
+必要な場合だけHeightMapをimportします。
+
+resolution_heightmap = 0.04
+
+HeightMapの格子間隔を0.04 m、つまり4 cmに設定します。
+
+num_rows_heightmap = 7
+num_cols_heightmap = 7
+
+縦7点×横7点の格子を使います。
+
+したがって各足について49点の地面高さを保持します。
+
+格子点間隔が4 cmなので、点の端から端までは、
+
+$$ (7-1)\times0.04=0.24\ \mathrm{m} $$
+
+です。
+
+つまり、おおむね24 cm四方の局所地形を表します。
+
+heightmaps = LegsAttr(
+
+4本の足それぞれに、独立したHeightMapを作ります。
+
+FL=HeightMap(
+    num_rows=num_rows_heightmap,
+    num_cols=num_cols_heightmap,
+    dist_x=resolution_heightmap,
+    dist_y=resolution_heightmap,
+    mj_model=env.mjModel,
+    mj_data=env.mjData,
+),
+
+左前脚用のHeightMapです。
+
+num_rows：xまたは縦方向の点数
+num_cols：yまたは横方向の点数
+dist_x：x方向の格子間隔
+dist_y：y方向の格子間隔
+mj_model：地形形状を含むMuJoCoモデル
+mj_data：現在のMuJoCo状態
+
+FR、RL、RRについても同じHeightMapを作ります。
+
+各足で別にする理由は、足ごとに次の着地点候補が異なるからです。
+
+else:
+    heightmaps = None
+
+blindモードなら地形高さを取得しません。
+
+後のcompute_actions()にはNoneが渡され、地形を見ない着地点計算になります。
+
+119〜139行：MPC制御器の初期化
+quadrupedpympc_observables_names = (
+
+制御器の内部から、記録・描画用に取り出したい項目を指定します。
+
+これはMPCの入力ではなく、デバッグ・可視化用の出力項目です。
+
+"ref_base_height",
+
+目標胴体高さです。単位はmです。
+
+"ref_base_angles",
+
+目標roll・pitch・yaw角です。単位はradです。
+
+"ref_feet_pos",
+
+Raibertヒューリスティックなどが計算した、各足の基準着地点です。
+
+"nmpc_GRFs",
+
+MPCが計算した各足の地面反力です。各脚3成分で単位はNです。
+
+"nmpc_footholds",
+
+MPCまたは着地点補正で使用する足の目標着地点です。
+
+ref_feet_posと必ず同じとは限りません。着地点最適化を有効にした場合、MPCによる補正結果が入る可能性があります。
+
+"swing_time",
+
+各脚が現在の遊脚期間に入ってからの経過時間です。単位は秒です。
+
+"phase_signal",
+
+各脚の歩容位相です。通常0〜1の無次元値です。
+
+"lift_off_positions",
+
+各脚が地面から離れた瞬間の足先位置です。遊脚軌道の始点になります。
+
+129〜131行はコメントアウトされているため、実行されません。
+
+quadrupedpympc_wrapper = QuadrupedPyMPC_Wrapper(
+
+MPC制御系全体をまとめたラッパーを生成します。
+
+この中で主に、
+
+WBInterface
+SRBDControllerInterface
+歩容生成器
+着地点生成器
+遊脚軌道制御器
+
+が初期化されます。
+
+つまり、simulation.pyはMPCの数式を直接解くのではなく、このラッパーを通して共通の制御ロジックを呼びます。
+
+initial_feet_pos=env.feet_pos,
+
+env.feet_posという関数そのものを渡します。
+
+値を取得する、
+
+env.feet_pos(frame="world")
+
+ではない点に注意してください。
+
+ラッパー内部で、
+
+initial_feet_pos(frame="world")
+
+と呼び出し、初期足先位置をworld座標系で取得する設計です。
+
+変数名はinitial_feet_posですが、実体は足先位置を取得する関数です。型注釈ではLegsAttrと書かれており、実装と型注釈が一致していません。
+
+legs_order=tuple(legs_order),
+
+脚順序をリストからタプルへ変換して渡します。
+
+("FL", "FR", "RL", "RR")
+
+となります。
+
+feet_geom_id=env._feet_geom_id,
+
+MuJoCoモデル上の各足先形状のIDを渡します。
+
+先頭が_なので、本来はQuadrupedEnv内部用の属性です。外部から直接アクセスしているため、gym-quadrupedの実装変更に弱い書き方です。
+
+接触判定などで、「どのMuJoCo geomがどの足か」を識別するために使われます。
+
+quadrupedpympc_observables_names=quadrupedpympc_observables_names,
+
+先ほど選んだ記録・可視化項目をラッパーへ渡します。
+
+141〜160行：データ記録の準備
+if recording_path is not None:
+
+保存先が指定されたときだけ、HDF5形式でシミュレーション結果を記録します。
+
+from gym_quadruped.utils.data.h5py import H5Writer
+
+記録が必要な場合だけHDF5 Writerをimportします。
+
+root_path = pathlib.Path(recording_path)
+
+文字列などで渡された保存先を、パス操作しやすいPathへ変換します。
+
+root_path.mkdir(exist_ok=True)
+
+保存先ディレクトリを作ります。すでに存在していてもエラーにしません。
+
+ただしparents=Trueがないので、親ディレクトリまで存在しない場合は失敗します。
+
+dataset_path = (
+
+保存ファイルのパスを組み立てます。
+
+root_path / f"{robot_name}/{scene_name}"
+
+ロボット名とシーン名でディレクトリを分けます。
+
+/ f"lin_vel={...} ang_vel={...} friction={...}"
+
+速度指令と摩擦係数をディレクトリ名に含めます。
+
+/ f"ep={num_episodes}_steps={...}.h5"
+
+エピソード数と1エピソードのステップ数をファイル名に含めます。
+
+int(num_seconds_per_episode // simulation_dt)
+
+1エピソードのシミュレーションステップ数を計算します。
+
+たとえば60秒、dt=0.002秒なら、
+
+$$ 60 / 0.002 = 30000\ \text{step} $$
+
+です。
+
+//は切り捨て除算です。
