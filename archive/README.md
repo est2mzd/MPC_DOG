@@ -7,6 +7,15 @@
 - `git mv`で移動したものだけなので、各ファイルの変更履歴(`git log --follow`)は
   そのまま追跡できます。
 
+## 2026-08-29(さらに続き3):`logs/`もarchive(未追跡のまま)
+
+`logs/`(実行ログ・ベンチマークの中間出力、4.2MB)はもともと`.gitignore`の
+`logs/`ルールで追跡対象外でした。git履歴を持たないため`git mv`ではなく
+通常の`mv`で`archive/logs/`へ物理的に移動しています。`logs/`という
+ディレクトリ名ベースのgitignoreルールは移動後の場所にもそのままかかる
+ため、`archive/logs/`も引き続き未追跡です(再生成可能なログのため、
+このコミット履歴には含めていません)。
+
 ## 2026-08-29(さらに続き2):`agent_reports/`もarchive
 
 ユーザーの指示により、`agent_reports/quadruped_pympc_onboarding/`
