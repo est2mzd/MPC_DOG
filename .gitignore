@@ -1,7 +1,8 @@
 external/*
 !external/legged_control
 !external/Quadruped-PyMPC
-logs/
+/logs/
+/archive/logs/
 __pycache__/
 *.pyc
 .venv/
