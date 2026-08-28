@@ -7,6 +7,16 @@
 - `git mv`で移動したものだけなので、各ファイルの変更履歴(`git log --follow`)は
   そのまま追跡できます。
 
+## 2026-08-29(さらに続き2):`agent_reports/`もarchive
+
+ユーザーの指示により、`agent_reports/quadruped_pympc_onboarding/`
+(read_code_01〜20、agent_instruction、09_bugs_and_risks_summary等、42
+ファイル)・`agent_reports/legged_control_onboarding/`(read_code_01〜14、
+agent_instruction)を含む`agent_reports/`全体を`archive/agent_reports/`へ
+移動しました(既存の`archive/agent_reports/quadruped_pympc_onboarding/`
+の下書き群と同じ場所に統合)。これでリポジトリのルートは
+`archive/`・`external/`・`papers/`とプラムビングのみになっています。
+
 ## 2026-08-29(さらに続き):`scratch/`・`AGENTS.md`・`README.md`もarchive
 
 ユーザーの指示により、直前のarchiveで新設したばかりの`scratch/`
