@@ -27,6 +27,38 @@
   `.py`/`.ipynb`/`.sh`以外のファイル(`README.md`・`assets/`・
   `benchmark_results/`等)がそのまま残っている(今回の指示範囲外のため)
 
+## 2026-08-29(続き):残り全ファイル・空フォルダの一括archive
+
+上記の`.py`/`.ipynb`/`.sh`移動で空になった、あるいは元から`.md`等しか
+持たなかったディレクトリを、ユーザーの指示(「サブの不要なフォルダ、不要
+ファイル、`.md`・`.ipynb`も対象」)により丸ごと`archive/`へ移動しました
+(393ファイル)。対象:`docs/`(168)・`notebook_pympc/`(93、
+`benchmark_results*/`・`README.md`)・`notebook_legged/`(68、`assets/`・
+`README.md`)・`notebook/`(43、`assets/`)・`configs/`(19、
+`pympc_presets/*.yaml`)・`prompts/`(1)・`src/legged_control_mujoco/models/a1.xml`(1)。
+
+移動後、`notebook/`・`notebook_pympc/`・`notebook_legged/`・`configs/`・
+`prompts/`・`src/`・`scripts/`・`tests/`はgit管理対象が0件になったため、
+ディレクトリ自体を削除しました(`__pycache__`・`*.egg-info`等の
+gitignore対象ビルド生成物のみが残っていたことを確認済み)。
+
+`docs/`配下には、ビルドキャッシュ(`_eqcache/`・`_figcache/`・
+`__pycache__`)やワークショップの中間生成物
+(`.gitignore`に明記の`assets/frames_*/`・`tuning_lab_results.json`等、
+「スクリプトで再生成可能」と既に注記されていたもの)、LibreOfficeの
+ロックファイルなど、**未追跡(untracked)の生成物のみ**が3191ファイル
+(147MB)残っていたため、`git status`で追跡外であることを確認した上で
+`docs/`ごと削除しました。
+
+`papers/`(翻訳成果物`Nonlinear_Model_Predictive_Control_for_Quadrupedal.md`+
+元論文PDF)は、トライアル・分析の副産物ではなく明示的に依頼・保持されている
+参照文書のため、今回のarchive対象から**除外**しています。ルート直下の
+`README.md`・`AGENTS.md`も、現役の案内文書として除外しています。
+
+**追加の既知の影響**:上記に加え、`README.md`・`AGENTS.md`が参照している
+`notebook_pympc/`・`docs/`配下のノートブック・ガイド類へのリンク・パスは、
+すべて`archive/`配下へ移動済みのため無効になっています(今回は未修正)。
+
 ## `archive/notebook/`(方針A、旧)
 
 `notebook/`にあった`_append_*`・`_exec_*`・`_patch_*`・`_probe_*`・`_run_*`
