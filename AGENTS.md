@@ -170,3 +170,17 @@ Log what you did to `agent_reports/` at the repo root:
   plus a short slug: `01_xxx.md`, `02_yyy.md`, ... — number continues
   across sessions within the same group, so check the highest existing
   number in that folder before adding the next entry.
+- Superseded drafts (old versions replaced by a later, canonical file)
+  go to `archive/agent_reports/<group-name>/` via `git mv`, not deletion
+  — see `archive/README.md`.
+
+## Scratch work and branches
+
+- Throwaway trial scripts, one-off checks, and in-progress verification
+  live in `scratch/` (gitignored except its `README.md` files) until
+  they're worth keeping — see `scratch/README.md` for the promotion
+  rule. Do not drop `_append_*`/`_exec_*`/`_patch_*`-style scratch
+  files directly into `notebook/` or other tracked directories.
+- New exploratory work on `external/` (or other non-trivial AI-driven
+  changes) happens on `feature/*` or `experiment/*` branches, not
+  directly on `main`. `main` tracks the working, reviewed state.

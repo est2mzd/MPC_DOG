@@ -17,3 +17,16 @@ docs/pympc_2day/assets/scenario_lab_results.json
 
 # LibreOffice lock files
 .~lock.*#
+
+# Scratch / trial work (see scratch/README.md) — keep the READMEs only
+scratch/*
+!scratch/README.md
+!scratch/external/
+scratch/external/*
+!scratch/external/README.md
+
+# Prevent the notebook/_append_* etc. clutter pattern from recurring
+# (see archive/README.md for the history of why this exists)
+notebook/_*
+notebook_pympc/_*
+notebook_legged/_*
