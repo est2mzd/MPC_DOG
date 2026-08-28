@@ -7,6 +7,24 @@
 - `git mv`で移動したものだけなので、各ファイルの変更履歴(`git log --follow`)は
   そのまま追跡できます。
 
+## 2026-08-29(さらに続き):`scratch/`・`AGENTS.md`・`README.md`もarchive
+
+ユーザーの指示により、直前のarchiveで新設したばかりの`scratch/`
+(使い捨て作業の置き場、`README.md`2枚のみ追跡)と、ルート直下の
+`AGENTS.md`・`README.md`も`archive/root/`・`archive/scratch/`へ移動しました。
+これでリポジトリのルートは`agent_reports/`・`archive/`・`external/`・`papers/`
+と最小限のプラムビング(`.gitignore`・`.gitmodules`・`pyproject.toml`・
+`uv.lock`・`logs/`)だけになっています。**この`archive/README.md`が現時点で
+唯一のルート近傍の説明文書**です。
+
+- `archive/root/README.md`・`archive/root/AGENTS.md`:元のリポジトリ直下の
+  `README.md`・`AGENTS.md`(パスの衝突を避けるため`root/`配下に格納)
+- `archive/scratch/`:方針Bで作った`scratch/README.md`・
+  `scratch/external/README.md`(中身のルール自体はまだ有効な考え方だが、
+  一旦保留)
+- `.gitignore`の`scratch/*`関連ルールは今回削除していません(該当パスが
+  存在しないだけで無害)
+
 ## 2026-08-29:`.py`/`.ipynb`/`.sh`全ファイルの一括archive
 
 `external/`(submodule)を「ゼロから」検証し直す前提として、ユーザーの明示的な
