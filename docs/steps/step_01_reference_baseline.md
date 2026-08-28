@@ -11,8 +11,8 @@ Quadruped-PyMPCを変更せずに実行し、以後のStepで比較に使う基�
 
 - `external/`配下のコード変更(実施していない、後述「事実」で無変更を確認)
 - MPC_DOG独自の状態推定・MPC・WBCの実装
-- 前進歩行の検証(Step 5より後)
-- 実際のシミュレーション実行・ログ収集・GIF作成 — **本Stepの前提条件(後述)を満たせず未達成**。詳細は「10. 結果」「14. 未解決事項」参照。
+- 前進歩行の検証(Step 5より後、本Stepの記録でも`ref_base_lin_vel`は終始ゼロで前進していないことを確認済み)
+- `env.mjData.contact`等の生データそのものの保存(GRF・接触bool・関節トルクという集約済みの物理量のみをログした)
 
 ## 3. 前提の食い違い(先に報告)
 
@@ -123,7 +123,13 @@ simulation/simulation.py (134行) QuadrupedPyMPC_Wrapper 生成
 
 ## 9. 変更内容と変更理由
 
-`external/`配下は無変更(後述「12. 事実」で`git status`により確認)。MPC_DOG側で新規作成したのは、本ドキュメントおよび`scripts/run_reference_baseline.sh`(公式手順をそのまま呼び出す起動スクリプト)のみ。ロジックの実装は行っていない。
+`external/`配下は無変更(後述「15. 事実」で、ビルド・実行の前後とも`git status`により確認)。MPC_DOG側で新規作成したのは以下の3点で、いずれも制御ロジックの実装は一切含まない。
+
+- `docs/steps/step_01_reference_baseline.md`(本ドキュメント)
+- `scripts/run_reference_baseline.sh`:環境の前提条件(ビルドツールチェイン・acadosビルド済み・`ACADOS_SOURCE_DIR`)を検査し、問題があれば理由を明示して停止する起動スクリプト
+- `scripts/record_step01_baseline.py`:`simulation.py`の`run_simulation()`内部ループ(169〜327行目)を、**呼び出す関数・引数の順序を一切変えずに**そのまま呼び出しながら、(a)オフスクリーンレンダリングでGIF用フレームを取得し、(b)Base状態・接触状態・GRF・関節トルク・MPC計算時間をCSVへ記録する、記録専用のハーネス。PyMPC自体の計算式は含まれておらず、各ブロックの直前コメントに対応する`simulation.py`の行番号を明記した(ファイル冒頭のdocstring参照)。
+
+acadosのビルドは、README_install.mdの手順通りだが1点だけ、`ACADOS_WITH_SYSTEM_BLASFEO`を`ON`(README記載値)ではなく`OFF`(acados自身の`CMakeLists.txt:96`が定義する既定値)にして実行した。理由:`ON`のまま実行すると、システムに`blasfeo`パッケージが見つからずCMake configureが失敗した(このホストはconda/pixi環境ではなく`uv`管理の`.venv`のため、Quadruped-PyMPC側のconda環境が提供する想定のシステムblasfeoが存在しない)。`OFF`はacados自身のCMakeLists.txtが警告文で「開発者が実際にテストしているのはOFFの場合のみ」と明記している値でもある。これは`external/`のコード変更ではなくビルド時のCMakeオプション選択であり、外部コードそのものには一切手を加えていない。
 
 ## 10. 入出力・shape・単位・座標系
 
@@ -145,59 +151,91 @@ simulation/simulation.py (134行) QuadrupedPyMPC_Wrapper 生成
 
 ## 11. 実行方法
 
-`scripts/run_reference_baseline.sh`を参照。中身は公式`README_install.md`の手順をそのまま呼び出すラッパーであり、**現時点では実行環境が未整備のため未検証**(後述12節)。
+```bash
+bash scripts/run_reference_baseline.sh
+```
+
+内部で行っていること(スクリプト本体参照):
+
+1. preflightチェック(`simulation.py`の存在、`cmake`/`make`/`gcc`/`g++`、`quadruped_pympc/acados/lib`、`ACADOS_SOURCE_DIR`)
+2. `ACADOS_SOURCE_DIR`・`LD_LIBRARY_PATH`をこのプロセス内だけに設定(ユーザー環境やexternal/は変更しない)
+3. `scripts/record_step01_baseline.py`を実行(既定)。公式`simulation.py`を対話的にそのまま動かしたいだけの場合は`RUN_OFFICIAL_ONLY=1 bash scripts/run_reference_baseline.sh`。
+
+acadosのビルド自体(一度だけ必要)は、README_install.mdの手順通り以下で行った(`ACADOS_WITH_SYSTEM_BLASFEO`の値のみ9節の理由によりOFFへ変更):
+
+```bash
+cd external/Quadruped-PyMPC/quadruped_pympc/acados
+mkdir build && cd build
+cmake -DACADOS_WITH_SYSTEM_BLASFEO:BOOL=OFF -DCMAKE_POLICY_VERSION_MINIMUM=3.5 ..
+make install -j4
+uv pip install --python ../../../../.venv/bin/python -e ../interfaces/acados_template
+uv pip install --python ../../../../.venv/bin/python -e ../../..   # Quadruped-PyMPC本体
+```
+
+(`uv pip install`を使ったのは、`.venv`が`uv`管理でpip本体を含まないため。README_install.mdの`pip install -e .`と同義)
 
 ## 12. 評価指標
 
-- `sum(実行できたか)`:実行の成否(バイナリ)
-- Base状態・接触状態・GRF・関節指令・MPC計算時間のログ有無
+- 実行の成否(バイナリ)、`external/`への差分の有無
+- Base状態・接触状態・GRF・関節指令・MPC計算時間のログ有無と内容の妥当性
 - GIFの実時間・解像度・フレーム数・ファイルサイズ
 
 ## 13. 結果
 
-**未達成。実行環境のセットアップ段階でブロックされ、シミュレーションを1回も実行できていない。**
+**成功。** `bash scripts/run_reference_baseline.sh`で、公式のPyMPCコントローラ(acados NMPC + WBC)がMuJoCo上のgo2を25秒間(12,499ステップ、`dt=0.002`秒)動かし、ログとGIFを生成した。
 
-環境調査で確認した事実(このマシン上):
+実行環境(このマシン、ユーザーがツールチェイン導入後):
 
 | 項目 | 状態 |
 |---|---|
-| `.venv`(uv管理、Python 3.11) | 存在する |
-| `mujoco` | インポート可能(v3.11.0) |
-| `casadi` | インポート可能(v3.7.2) |
-| `gym_quadruped` | インポート可能 |
-| `acados_template` | **インポート失敗**:`SyntaxError: unknown encoding: future_fstrings`(`acados_template/utils.py`) |
-| `quadruped_pympc/acados`(submodule) | 初期化済み(ソースは存在、pin先 `5d358fe80c1037a0feeb8ba1021fcd354f1be8c2`) だが**未ビルド**(`build/`ディレクトリなし、コンパイル済み`.so`なし) |
-| `cmake` / `make` / `gcc` / `g++` / `cc` / `clang` | **すべて未インストール**(`command -v`で検出不可) |
-| `sudo` | パスワードが必要(非対話的に利用不可、`apt`等でのツールチェイン導入も不可) |
+| `cmake`/`make`/`gcc`/`g++` | インストール済み(Ubuntu標準パッケージ、gcc/g++ 13.3.0、cmake 3.28.3) |
+| acadosビルド | 成功(`libacados.so`・`libblasfeo.so`・`libhpipm.so`を`quadruped_pympc/acados/lib/`に生成) |
+| `acados_template`のインポート | 成功(ビルド後に`pip install -e`すると依存の`future-fstrings`も自動解決され、以前観測した`SyntaxError`は解消した) |
+| tera_renderer | 初回実行時に公式の自動ダウンロード機能(README_install.md記載の仕様通り)で取得 |
 
-README_install.mdの手順5(acadosのビルド)には`cmake`・`make`・Cコンパイラが必須だが、このマシンには**C/C++ビルドツールチェインが一切存在せず、権限の都合で新規インストールもできない**。したがって、公式手順通りの`python3 simulation/simulation.py`実行は現状不可能である。
+実行結果の統計(`artifacts/logs/step_01/state_log.csv`、12,499行を集計):
 
-Base状態・GRF・関節指令・MPC計算時間のログ、および20秒以上のGIFは、いずれも**作成できていない**。
+| 指標 | 値 |
+|---|---|
+| 実時間25秒のシミュレーションにかかった壁時計時間 | 46.5秒(269 steps/s) |
+| `compute_actions`(MPC+WBC)1呼び出しあたりの時間 | 平均2.17ms、中央値2.07ms、p99 4.67ms、最大30.2ms |
+| Base高さ`z` | 0.290〜0.308m(平均0.306m)、転倒なし |
+| Base roll / pitch | roll: -0.0135〜0.0061 rad、pitch: -0.0000〜0.0475 rad(いずれも小さく、安定) |
+| 接地率(4脚) | FL 0.637 / FR 0.649 / RL 0.614 / RR 0.620(既定トロットの`duty_factor=0.65`とほぼ整合) |
+| MPCが計算した接地力の合計`Fz`(4脚) | 平均139.9N、範囲116.3〜190.7N(go2質量`12.019kg`×`g=9.81`≈117.9Nに近い) |
+| 目標並進速度`ref_base_lin_vel` | 全ステップで`(0.0, 0.0)`固定(後述「事実」参照) |
+| Base水平方向の総移動量 | 約0.84m(前進歩行ではなく、その場でのわずかなドリフトの範囲) |
+| 関節トルクの絶対値最大 | 15.0 N·m(全12関節・全ステップ中) |
 
 ## 14. GIF
 
-未作成(理由:上記13節のブロッカーによりシミュレーションが1回も実行できていないため)。
+- パス:`artifacts/gifs/step_01_reference_baseline.gif`
+- 実時間:25.0秒(250フレーム ÷ 10fps)
+- 解像度:640×360
+- フレーム数:250
+- ファイルサイズ:約7.6MB
+- ループ:無限ループ(`imageio.mimsave(..., loop=0)`)
+- 内容:ロボット全体と床面が入るfree camera(baseのx-yを追従)。画面左上に経過時間・目標速度・実速度をオーバーレイ表示。前進歩行は発生していないため10m移動の収録要件(指示書5.2節)は本Stepでは非該当(理由は「9. 事実」参照)。
 
 ## 15. 事実
 
-- `external/Quadruped-PyMPC`はcommit `cc145a2`で固定されたgit submoduleであり、本Step作業前後で`git status`(submodule内)に差分がないことを確認した(無変更)。
-- 6節の呼び出し経路・行番号は、すべて上記commitに対して`grep`/`Read`で直接確認したものである。
-- README_install.mdが要求する`cmake`・`make`・Cコンパイラが本マシンには存在せず、非対話的`sudo`も使えないため、acadosのビルドが実行不可能である。
-- `acados_template`のインポートは、ビルド前の状態でも`future_fstrings`エンコーディング関連の`SyntaxError`で失敗する。
+- `external/Quadruped-PyMPC`および入れ子の`quadruped_pympc/acados`submoduleは、acadosのビルド・OCPソルバーのコード生成・25秒間のシミュレーション実行の前後を通じて`git status`(それぞれのsubmodule内)に一切差分が無いことを確認した。ビルド成果物(`build/`・`lib/`・`bin/`)とOCPコード生成物(`quadruped_pympc/controllers/gradient/nominal/c_generated_code/`)は、いずれも各リポジトリ自身の`.gitignore`で無視される場所に生成されている。
+- 6節の呼び出し経路・行番号は、すべて対象commitに対して`grep`/`Read`で直接確認したものである。
+- `run_simulation()`は既定で`base_vel_command_type="human"`(キーボード入力)を使うが、本実行は非対話的なターミナルから行ったためキー入力は一切発生せず、`ref_base_lin_vel`/`ref_base_ang_vel`は初期値のゼロのまま25秒間変化しなかった(`state_log.csv`の`ref_lin_vel_x_mps`等の列がすべて`0.0`であることで確認)。結果としてロボットは前進せず、トロット歩容でその場に留まる動きになった。
+- `quadrupedpympc_wrapper.get_obs()`が返す`ctrl_state["nmpc_GRFs"]`は`LegsAttr`型(脚名でアクセスするオブジェクト)であり、フラットな配列ではない(`quadruped_pympc_wrapper.py:39`)。
+- MuJoCoのオフスクリーンレンダラ(`mujoco.Renderer`)は、モデルの既定オフスクリーンフレームバッファ幅(640px)を超える解像度を指定するとエラーになる(go2のMJCFにフレームバッファサイズの明示指定が無いための既定値)。
 
 ## 16. 推測
 
-- `future_fstrings`のエラーは、`future-fstrings`というPyPIパッケージ(ソースエンコーディング宣言`# -*- coding: future_fstrings -*-`を解釈するためのcodec登録を行う)が現在の`.venv`にインストールされていないために発生していると考えられる。acadosを正式にビルドする過程(`pip install -e ./../interfaces/acados_template`)でこの依存関係も解決される可能性が高いが、未検証のため断定はしない。
-- ホスト環境にC/C++ツールチェインが意図的に置かれていない(コンテナ/サンドボックス環境の制約である)可能性が高いが、根拠となる情報はこのセッション内には無く確証はない。
+- `compute_actions_time`の最大値(30.2ms)は、MPCが実際にacadosソルバーを呼ぶステップ(既定`mpc_frequency=100`Hzに従い間引かれる)に対応すると考えられるが、`compute_actions`内部でどのステップが実際にソルバーを呼んだかは今回のログには含めていないため、厳密な対応関係は未確認。
+- Base水平方向に約0.84m動いたのは、目標速度がゼロであっても、トロットの各接地衝撃や初期姿勢からの整定過程で生じる小さなドリフトによるものと考えられる(意図的な移動指令ではない)。
 
 ## 17. 未解決事項
 
-1. **acadosがビルドできない**:C/C++ツールチェイン(`cmake`・`make`・gcc/g++)が本マシンに存在せず、`sudo`も非対話的に使えない。ユーザー側での対応(ツールチェインの導入、または既にビルド済みのacados/コンテナ環境の提供)が必要。
-2. 上記が解決するまで、Step 1の実行(5〜8項目)・ログ収集・GIF作成が行えない。
-3. `acados_template`の`future_fstrings`エラーの根本原因は未検証。
+1. `compute_actions_time`とMPC実解回数(間引き)の対応関係の詳細な検証(未実施、Step 5「MPC計算時間が制御周期内に収まるか」でより厳密に扱う想定)。
+2. GIFのファイルサイズ(約7.6MB)は要件の上限は明記されていないが、やや大きい。必要であれば減色・フレーム間引きで縮小可能。
 
 ## 18. 次のStepへ進める条件
 
-- 上記「未解決事項1」が解消され、`python3 simulation/simulation.py`が公式手順通りに実行できること。
-- 20秒以上のGIFと、Base状態・接触状態・GRF・関節指令・MPC計算時間のログが`artifacts/`配下に保存されていること。
-- 完了条件(指示書「Step 1 完了条件」)をすべて満たすまで、Step 2以降には着手しない。
+- 完了条件をすべて満たしたことを確認済み:`external/`に差分なし、commit SHAと実行コマンドを記録、`bash scripts/run_reference_baseline.sh`一発で再現可能、主要処理経路を実ファイル名・行番号で説明、ログ(`artifacts/logs/step_01/state_log.csv`・`gif_meta.json`)とGIF(`artifacts/gifs/step_01_reference_baseline.gif`)を作成済み、GIFは25秒(20秒以上)。前進歩行は発生していないため10m要件は非該当。
+- ユーザーの承認を得てからStep 2(四脚接地での静止)へ進む。
