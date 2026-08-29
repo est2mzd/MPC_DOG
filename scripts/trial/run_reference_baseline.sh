@@ -23,16 +23,18 @@
 #   続けて不可解なエラーを出さないため)。
 #
 # 既定では、公式 simulation.py をそのまま実行するのではなく、
-# scripts/record_step01_baseline.py (MPC_DOG側の記録ハーネス。制御ロジックは
+# src/trial/record_step01_baseline.py (MPC_DOG側の記録ハーネス。制御ロジックは
 # 一切変更せず呼び出すだけ、詳細は同ファイル冒頭のdocstring参照) を実行し、
 # ログ(artifacts/logs/step_01/)とGIF(artifacts/gifs/)を生成する。
 # 公式スクリプトそのものを対話的に動かしたいだけの場合は
-# `RUN_OFFICIAL_ONLY=1 bash scripts/run_reference_baseline.sh` を使うこと。
+# `RUN_OFFICIAL_ONLY=1 bash scripts/trial/run_reference_baseline.sh` を使うこと。
 # ============================================================================
 
 set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# このスクリプトは scripts/trial/ 配下(リポジトリ直下から2階層下)にあるため
+# 2階層上をリポジトリルートとする。
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 PYMPC_DIR="${REPO_ROOT}/external/Quadruped-PyMPC"
 ACADOS_DIR="${PYMPC_DIR}/quadruped_pympc/acados"
 VENV_PYTHON="${REPO_ROOT}/.venv/bin/python"
@@ -93,7 +95,7 @@ if [ "${RUN_OFFICIAL_ONLY:-0}" = "1" ]; then
   cd "${PYMPC_DIR}"
   "${VENV_PYTHON}" simulation/simulation.py
 else
-  echo "=== 記録ハーネス(scripts/record_step01_baseline.py)を実行します ==="
+  echo "=== 記録ハーネス(src/trial/record_step01_baseline.py)を実行します ==="
   cd "${PYMPC_DIR}"
-  "${VENV_PYTHON}" "${REPO_ROOT}/scripts/record_step01_baseline.py"
+  "${VENV_PYTHON}" "${REPO_ROOT}/src/trial/record_step01_baseline.py"
 fi

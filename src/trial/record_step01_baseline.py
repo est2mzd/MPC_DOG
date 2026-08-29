@@ -50,8 +50,9 @@ NUM_SECONDS = 25.0        # 記録するシミュレーション実時間(秒)�
 GIF_FPS = 10               # GIFの再生フレームレート(要件: 10〜15fps程度)
 GIF_MAX_WIDTH = 640        # GIF解像度(要件: 960x540以下。ファイルサイズを抑えるため小さめに設定)
 GIF_MAX_HEIGHT = 360
-LOG_DIR = Path(__file__).resolve().parent.parent / "artifacts" / "logs" / "step_01"
-GIF_DIR = Path(__file__).resolve().parent.parent / "artifacts" / "gifs"
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent  # src/trial/ の2階層上
+LOG_DIR = REPO_ROOT / "artifacts" / "logs" / "step_01"
+GIF_DIR = REPO_ROOT / "artifacts" / "gifs"
 GIF_PATH = GIF_DIR / "step_01_reference_baseline.gif"
 
 

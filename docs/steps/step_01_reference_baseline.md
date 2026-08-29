@@ -126,8 +126,8 @@ simulation/simulation.py (134行) QuadrupedPyMPC_Wrapper 生成
 `external/`配下は無変更(後述「15. 事実」で、ビルド・実行の前後とも`git status`により確認)。MPC_DOG側で新規作成したのは以下の3点で、いずれも制御ロジックの実装は一切含まない。
 
 - `docs/steps/step_01_reference_baseline.md`(本ドキュメント)
-- `scripts/run_reference_baseline.sh`:環境の前提条件(ビルドツールチェイン・acadosビルド済み・`ACADOS_SOURCE_DIR`)を検査し、問題があれば理由を明示して停止する起動スクリプト
-- `scripts/record_step01_baseline.py`:`simulation.py`の`run_simulation()`内部ループ(169〜327行目)を、**呼び出す関数・引数の順序を一切変えずに**そのまま呼び出しながら、(a)オフスクリーンレンダリングでGIF用フレームを取得し、(b)Base状態・接触状態・GRF・関節トルク・MPC計算時間をCSVへ記録する、記録専用のハーネス。PyMPC自体の計算式は含まれておらず、各ブロックの直前コメントに対応する`simulation.py`の行番号を明記した(ファイル冒頭のdocstring参照)。
+- `scripts/trial/run_reference_baseline.sh`:環境の前提条件(ビルドツールチェイン・acadosビルド済み・`ACADOS_SOURCE_DIR`)を検査し、問題があれば理由を明示して停止する起動スクリプト
+- `src/trial/record_step01_baseline.py`:`simulation.py`の`run_simulation()`内部ループ(169〜327行目)を、**呼び出す関数・引数の順序を一切変えずに**そのまま呼び出しながら、(a)オフスクリーンレンダリングでGIF用フレームを取得し、(b)Base状態・接触状態・GRF・関節トルク・MPC計算時間をCSVへ記録する、記録専用のハーネス。PyMPC自体の計算式は含まれておらず、各ブロックの直前コメントに対応する`simulation.py`の行番号を明記した(ファイル冒頭のdocstring参照)。
 
 acadosのビルドは、README_install.mdの手順通りだが1点だけ、`ACADOS_WITH_SYSTEM_BLASFEO`を`ON`(README記載値)ではなく`OFF`(acados自身の`CMakeLists.txt:96`が定義する既定値)にして実行した。理由:`ON`のまま実行すると、システムに`blasfeo`パッケージが見つからずCMake configureが失敗した(このホストはconda/pixi環境ではなく`uv`管理の`.venv`のため、Quadruped-PyMPC側のconda環境が提供する想定のシステムblasfeoが存在しない)。`OFF`はacados自身のCMakeLists.txtが警告文で「開発者が実際にテストしているのはOFFの場合のみ」と明記している値でもある。これは`external/`のコード変更ではなくビルド時のCMakeオプション選択であり、外部コードそのものには一切手を加えていない。
 
@@ -152,14 +152,14 @@ acadosのビルドは、README_install.mdの手順通りだが1点だけ、`ACAD
 ## 11. 実行方法
 
 ```bash
-bash scripts/run_reference_baseline.sh
+bash scripts/trial/run_reference_baseline.sh
 ```
 
 内部で行っていること(スクリプト本体参照):
 
 1. preflightチェック(`simulation.py`の存在、`cmake`/`make`/`gcc`/`g++`、`quadruped_pympc/acados/lib`、`ACADOS_SOURCE_DIR`)
 2. `ACADOS_SOURCE_DIR`・`LD_LIBRARY_PATH`をこのプロセス内だけに設定(ユーザー環境やexternal/は変更しない)
-3. `scripts/record_step01_baseline.py`を実行(既定)。公式`simulation.py`を対話的にそのまま動かしたいだけの場合は`RUN_OFFICIAL_ONLY=1 bash scripts/run_reference_baseline.sh`。
+3. `src/trial/record_step01_baseline.py`を実行(既定)。公式`simulation.py`を対話的にそのまま動かしたいだけの場合は`RUN_OFFICIAL_ONLY=1 bash scripts/trial/run_reference_baseline.sh`。
 
 acadosのビルド自体(一度だけ必要)は、README_install.mdの手順通り以下で行った(`ACADOS_WITH_SYSTEM_BLASFEO`の値のみ9節の理由によりOFFへ変更):
 
@@ -182,7 +182,7 @@ uv pip install --python ../../../../.venv/bin/python -e ../../..   # Quadruped-P
 
 ## 13. 結果
 
-**成功。** `bash scripts/run_reference_baseline.sh`で、公式のPyMPCコントローラ(acados NMPC + WBC)がMuJoCo上のgo2を25秒間(12,499ステップ、`dt=0.002`秒)動かし、ログとGIFを生成した。
+**成功。** `bash scripts/trial/run_reference_baseline.sh`で、公式のPyMPCコントローラ(acados NMPC + WBC)がMuJoCo上のgo2を25秒間(12,499ステップ、`dt=0.002`秒)動かし、ログとGIFを生成した。
 
 実行環境(このマシン、ユーザーがツールチェイン導入後):
 
@@ -237,5 +237,5 @@ uv pip install --python ../../../../.venv/bin/python -e ../../..   # Quadruped-P
 
 ## 18. 次のStepへ進める条件
 
-- 完了条件をすべて満たしたことを確認済み:`external/`に差分なし、commit SHAと実行コマンドを記録、`bash scripts/run_reference_baseline.sh`一発で再現可能、主要処理経路を実ファイル名・行番号で説明、ログ(`artifacts/logs/step_01/state_log.csv`・`gif_meta.json`)とGIF(`artifacts/gifs/step_01_reference_baseline.gif`)を作成済み、GIFは25秒(20秒以上)。前進歩行は発生していないため10m要件は非該当。
+- 完了条件をすべて満たしたことを確認済み:`external/`に差分なし、commit SHAと実行コマンドを記録、`bash scripts/trial/run_reference_baseline.sh`一発で再現可能、主要処理経路を実ファイル名・行番号で説明、ログ(`artifacts/logs/step_01/state_log.csv`・`gif_meta.json`)とGIF(`artifacts/gifs/step_01_reference_baseline.gif`)を作成済み、GIFは25秒(20秒以上)。前進歩行は発生していないため10m要件は非該当。
 - ユーザーの承認を得てからStep 2(四脚接地での静止)へ進む。
