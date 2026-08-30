@@ -1,9 +1,28 @@
-"""Step 01: 基準ログとGIFの記録ハーネス。
+"""Step 02: 歩容周波数(step frequency)と前進速度の関係を記録するハーネス。
 
 背景: simulation.py の run_simulation() はGIF用フレーム取得やGRF/接触/
 MPC計算時間のCSV記録の仕組みを持たないため、記録用に作成した。
-目的: run_simulation() の内側ループ(simulation.py 169-327行目、
-commit cc145a2)を制御ロジックは変更せず同じ順序で呼び出し、ログとGIFを生成する。
+Step 01(`step_01_baseline.py`)は ref 速度ゼロの静止立位の基準記録だったが、
+Step 02 は **平面マップ(scene="flat", visual_foothold_adaptation="blind")上での
+前進トロット**を対象にし、歩容周波数 `GAIT_STEP_FREQ_HZ` を振って
+「その前進速度で転倒せず歩けるか」を確認する。
+
+目的: run_simulation() の内側ループ(simulation.py 169-327行目、commit cc145a2)を
+**制御ロジックは変更せず同じ順序で**呼び出し、ログとGIFを生成する。
+`external/` 配下は一切変更しない(周波数の上書きは公式コードと同じく
+qpympc_cfg のモジュール dict を構築前に書き換える方式)。
+
+調査メモ(2026-08-30):
+- 当初の既定 `INITIAL_FORWARD_VEL_MPS=1.1` / `GAIT_STEP_FREQ_HZ=1.4` は
+  0.57s で転倒した(1歩が長すぎて足を置ききれない)。
+- 速度に対して歩容周波数を上げると安定する。実測(平地・8s):
+  0.3/1.4 OK, 0.5/1.4 OK, 0.7/1.4 OK, 0.9/1.4 際どい, 1.1/1.4 転倒,
+  0.5/1.0 転倒, 0.5/2.0 OK, 0.7/2.0 OK, 1.0/2.5 OK, 1.1/2.5 OK。
+- 既定は 1.1 m/s を 2.5 Hz で歩かせる組み合わせにした(平地で転倒なし・
+  8s で約7.9m前進)。環境変数で上書き可能。
+
+実行方法: `bash scripts/trial/run_step_02.sh`
+  環境変数 STEP02_VEL / STEP02_FREQ / STEP02_SECONDS で上書きできる。
 """
 
 from __future__ import annotations
@@ -11,6 +30,7 @@ from __future__ import annotations
 import copy
 import csv
 import json
+import os
 import time
 from pathlib import Path
 
@@ -30,20 +50,28 @@ from gym_quadruped.quadruped_env import QuadrupedEnv
 
 # ============================================================================
 # 記録パラメータ(MPC_DOG側の設定。external/ 側の値は一切変更しない)
+# 環境変数で上書き可能: STEP02_SECONDS / STEP02_VEL / STEP02_FREQ
 # ============================================================================
-NUM_SECONDS = 10  # 記録するシミュレーション実時間(秒)。要件は20秒以上(現在2秒はテスト用の暫定値)
-INITIAL_FORWARD_VEL_MPS = 1.1  # 犬の前進初期速度[m/s]
-GAIT_STEP_FREQ_HZ = 1.4  # 歩容の周波数[Hz]。既定はtrotの1.4(config.py:216)を上書きする
+NUM_SECONDS = float(os.environ.get("STEP02_SECONDS", "10"))  # 記録するシミュレーション実時間[s]
+INITIAL_FORWARD_VEL_MPS = float(os.environ.get("STEP02_VEL", "1.1"))  # 犬の前進速度指令[m/s]
+GAIT_STEP_FREQ_HZ = float(os.environ.get("STEP02_FREQ", "2.5"))  # 歩容の周波数[Hz]。trot既定1.4(config.py:216)を上書きする
 GIF_FPS = 10               # GIFの再生フレームレート(要件: 10〜15fps程度)
 GIF_MAX_WIDTH = 480        # GIF解像度(要件: 960x540以下。ファイルサイズを抑えるため小さめに設定)
 GIF_MAX_HEIGHT = 270
 OVERLAY_FONT_SIZE = 24     # GIF内オーバーレイ文字のフォントサイズ(px)
 OVERLAY_FONT = ImageFont.load_default(size=OVERLAY_FONT_SIZE)
 OVERLAY_COLOR = (0, 0, 0)  # オーバーレイ文字の色(黒)
+
+# 転倒判定(reset はしない。最初に閾値を割った sim 時刻だけ記録する)。
+# gym_quadruped の is_terminated/is_truncated は前進歩行では扱いが安定しないため、
+# base 高さと傾きで簡易判定する(Quad-SDK版ハーネスの FALL_HEIGHT_THRESHOLD_M と同じ発想)。
+FALL_HEIGHT_THRESHOLD_M = 0.15   # go2 の立位 base 高さ約0.29m。半分程度を割ったら転倒扱い
+FALL_TILT_THRESHOLD_RAD = 0.8    # |roll| または |pitch| がこれを超えたら転倒扱い
+
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent  # src/trial/ の2階層上
 LOG_DIR = REPO_ROOT / "artifacts" / "logs" / "step_02"
 GIF_DIR = REPO_ROOT / "artifacts" / "gifs"
-SUMMARY_CSV_PATH = LOG_DIR / "trials_summary.csv"  # 試行ごとの結果一覧(id, 速度, sim時間, 歩行距離, コケた時間)
+SUMMARY_CSV_PATH = LOG_DIR / "trials_summary.csv"  # 試行ごとの結果一覧(id, 速度, 周波数, sim時間, 歩行距離, コケた時間, 判定)
 
 
 def _next_trial_id(summary_path: Path) -> int:
@@ -70,7 +98,7 @@ def main() -> None:
 
     trial_id = _next_trial_id(SUMMARY_CSV_PATH)  # このハーネスの1回の実行を識別する連番
     trial_id_str = f"{trial_id:02d}"  # 2桁ゼロ埋め表記(99を超える場合は桁が増える)
-    gif_path = GIF_DIR / f"step_01_{trial_id_str}.gif"
+    gif_path = GIF_DIR / f"step_02_{trial_id_str}.gif"
 
     # simulation.py 55〜76行目相当(commit cc145a2)。ref_base_ang_vel/state_obs_names は
     # このハーネスでは不要なため渡していない。base_vel_command_type/ref_base_lin_velは
@@ -78,7 +106,7 @@ def main() -> None:
     # 前進速度を指定できる"forward"に変更している(公式コードからの変更点)。
     env = QuadrupedEnv(
         robot=qpympc_cfg.robot,
-        scene=qpympc_cfg.simulation_params["scene"],
+        scene=qpympc_cfg.simulation_params["scene"],  # 既定 "flat"(平面マップ)
         sim_dt=qpympc_cfg.simulation_params["dt"],
         ground_friction_coeff=qpympc_cfg.simulation_params.get("ground_friction_coeff", (0.5, 1.0)),
         base_vel_command_type="forward",  # "human"/"forward"/"random"のうち、非対話実行でも速度指令が入る"forward"を選択
@@ -90,6 +118,7 @@ def main() -> None:
     legs_order = ["FL", "FR", "RL", "RR"]
     # simulation.py 95〜117行目のelse節(visual_foothold_adaptation="blind"が既定)に相当。
     # if節(VFA有効時のHeightMap構築)はこのハーネスでは使わないため実装していない。
+    # = 平面マップ入力(地形の起伏を見ない盲目歩行)を前提にしている。
     heightmaps = None
 
     # WBInterface構築時にqpympc_cfg.simulation_params['gait_params'][gait_name]['step_freq']が
@@ -129,9 +158,13 @@ def main() -> None:
 
     frames: list[np.ndarray] = []
     log_rows: list[dict] = []
-    fall_time_s = None  # is_terminated/is_truncatedが最初に発生したsim_time[s](発生しなければNoneのまま)
+    fall_time_s = None  # base高さ/傾きが最初に閾値を割ったsim_time[s](割らなければNoneのまま)
 
-    print(f"Recording {NUM_SECONDS}s ({n_steps} steps at dt={simulation_dt}s) ...")
+    print(
+        f"Step 02: flat-ground forward trot  |  v={INITIAL_FORWARD_VEL_MPS} m/s  "
+        f"step_freq={GAIT_STEP_FREQ_HZ} Hz  |  recording {NUM_SECONDS:.0f}s "
+        f"({n_steps} steps at dt={simulation_dt}s) ..."
+    )
     t_wall_start = time.time()
 
     for step in range(n_steps):
@@ -212,7 +245,7 @@ def main() -> None:
         action[env.legs_tau_idx.RR] = tau.RR
 
         # actionのトルク[N・m]をロボットに適用しdt分シミュレーションを進める。
-        # reward/infoは未使用。is_terminated/is_truncatedのみ後段のリセット判定に使う。
+        # reward/infoは未使用。is_terminated/is_truncatedは後段のリセット判定にも使わない(下記)。
         state, reward, is_terminated, is_truncated, info = env.step(action=action)
 
         # ==== simulation.py 254行目相当:コントローラの観測値(GRF等)を取得 ====
@@ -241,6 +274,7 @@ def main() -> None:
                 "ref_lin_vel_x_mps": ref_base_lin_vel[0],
                 "ref_lin_vel_y_mps": ref_base_lin_vel[1],
                 "ref_ang_vel_z_radps": ref_base_ang_vel[2],
+                "gait_step_freq_hz": GAIT_STEP_FREQ_HZ,
                 **{f"contact_{leg}": bool(contact_bool[leg]) for leg in legs_order},
                 **{f"grf_mpc_{leg}_{ax}_N": float(ctrl_state["nmpc_GRFs"][leg][j])
                    for leg in legs_order for j, ax in enumerate("xyz")},
@@ -251,6 +285,14 @@ def main() -> None:
             }
         )
 
+        # 転倒判定(reset はしない。最初に閾値を割った時刻のみ記録し、以降もそのまま回す)
+        if fall_time_s is None and (
+            base_pos[2] < FALL_HEIGHT_THRESHOLD_M
+            or abs(base_ori_euler_xyz[0]) > FALL_TILT_THRESHOLD_RAD
+            or abs(base_ori_euler_xyz[1]) > FALL_TILT_THRESHOLD_RAD
+        ):
+            fall_time_s = env.simulation_time
+
         # ==== オフスクリーン描画(GIF用フレーム、frame_strideごとに間引く) ====
         if step % frame_stride == 0:
             cam.lookat[:] = [base_pos[0], base_pos[1], 0.0]  # xyはロボット追従、zは地面レベルで固定
@@ -259,26 +301,26 @@ def main() -> None:
             pil_img = Image.fromarray(img)
             draw = ImageDraw.Draw(pil_img)
             overlay = (
-                f"Step 01: reference baseline (unmodified Quadruped-PyMPC)\n"
-                f"t = {env.simulation_time:5.2f} s\n"
+                f"Step 02: flat-ground forward trot (unmodified Quadruped-PyMPC)\n"
+                f"t = {env.simulation_time:5.2f} s   step_freq = {GAIT_STEP_FREQ_HZ:.2f} Hz\n"
                 f"ref v=({ref_base_lin_vel[0]:+.2f},{ref_base_lin_vel[1]:+.2f}) m/s  "
                 f"actual v=({base_lin_vel[0]:+.2f},{base_lin_vel[1]:+.2f}) m/s"
             )
             draw.multiline_text((8, 8), overlay, font=OVERLAY_FONT, fill=OVERLAY_COLOR)
             frames.append(np.asarray(pil_img))
 
-        # 転倒したら、リセットする処理
-        # if is_terminated or is_truncated:
-        #     if fall_time_s is None:
-        #         fall_time_s = log_rows[-1]["sim_time_s"]  # 最初の発生時刻のみ記録(2回目以降のリセットは対象外)
-        #     env.reset(random=True)  # ロボットをランダム化した初期姿勢へ戻す(戻り値なし)。65行目のrandom=Falseと対比
-        #     quadrupedpympc_wrapper.reset(initial_feet_pos=env.feet_pos(frame="world"))  # MPC/WBC内部状態(歩容位相・着地目標など)をリセット(戻り値なし)
-
     wall_elapsed = time.time() - t_wall_start
     print(f"Done: {n_steps} steps in {wall_elapsed:.1f}s wall-clock "
           f"({n_steps / wall_elapsed:.1f} steps/s)")
 
     env.close()
+
+    # ==== 成否判定(平面マップで転倒せず、指令速度の6割以上前進できたら success) ====
+    walk_dist_x = log_rows[-1]["base_pos_x_m"] - log_rows[0]["base_pos_x_m"]
+    sim_seconds = log_rows[-1]["sim_time_s"] - log_rows[0]["sim_time_s"]
+    dist_target = INITIAL_FORWARD_VEL_MPS * sim_seconds
+    success = (fall_time_s is None) and (walk_dist_x > 0.6 * dist_target)
+    verdict = "PASS" if success else "FAIL"
 
     # ==== ログをCSVへ保存 ====
     csv_path = LOG_DIR / "state_log.csv"
@@ -308,9 +350,15 @@ def main() -> None:
     gif_size_bytes = gif_path.stat().st_size
 
     meta = {
+        "step": "02_frequency",
+        "forward_vel_mps": INITIAL_FORWARD_VEL_MPS,
+        "gait_step_freq_hz": GAIT_STEP_FREQ_HZ,
         "num_seconds_recorded": NUM_SECONDS,
         "n_sim_steps": n_steps,
         "wall_clock_seconds": wall_elapsed,
+        "walk_dist_x_m": walk_dist_x,
+        "fall_time_s": fall_time_s,
+        "verdict": verdict,
         "gif_path": str(gif_path),
         "gif_n_frames": n_frames_actual,
         "gif_fps": GIF_FPS,
@@ -327,10 +375,12 @@ def main() -> None:
     summary_row = {
         "id": trial_id_str,
         "velocity_mps": INITIAL_FORWARD_VEL_MPS,
-        "sim_time_s": n_steps * simulation_dt,
-        "walk_dist_x_m": log_rows[-1]["base_pos_x_m"] - log_rows[0]["base_pos_x_m"],
+        "gait_step_freq_hz": GAIT_STEP_FREQ_HZ,
+        "sim_time_s": sim_seconds,
+        "walk_dist_x_m": walk_dist_x,
         "walk_dist_y_m": log_rows[-1]["base_pos_y_m"] - log_rows[0]["base_pos_y_m"],
         "fall_time_s": fall_time_s,
+        "verdict": verdict,
     }
     write_header = not SUMMARY_CSV_PATH.exists()
     with open(SUMMARY_CSV_PATH, "a", newline="") as f:
@@ -339,6 +389,13 @@ def main() -> None:
             writer.writeheader()
         writer.writerow(summary_row)
     print(f"Appended trial {trial_id_str} to {SUMMARY_CSV_PATH}")
+
+    print(
+        f"\n[{verdict}] v={INITIAL_FORWARD_VEL_MPS} m/s  freq={GAIT_STEP_FREQ_HZ} Hz  "
+        f"walk_dist_x={walk_dist_x:.2f} m (target {dist_target:.2f} m)  "
+        f"fall_time_s={fall_time_s}"
+    )
+    raise SystemExit(0 if success else 1)
 
 
 if __name__ == "__main__":
