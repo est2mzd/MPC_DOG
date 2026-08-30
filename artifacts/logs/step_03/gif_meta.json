@@ -1,0 +1,23 @@
+{
+  "step": "03_gap_crossing",
+  "forward_vel_mps": 0.7,
+  "gait_step_freq_hz": 2.4,
+  "num_seconds_recorded": 20.0,
+  "n_sim_steps": 9999,
+  "wall_clock_seconds": 42.95949101448059,
+  "gap_length_m": 0.3,
+  "gap_spacing_m": 2.0,
+  "walk_dist_x_m": 12.834228717293835,
+  "walk_dist_y_m": -0.015134711091431831,
+  "gaps_crossed": 6,
+  "min_foot_z_m": -0.04306023024351774,
+  "fall_time_s": null,
+  "verdict": "PASS",
+  "gif_path": "/home/takuya/work/mpc_dog/artifacts/gifs/step_03_03.gif",
+  "gif_n_frames": 200,
+  "gif_resolution_wh": [
+    480,
+    270
+  ],
+  "gif_size_mb": 7.7
+}
