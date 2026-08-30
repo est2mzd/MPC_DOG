@@ -1,15 +1,15 @@
 {
-  "num_seconds_recorded": 25.0,
-  "n_sim_steps": 12499,
-  "wall_clock_seconds": 46.520167112350464,
-  "gif_path": "/home/takuya/work/mpc_dog/artifacts/gifs/step_01_reference_baseline.gif",
-  "gif_n_frames": 250,
+  "num_seconds_recorded": 10,
+  "n_sim_steps": 4999,
+  "wall_clock_seconds": 19.43321919441223,
+  "gif_path": "/home/takuya/work/mpc_dog/artifacts/gifs/step_01_05.gif",
+  "gif_n_frames": 100,
   "gif_fps": 10,
-  "gif_real_time_seconds": 25.0,
+  "gif_real_time_seconds": 10.0,
   "gif_resolution_wh": [
-    640,
-    360
+    480,
+    270
   ],
-  "gif_size_bytes": 7939014,
-  "gif_size_mb": 7.57
+  "gif_size_bytes": 3041357,
+  "gif_size_mb": 2.9
 }
