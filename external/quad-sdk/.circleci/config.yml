@@ -1,0 +1,63 @@
+jobs:
+  build-and-test:
+    docker:
+      - image: osrf/ros:jazzy-desktop-full
+    resource_class: large
+
+    working_directory: /root/ros2_ws/src/quad-sdk
+
+    shell: /bin/bash -eo pipefail
+
+    environment:
+      DEBIAN_FRONTEND: noninteractive
+      MAKEFLAGS: "-j2"
+
+    steps:
+      - checkout
+
+      - run:
+          name: Update packages
+          command: |
+            apt update
+
+      - run:
+          name: Fetch submodules
+          command: |
+            git submodule sync --recursive
+            git submodule update --init --recursive
+
+      - run:
+          name: Setup dependencies and build
+          command: |
+            source /opt/ros/jazzy/setup.bash
+
+            cd /root/ros2_ws/src/quad-sdk
+            chmod +x setup.sh
+            ./setup.sh
+
+            cd /root/ros2_ws
+            colcon build --executor sequential --parallel-workers 1 --cmake-args -DCMAKE_BUILD_TYPE=RelWithDebInfo
+
+      - run:
+          name: Run tests
+          command: |
+            source /opt/ros/jazzy/setup.bash
+            source /root/ros2_ws/install/setup.bash
+
+            cd /root/ros2_ws
+            colcon test --event-handlers console_direct+ --parallel-workers 1 \
+              --packages-skip mocap4r2_control mocap4r2_optitrack_driver
+            colcon test-result --verbose
+
+      - run:
+          name: Run soft linting checks
+          command: |
+            cd /root/ros2_ws/src/quad-sdk
+            chmod +x ./scripts/lint_soft.sh
+            ./scripts/lint_soft.sh
+
+workflows:
+  version: 2
+  jazzy-build-and-test:
+    jobs:
+      - build-and-test

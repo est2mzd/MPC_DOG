@@ -1,0 +1,27 @@
+# docs/ holds the MkDocs Material site source (checked in).
+# MkDocs build output goes to site/ and is ignored.
+site/
+.venv-docs/
+.cache/
+encryptcontent.cache
+*.pyc
+__pycache__/
+.pytest_cache/
+# quad_perf_tests batch-iteration bag output
+iteration_bags/
+*.vscode
+**/build/
+*.vscode
+external/ipopt/*
+!external/ipopt/.gitkeep
+*.csv
+robot_driver/include/robot_driver/models/
+matlab_msg_gen/
+
+# Large bag files
+quad_logger/bags/**/*.mcap
+quad_logger/bags/archive/**/*.mcap
+
+quad_logger/bags/
+quad_logger/bags/archive/
+*.mcap

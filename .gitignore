@@ -1,6 +1,7 @@
 external/*
 !external/legged_control
 !external/Quadruped-PyMPC
+!external/quad-sdk
 /logs/
 /archive/logs/
 __pycache__/
@@ -18,6 +19,28 @@ docs/pympc_2day/assets/scenario_lab_results.json
 
 # LibreOffice lock files
 .~lock.*#
+
+# Step 01検証で生成するGIF(容量が大きい、artifacts/gifs/配下のみ対象。
+# archive/配下の既存GIFはgit管理を継続するため対象外)
+artifacts/gifs/*.gif
+
+# backup/(2.0GB、未追跡)。archive/は履歴保持のため意図的にgit管理下にあり
+# (archive/README.md参照)、対象外とする
+/backup/
+
+# Quad-SDK Step 01検証のmp4録画・CSVログ(680MB、未追跡)
+artifacts/logs/quadsdk_step01/
+
+# Quad-SDK: 使用しているのはgo2/go2wのみのため、他ロボットの3Dモデル
+# (quad_simulator/*_description/、合計約554MB)は追跡対象外とする
+external/quad-sdk/quad_simulator/a1_description/
+external/quad-sdk/quad_simulator/a2_description/
+external/quad-sdk/quad_simulator/b2_description/
+external/quad-sdk/quad_simulator/go1_description/
+external/quad-sdk/quad_simulator/spirit_description/
+external/quad-sdk/quad_simulator/spot_description/
+external/quad-sdk/quad_simulator/vision60_description/
+external/quad-sdk/quad_simulator/underbrush_description/
 
 # Scratch / trial work (see scratch/README.md) — keep the READMEs only
 scratch/*

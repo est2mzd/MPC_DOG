@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mujoco model="flat_wide" xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <!-- flat.xml.xacroと全く同じ構造(単純なboxプリミティブ地面)のまま、
+       sizeとposだけを拡大したもの。
+       目的: big_flat.xml(98,592三角形の詳細メッシュ)へ切り替えた際に発生した
+       不安定化(進捗ログ2026-08-30 16:35参照)が「メッシュ地形特有の問題」なのか
+       「単に地面が大きいことによる問題」なのかを切り分けるための1変数の変更。
+       floor範囲: x∈[-3,15](18m)、y∈[-5,5](10m)。ロボットはx≈0付近から
+       歩き始めるため、+x方向に約15mの余裕があり、10m規模の試験に対して
+       十分な広さを確保している。 -->
+
+  <xacro:arg name="meshdir" default=""/>
+  <xacro:arg name="mjcf_path" default=""/>
+
+  <compiler
+    angle="radian"
+    meshdir="$(arg meshdir)"
+    texturedir="$(arg meshdir)"
+    autolimits="true"/>
+
+  <include file="$(arg mjcf_path)"/>
+
+  <worldbody>
+    <light directional="true" diffuse=".8 .8 .8" specular=".2 .2 .2" pos="0 0 5" dir="0 0 -1"/>
+    <geom name="floor" type="box" size="9 5 0.05" pos="6 0 -0.05" rgba="0.8 0.9 0.8 1"/>
+
+    <!-- 5m間隔の目盛り線(録画からロボットの移動距離を目視で読み取れるようにする
+         ための追加、進捗ログ2026-08-30参照)。物理演算には影響しないよう
+         contype/conaffinity=0(衝突判定なし)にしている。
+         x方向の線(y軸に平行、x=0,5,10,15の位置): floorのy範囲[-5,5]全体を横切る -->
+    <geom name="grid_x0"  type="box" size="0.02 5 0.001" pos="0  0 0.001" rgba="0.3 0.3 0.3 1" contype="0" conaffinity="0"/>
+    <geom name="grid_x5"  type="box" size="0.02 5 0.001" pos="5  0 0.001" rgba="0.3 0.3 0.3 1" contype="0" conaffinity="0"/>
+    <geom name="grid_x10" type="box" size="0.02 5 0.001" pos="10 0 0.001" rgba="0.3 0.3 0.3 1" contype="0" conaffinity="0"/>
+    <geom name="grid_x15" type="box" size="0.02 5 0.001" pos="15 0 0.001" rgba="0.3 0.3 0.3 1" contype="0" conaffinity="0"/>
+    <!-- y方向の線(x軸に平行、y=-5,0,5の位置): floorのx範囲[-3,15]全体を横切る -->
+    <geom name="grid_ym5" type="box" size="9 0.02 0.001" pos="6 -5 0.001" rgba="0.3 0.3 0.3 1" contype="0" conaffinity="0"/>
+    <geom name="grid_y0"  type="box" size="9 0.02 0.001" pos="6  0 0.001" rgba="0.3 0.3 0.3 1" contype="0" conaffinity="0"/>
+    <geom name="grid_y5"  type="box" size="9 0.02 0.001" pos="6  5 0.001" rgba="0.3 0.3 0.3 1" contype="0" conaffinity="0"/>
+  </worldbody>
+</mujoco>

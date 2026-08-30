@@ -1,0 +1,12 @@
+/**/conflict_based_search:
+  ros__parameters:
+    robot_names: ["robot_1", "robot_2"]       # Robot namespaces to coordinate
+    update_rate: 5.0                          # Service polling rate, Hz
+    service_timeout_s: 30.0                   # Per-planner service timeout, s
+    warm_start: true                          # Reuse planner trees during constrained replans
+    max_iterations: 500                       # Maximum CBS expansions before fallback publish
+
+    # Body bounding-box dimensions for OBB collision checks, m
+    body_length: 0.70                         # Go2 chassis length with margin
+    body_width: 0.35                          # Go2 chassis width with margin
+    body_height: 0.35                         # Go2 chassis height with margin

@@ -1,0 +1,210 @@
+site_name: Quad-SDK
+site_description: Open-source full-stack framework for agile quadrupedal locomotion
+site_url: https://robomechanics.github.io/quad-sdk/
+repo_url: https://github.com/robomechanics/quad-sdk
+repo_name: robomechanics/quad-sdk
+edit_uri: edit/main/docs/
+
+copyright: Copyright &copy; Robomechanics Lab, Carnegie Mellon University
+
+# Per-package READMEs (included verbatim) link to source files outside docs/
+# (e.g. ../quad_msgs/msg/RobotState.msg) — these render fine on GitHub but
+# don't resolve as docs pages. Demote those to info so --strict still passes.
+
+validation:
+  links:
+    unrecognized_links: info
+    not_found: info
+
+theme:
+  name: material
+  custom_dir: docs/overrides
+  language: en
+  logo: assets/quad_sdk_promo.png
+  favicon: assets/quad_sdk_promo.png
+  icon:
+    repo: fontawesome/brands/github
+    edit: material/pencil
+    view: material/eye
+  palette:
+    # Follow the OS prefers-color-scheme for the default; users can flip
+    # mode via the toggle.
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tracking
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.expand
+    - navigation.indexes
+    - navigation.top
+    - navigation.footer
+    - toc.follow
+    - search.suggest
+    - search.highlight
+    - search.share
+    - content.code.copy
+    - content.code.annotate
+    - content.action.edit
+    - content.tabs.link
+    - content.tooltips
+
+extra_css:
+  - stylesheets/extra.css
+
+extra_javascript:
+  - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
+
+plugins:
+  - search:
+      separator: '[\s​\-_,:!=\[\]()"`/]+|\.(?!\d)|&[lg]t;|(?!\b)(?=[A-Z][a-z])'
+  - social:
+      cards_layout_options:
+        background_color: "#C41230"
+        color: "#FFFFFF"
+  - glightbox:
+      touchNavigation: true
+      loop: false
+      effect: zoom
+      slide_effect: slide
+      width: 90%
+      height: auto
+      zoomable: true
+      draggable: true
+  - git-revision-date-localized:
+      enable_creation_date: false
+      type: timeago
+      fallback_to_build_date: true
+      strict: false
+      exclude:
+        - assets/.doxy/**
+        - quad-sdk-api/**
+        - tags.md
+        - 404.md
+  # Client-side AES encryption — scoped to pages that opt in via `password:`
+  # front-matter. The RML lab section uses this; everything else is unaffected.
+  # NOTE: no `global_password` — that would encrypt everything.
+  - encryptcontent:
+      title_prefix: ''
+      summary: 'Robomechanics Lab — internal'
+      placeholder: 'Lab password'
+      decryption_failure_message: 'That password did not unlock this page.'
+      encryption_info_message: 'This page is encrypted. Ask an RML lead for the password.'
+      # Cache the unlock in browser localStorage so RML members enter the
+      # password once per browser, not once per page.
+      remember_password: true
+      session_storage: false
+      password_button: true
+      password_button_text: 'Unlock'
+      reload_scripts:
+        - https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js
+  - include-markdown:
+      rewrite_relative_urls: true
+      comments: false
+  # mkdoxy (Doxygen → Markdown C++ API) is disabled for now. Enable later
+  # under an "API Reference" nav entry if/when we want it back.
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+
+nav:
+  - Home: index.md
+  - Getting Started:
+      - Installation: getting-started/installation.md
+      - Quickstart: getting-started/quickstart.md
+      - Hardware Bringup: getting-started/hardware-bringup.md
+  - Architecture:
+      - Overview: architecture/overview.md
+      - ROS2 Migration: architecture/ros2-migration.md
+      - Pinocchio Integration: architecture/pinocchio-integration.md
+  - Packages:
+      - Overview: packages/index.md
+      - Planning:
+          - Global Body Planner: packages/global_body_planner.md
+          - Local Planner: packages/local_planner.md
+          - NMPC Controller: packages/nmpc_controller.md
+          - Conflict Based Search: packages/conflict_based_search.md
+      - Control & Estimation:
+          - Robot Driver: packages/robot_driver.md
+          - Body Force Estimator: packages/body_force_estimator.md
+      - Simulation:
+          - Quad Simulator: packages/quad_simulator.md
+          - Isaac Plugins: packages/isaac_plugins.md
+          - Force Applicator: packages/force_applicator.md
+      - Utilities:
+          - Quad Utils: packages/quad_utils.md
+          - Quad Msgs: packages/quad_msgs.md
+          - Quad Logger: packages/quad_logger.md
+          - Quad Perf Tests: packages/quad_perf_tests.md
+          - Scripts: packages/scripts.md
+  - Tutorials:
+      - First Simulation Run: tutorials/first-run.md
+      - Running in Isaac Sim: tutorials/isaac-sim.md
+      - Multi-Robot with CBS: tutorials/multi-robot.md
+      - Logging & Playback: tutorials/logging.md
+      - Batch Iteration Testing: tutorials/iteration-testing.md
+      - Adding a New Robot: tutorials/adding-a-robot.md
+      - Custom Terrain Maps: tutorials/custom-terrain.md
+      - Writing Your Own Controller: tutorials/writing-controller.md
+      - Specialized Controllers: tutorials/specialized-controllers.md
+  - Platforms: platforms.md
+  - Roadmap: roadmap.md
+  - FAQ: faq.md
+  - 🔒 RML:
+      - 🔒 Lab Hub: rml/index.md
+      - 🔒 Network & IPs: rml/networking.md
+      - 🔒 Time Sync: rml/time-sync.md
+      - 🔒 Motion Capture: rml/mocap.md
+      - 🔒 Robot Bringup: rml/robot-bringup.md
+      - 🔒 Hardware Design: rml/hardware-design.md
+  - Cite: cite.md
+  - Contributing: contributing.md
+
+extra:
+  version:
+    provider: mike
+    default: ros2
+    alias: false
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/robomechanics/quad-sdk
+    - icon: fontawesome/solid/globe
+      link: https://www.cmu.edu/me/robomechanicslab/
+  generator: false
