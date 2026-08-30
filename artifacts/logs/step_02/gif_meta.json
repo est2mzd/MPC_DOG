@@ -1,0 +1,21 @@
+{
+  "step": "02_frequency",
+  "forward_vel_mps": 1.1,
+  "gait_step_freq_hz": 2.5,
+  "num_seconds_recorded": 10.0,
+  "n_sim_steps": 4999,
+  "wall_clock_seconds": 19.483274221420288,
+  "walk_dist_x_m": 9.948178440793319,
+  "fall_time_s": null,
+  "verdict": "PASS",
+  "gif_path": "/home/takuya/work/mpc_dog/artifacts/gifs/step_02_01.gif",
+  "gif_n_frames": 100,
+  "gif_fps": 10,
+  "gif_real_time_seconds": 10.0,
+  "gif_resolution_wh": [
+    480,
+    270
+  ],
+  "gif_size_bytes": 3114720,
+  "gif_size_mb": 2.97
+}

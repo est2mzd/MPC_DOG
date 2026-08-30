@@ -16,9 +16,11 @@
  - [Step 01 のセンシング(状態推定)の仕組みとデータ構造(事実と推測を分離)](./agent_reports/quadsdk_step01_sensing.md)
  - [Step 01 の MPC(NMPC)の理論・コスト・制約・最適化とパラメータ(事実と推測を分離)](./agent_reports/quadsdk_step01_mpc.md)
  - [Step 01 の WBC(脚コントローラ/逆動力学)の理論・コード・パラメータ(事実と推測を分離)](./agent_reports/quadsdk_step01_wbc.md)
+ - [Step 01 の GAIT(歩容)と MPC の関係 — 理論式・コード(事実と推測を分離)](./agent_reports/quadsdk_step01_gait_and_mpc.md)
 
 ## Quadruped-PyMPC
 
  - [環境構築(acadosビルド・インストール)と実行方法](./docs/pympc_step01_changes_and_usage.md)
  - [Step 01 検証記録(経緯)](./docs/steps/step_01_reference_baseline.md)
  - [記録ハーネス(step_01_baseline.py)の構造説明](./docs/step_01_baseline_py_structure.md)
+ - [Step 02 検証記録(平面マップ・歩容周波数と前進速度／成功)](./docs/steps/step_02_frequency.md)
