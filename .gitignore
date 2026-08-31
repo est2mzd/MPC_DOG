@@ -25,10 +25,13 @@ docs/pympc_2day/assets/scenario_lab_results.json
 artifacts/gifs/*.gif
 # ただし、README や agent_reports/ の文書が「事実の根拠」として参照・表示する
 # 少数のGIFは追跡する(各 <1MB)。リンク切れ・非表示を防ぐため。
-!artifacts/gifs/quadsdk_step03_1m_v0p15_12to35s.gif   # README に埋め込み(step03 溝渡り、12-35s 切り抜き)
-!artifacts/gifs/quadsdk_step04_1m_v0p3_15to40s.gif    # README に埋め込み(step04 溝渡り、15-40s 切り抜き)
-!artifacts/gifs/quadsdk_step03_1m_v0p15.gif           # 検証記録が参照(step03 溝渡り、全区間)
-!artifacts/gifs/quadsdk_step04_1m_v0p3.gif            # 検証記録が参照(step04 溝渡り、全区間)
+# 注: gitignore は行末インラインコメント非対応。コメントは必ず行頭 '#' で。
+# README 埋め込み(step03 12-35s / step04 15-40s 切り抜き):
+!artifacts/gifs/quadsdk_step03_1m_v0p15_12to35s.gif
+!artifacts/gifs/quadsdk_step04_1m_v0p3_15to40s.gif
+# 検証記録が参照(全区間):
+!artifacts/gifs/quadsdk_step03_1m_v0p15.gif
+!artifacts/gifs/quadsdk_step04_1m_v0p3.gif
 !artifacts/gifs/quadsdk_step03_1m_v0p5.gif
 !artifacts/gifs/quadsdk_step03_1m_gbpl_goal2_success.gif
 
