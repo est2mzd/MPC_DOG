@@ -21,10 +21,10 @@
     local_footstep_planner:
         hip_clearance: 0.1
         foothold_search_radius: 0.55
-        period: 0.36 # s
+        period: 0.6 # s   # [MPC_DOG] gap crossing: slower crawl-ish gait (was trot 0.36)
         ground_clearance: 0.07 # tune
-        duty_cycles: [0.5, 0.5, 0.5, 0.5]
-        phase_offsets: [0.0, 0.5, 0.5, 0.0] 
+        duty_cycles: [0.75, 0.75, 0.75, 0.75]  # [MPC_DOG] >=3 feet down most of cycle (was trot 0.5)
+        phase_offsets: [0.0, 0.25, 0.5, 0.75]  # [MPC_DOG] crawl sequence (was trot 0,0.5,0.5,0)
     nmpc_controller:
       body:
         x_dim: 12.0

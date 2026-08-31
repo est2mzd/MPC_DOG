@@ -546,17 +546,16 @@ Eigen::Vector3d LocalFootstepPlanner::getNearestValidFoothold(
     }
 
     double traversability = terrain_grid_.atPosition(obj_fun_layer_, pos_valid);
-    // [MPC_DOG] Strong hysteresis (2.0x, was 0.5x) so the snapped target does
-    // not chatter between the near and far strip across planning cycles --
-    // chatter jerks the swing leg and topples the trot at the hole edge.
     double kin_cost =
         (pos_valid - foot_position.head<2>()).norm() +
-        2.0 * (pos_valid - foot_position_prev_solve.head<2>()).norm();
-    // [MPC_DOG] When the nominal is over a hole, strongly prefer snapping
-    // FORWARD (direction of travel) so the robot commits to a crossing step
-    // instead of short-stepping at the near edge and stalling.
-    if (pos_valid.x() < foot_position.x()) {
-      kin_cost += 5.0 * (foot_position.x() - pos_valid.x());
+        1.0 * (pos_valid - foot_position_prev_solve.head<2>()).norm();
+    // [MPC_DOG] When the nominal is over a hole, essentially FORBID snapping
+    // backward (toward the near edge). Backward snaps make the robot
+    // short-step at the near edge, stall, and pitch forward into the hole.
+    // A huge penalty means any forward valid cell always beats any backward
+    // one -> the robot is forced to commit to a step across the hole.
+    if (pos_valid.x() < foot_position.x() - 0.01) {
+      kin_cost += 100.0 * (foot_position.x() - pos_valid.x());
     }
 
     if (traversability > foothold_obj_threshold_ &&

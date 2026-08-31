@@ -149,6 +149,11 @@ go2 のトロットが **最初の穴の縁**(body x ≈ 0.68〜0.89 m、前脚�
 「go2 トロットは 0.5〜1.1 m/s で安定性が心許ない、平地でも非決定的に転倒」と
 同じ壁。
 
+> **注**: 4〜5 節は run 1〜15 時点の記述。その後 run 16〜21 で
+> **縁の前方ピッチの正体が「地形マップの dip が偽のピッチ指令になっていた」
+> ことと分かり、対策(ジグザグ地形 + crawl 寄り歩容)で激しい横倒れは
+> 解消した**。最新の到達点は **6b 節**を参照。
+
 ---
 
 ## 6. 大学院初心者向け解説:なぜ足場を避けても転ぶのか
@@ -211,12 +216,83 @@ body x ≈ 0.68 m のとき、前脚の hip は x ≈ 0.87 m ── ちょうど
 
 ---
 
+## 6b. さらに進めた調査(run 16〜21)
+
+### 6b.1 縁の前方ピッチの正体 ── 地形マップの「dip」が偽のピッチ指令になっていた
+
+`local_planner.cpp` の twist モードは、各ホライズン点の胴体参照を
+**地形マップから直接作る**:
+
+```cpp
+ref_ground_height_(i) = getTerrainHeight(x, y);          // z_smooth レイヤ
+ref_body_plan_(i, 2)  = z_des_ + ref_ground_height_(i);  // 胴体高さ参照
+getTerrainSlope(x, y, yaw, ref_body_plan_(i,3), ref_body_plan_(i,4));
+                                                        // 胴体 roll/pitch 参照 = 地形傾斜
+```
+
+私の地形メッシュは穴帯を `map_dip` 下げていたので、胴体プランの未来点が
+穴 x 帯に入ると:
+
+- `getTerrainHeight` が `−map_dip` を返す → 胴体を穴へ**沈める**高さ指令
+- `getTerrainSlope` が急斜面(ランプ)の傾斜を返す → **胴体を 30〜50° 鼻下げに
+  する pitch 指令**
+
+これが「縁での前方ピッチスパイク」の正体だった(足場スナップの擾乱ではなかった)。
+
+**対策**: 地形メッシュを「dip(段差)」ではなく **細かいジグザグ(平均も
+平滑法線もほぼ 0、だが局所的にはザラザラ)** にした。
+
+- `getTerrainHeight`(z_smooth、半径 0.05)/ `getTerrainSlope`(smooth
+  normals、半径 0.12)はジグザグを平均して **≈ 0** → 偽のピッチ/高さ指令が
+  消える
+- `roughness` = |z_inpainted − z_smooth| と `slope`(normal_vectors、半径 0.08)は
+  局所のジグザグを拾って **`traversability` を 0.6 未満に落とす** → 足場回避は
+  維持
+
+`gen_quadsdk_gap_world.py` の PLY 生成をこのジグザグ方式に変更(既定
+`map_dip = 0.03`)。`filter_chain.yaml` の平滑化半径は 0.05 / 0.08 / 0.12。
+
+### 6b.2 歩容を crawl 寄りに ── 激しい横倒れが止まった
+
+`go2.yaml`: `period` 0.36→0.6、`duty_cycles` [0.5]→[0.75]、
+`phase_offsets` [0,0.5,0.5,0]→[0,0.25,0.5,0.75](対角トロット → 1 脚ずつ
+振る crawl 寄り、常時 3 脚接地)。
+
+- 6b.1 と併せて、**縁での前方ピッチは 0.2 rad 程度に収まり、π まで回る
+  横倒れは消えた**。
+- 前脚は穴を越えて向こうの凸条に着地するようになった(足場スナップ + 前方
+  バイアスが機能)。
+
+### 6b.3 まだ渡れない ── 前脚が穴上のとき胴体が沈む
+
+前脚が 1 m 深の穴の上に来る区間で、**支持が後方 2〜3 脚しかなくなり、
+胴体高さが 0.31 m → 0.03〜0.18 m まで沈む**。そのまま x ≈ 1.0〜1.1 m
+(穴の向こうの縁)で潰れて停止する。速度 0.15〜0.3 m/s、`period` 0.45〜0.9、
+`stance_kp` 60〜90 のいずれでも同じ。
+
+### 6b.4 結論(現時点)
+
+**twist モードの Quad-SDK(定常歩容 + Raibert 足場 + セントロイダル NMPC)は、
+胴体を 1 m 深・0.3 m 幅の穴の上を通せない。** 前脚が穴上にある間の「支持の
+空白」を、定常トロット/crawl とセントロイダル MPC では埋められない。
+これを埋めるのは Quad-SDK では **global body planner の LEAP / FLIGHT
+プリミティブ**(= `reference:=gbpl` + ゴール指定)の役割。twist モードには
+その機構が無い。
+
+到達点:
+- ✅ 足場回避(穴に足を入れない)
+- ✅ 縁の偽ピッチ指令の除去(ジグザグ地形マップ)
+- ✅ 激しい横倒れの解消(crawl 寄り歩容)
+- ❌ 胴体を穴の上を通す(支持の空白 → 沈み込み)
+
+---
+
 ## 7. 再現方法
 
 ```bash
 # 1) 穴ワールド + 地形 PLY を生成(external/quad-sdk へ書き込む)
-python3 src/trial/assets/gen_quadsdk_gap_world.py 2.0 1.0 2m 0.04     # step03_1m
-python3 src/trial/assets/gen_quadsdk_gap_world.py 1.5 1.0 1p5m 0.04   # step04_1m
+python3 src/trial/assets/gen_quadsdk_gap_world.py 2.0 1.0 2m 0.03     # step03_1m (ジグザグ地形、6b.1)
+python3 src/trial/assets/gen_quadsdk_gap_world.py 1.5 1.0 1p5m 0.03   # step04_1m
 
 # 2) install/ に symlink(または colcon build --packages-select quad_sim_scripts)
 SRC=external/quad-sdk/quad_simulator/quad_sim_scripts
