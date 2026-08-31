@@ -36,13 +36,18 @@ TAG = sys.argv[6] if len(sys.argv) > 6 else (
     f"s{STRIP*100:g}g{GAP*100:g}n{N}".replace(".", "p")
 )
 MESH_MARGIN = float(sys.argv[7]) if len(sys.argv) > 7 else 0.05
+# Optional: widen ONLY the final gap (after strip N-1) to LAST_GAP m. 0 = keep
+# GAP for every gap. Used by Step 06 (N-1 crossable 15 cm gaps then a 1 m gap).
+LAST_GAP = float(sys.argv[8]) if len(sys.argv) > 8 else 0.0
 
 NAME = f"flat_repgap_{TAG}"
 Y_HALF = 2.5
 PITCH = STRIP + GAP
-TEST_LEN = PITCH * N
 X_MIN = -3.0
-X_END = X0 + TEST_LEN          # first x of the landing plane
+# landing plane starts after the last strip + last gap
+_last_gap = LAST_GAP if LAST_GAP > 0.0 else GAP
+X_END = X0 + PITCH * (N - 1) + STRIP + _last_gap
+TEST_LEN = X_END - X0
 X_MAX = X_END + 6.0
 
 QSDK = (
@@ -140,8 +145,9 @@ for a, b_, c in pf:
 
 print(f"world : {worlds_dir / (NAME + '.xml.xacro')}")
 print(f"mesh  : {mesh_dir / (NAME + '.ply')}  ({len(pv)} verts, {len(pf)} tris)")
-print(f"strip {STRIP} gap {GAP} N {N} pitch {PITCH:g}  test x in "
-      f"[{X0:.2f}, {X_END:.2f}] (len {TEST_LEN:.2f})  mesh_margin {MESH_MARGIN}")
+print(f"strip {STRIP} gap {GAP} N {N} last_gap {_last_gap:g} pitch {PITCH:g}  "
+      f"test x in [{X0:.2f}, {X_END:.2f}] (len {TEST_LEN:.2f})  "
+      f"mesh_margin {MESH_MARGIN}")
 if len(pv) < 4 * (N + 1):
     print("WARNING: some strips vanished from the mesh "
           "(strip - 2*mesh_margin <= 0). The map will show a wider void.")
