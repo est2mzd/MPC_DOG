@@ -48,12 +48,12 @@
 |---|---|
 | ![30cm 穴を渡る](./artifacts/gifs/quadsdk_phase3_gap30_cross_15to30s.gif) | ![100cm 穴の手前で安全停止](./artifacts/gifs/quadsdk_phase3_gap100_safestop_15to25s.gif) |
 
-### Step 05:15 cm 平地 / 15 cm 穴 ×5 をクロールで渡る(12–32 s 切り抜き)
+### Step 05:15 cm 平地 / 15 cm 穴 ×5 をクロールで渡る(10–30 s 切り抜き)
 
 `edge_clearance:=0.15`、0.3 m/s。N=2〜5 いずれも再現性を持って通過。詳細は
 [Step 05 の検証記録](./agent_reports/steps/step_05_quadsdk_repeated_15cm_gaps.md)。
 
-![Step05 15cm連続穴を渡る](./artifacts/gifs/quadsdk_step05_s15g15n5_cross_12to32s.gif)
+![Step05 15cm連続穴を渡る](./artifacts/gifs/quadsdk_step05_s15g15n5_cross_10to30s.gif)
 
 ## Quadruped-PyMPC
 

@@ -46,7 +46,7 @@ artifacts/gifs/*.gif
 !artifacts/gifs/quadsdk_phase3_gap100_safestop_15to25s.gif
 # Step 05(15cm連続穴を渡る、full と 12-32s 切り抜き):
 !artifacts/gifs/quadsdk_step05_s15g15n5_cross.gif
-!artifacts/gifs/quadsdk_step05_s15g15n5_cross_12to32s.gif
+!artifacts/gifs/quadsdk_step05_s15g15n5_cross_10to30s.gif
 
 # backup/(2.0GB、未追跡)。archive/は履歴保持のため意図的にgit管理下にあり
 # (archive/README.md参照)、対象外とする
