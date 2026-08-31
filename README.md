@@ -39,6 +39,15 @@
 |---|---|
 | ![step03 溝渡り](./artifacts/gifs/quadsdk_step03_1m_v0p15_12to35s.gif) | ![step04 溝渡り](./artifacts/gifs/quadsdk_step04_1m_v0p3_15to40s.gif) |
 
+### Phase 3(`EDGE_TOO_CLOSE`):渡れる穴は渡る / 渡れない穴の手前で安全に止まる
+
+固定カメラ、0.3 m/s、`edge_clearance:=0.15`。詳細・CSV 根拠は
+[Step 05b の検証記録](./agent_reports/steps/step_05b_quadsdk_phase2a_safe_stop.md)。
+
+| 30 cm 深穴：跨いで渡り切る(15–30 s 切り抜き) | 100 cm 幅の穴：手前で直立停止(15–25 s 切り抜き) |
+|---|---|
+| ![30cm 穴を渡る](./artifacts/gifs/quadsdk_phase3_gap30_cross_15to30s.gif) | ![100cm 穴の手前で安全停止](./artifacts/gifs/quadsdk_phase3_gap100_safestop_15to25s.gif) |
+
 ## Quadruped-PyMPC
 
  - [環境構築(acadosビルド・インストール)と実行方法](./agent_reports/step01/pympc_step01_changes_and_usage.md)

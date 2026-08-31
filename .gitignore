@@ -41,6 +41,9 @@ artifacts/gifs/*.gif
 # Step 05b(Phase 3(A)検証):30cm穴は渡る / 100cm穴の手前で安全停止:
 !artifacts/gifs/quadsdk_phase3_gap30_cross.gif
 !artifacts/gifs/quadsdk_phase3_gap100_safestop.gif
+# README 埋め込み(15-30s / 15-25s 切り抜き):
+!artifacts/gifs/quadsdk_phase3_gap30_cross_15to30s.gif
+!artifacts/gifs/quadsdk_phase3_gap100_safestop_15to25s.gif
 
 # backup/(2.0GB、未追跡)。archive/は履歴保持のため意図的にgit管理下にあり
 # (archive/README.md参照)、対象外とする
