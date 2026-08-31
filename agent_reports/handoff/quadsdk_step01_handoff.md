@@ -201,4 +201,4 @@ Step単位(Step 01=前進歩行確認、以降のStepは未着手)で検証し�
 1. `agent_reports/step01/quad_sdk_step01_investigation.md` — 全経緯・根拠となる実測値
 2. `agent_reports/step01/quad_sdk_step01_changes_and_usage.md` — 変更点・実行方法の要点
 3. `scripts/trial/run_quadsdk_step01_baseline.sh` — 現在の実行スクリプト本体
-4. 本ファイル(`agent_reports/handoff_current.md`)
+4. 本ファイル(`agent_reports/handoff/quadsdk_step01_handoff.md`)

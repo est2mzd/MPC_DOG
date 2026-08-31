@@ -220,5 +220,5 @@ Phase 2A では STAND 遷移・`cmd_vel`→0・Map 期限切れ・edge clearance
 
 ## 関連
 
-- `agent_reports/handoff_current.md` — Quad-SDK Step 01(前進歩行)の旧引き継ぎ。
-  本タスク(穴対応 Foot Placement)とは別系統。
+- `agent_reports/handoff/quadsdk_step01_handoff.md` — Quad-SDK Step 01(前進歩行)
+  の旧引き継ぎ。本タスク(穴対応 Foot Placement)とは別系統。
