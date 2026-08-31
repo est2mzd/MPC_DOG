@@ -30,9 +30,9 @@
 固定カメラ。凸条の目盛りは 5 m 間隔。詳細・CSV 根拠は
 [Step 03_1m / 04_1m の検証記録](./agent_reports/steps/step_03_04_1m_quadsdk_gap_crossing.md)。
 
-| step03(溝の間隔 2.0 m、0.15 m/s) | step04(溝の間隔 1.5 m、0.3 m/s) |
+| step03(溝の間隔 2.0 m、0.15 m/s、12–35 s 切り抜き) | step04(溝の間隔 1.5 m、0.3 m/s、15–40 s 切り抜き) |
 |---|---|
-| ![step03 溝渡り](./artifacts/gifs/quadsdk_step03_1m_v0p15.gif) | ![step04 溝渡り](./artifacts/gifs/quadsdk_step04_1m_v0p3.gif) |
+| ![step03 溝渡り](./artifacts/gifs/quadsdk_step03_1m_v0p15_12to35s.gif) | ![step04 溝渡り](./artifacts/gifs/quadsdk_step04_1m_v0p3_15to40s.gif) |
 
 ## Quadruped-PyMPC
 
