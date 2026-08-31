@@ -3,14 +3,14 @@
 
 # Squad-SDK のためのREADME
 
- - [README](./docs/quad_sdk_environment_and_step01.md)
- - [PyMPCとSquad-SDKの使い分け](./docs/quad_sdk_pympc_selection_and_distribution.md)
+ - [README](./agent_reports/step01/quad_sdk_environment_and_step01.md)
+ - [PyMPCとSquad-SDKの使い分け](./agent_reports/step01/quad_sdk_pympc_selection_and_distribution.md)
 
 ## Quad-SDK
 
- - [Step 01 検証記録(経緯・実験ログ)](./docs/quad_sdk_step01_investigation.md)
- - [Step 01 変更点と実行方法(要点まとめ)](./docs/quad_sdk_step01_changes_and_usage.md)
- - [記録ハーネス(quadsdk_step01_baseline.py)の構造説明](./docs/quadsdk_step01_baseline_py_structure.md)
+ - [Step 01 検証記録(経緯・実験ログ)](./agent_reports/step01/quad_sdk_step01_investigation.md)
+ - [Step 01 変更点と実行方法(要点まとめ)](./agent_reports/step01/quad_sdk_step01_changes_and_usage.md)
+ - [記録ハーネス(quadsdk_step01_baseline.py)の構造説明](./agent_reports/step01/quadsdk_step01_baseline_py_structure.md)
  - [Step 01 の制御パイプライン(map → sensing → MPC → WBC のノード構成)](./agent_reports/quadsdk_step01_control_pipeline.md)
  - [Step 01 の地形マップ(map)の作り方とデータ構造(事実と推測を分離)](./agent_reports/quadsdk_step01_terrain_map.md)
  - [Step 01 のセンシング(状態推定)の仕組みとデータ構造(事実と推測を分離)](./agent_reports/quadsdk_step01_sensing.md)
@@ -25,9 +25,9 @@
 
 ## Quadruped-PyMPC
 
- - [環境構築(acadosビルド・インストール)と実行方法](./docs/pympc_step01_changes_and_usage.md)
+ - [環境構築(acadosビルド・インストール)と実行方法](./agent_reports/step01/pympc_step01_changes_and_usage.md)
  - [Step 01 検証記録(経緯)](./agent_reports/steps/step_01_reference_baseline.md)
- - [記録ハーネス(step_01_baseline.py)の構造説明](./docs/step_01_baseline_py_structure.md)
+ - [記録ハーネス(step_01_baseline.py)の構造説明](./agent_reports/step01/step_01_baseline_py_structure.md)
  - [Step 02 検証記録(平面マップ・歩容周波数と前進速度／成功)](./agent_reports/steps/step_02_frequency.md)
  - [Step 03 検証記録(前進方向に並ぶ穴／轍を落ちずに越える・大学院初心者向け解説つき／成功)](./agent_reports/steps/step_03_gap_crossing.md)
  - [Step 04 検証記録(穴の間隔を 1.5 m に詰めて同様／大学院初心者向け解説つき／成功)](./agent_reports/steps/step_04_gap_crossing_1p5m.md)

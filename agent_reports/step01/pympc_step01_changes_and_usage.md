@@ -38,7 +38,7 @@
   記録用ハーネス本体。`simulation.py`の`run_simulation()`内側ループ
   (呼び出す関数・引数の順序を変えずに)そのまま呼び出しながら、CSV記録と
   GIF用フレーム取得を行う。構造の詳細は
-  [`docs/step_01_baseline_py_structure.md`](./step_01_baseline_py_structure.md)を参照
+  [`agent_reports/step01/step_01_baseline_py_structure.md`](./step_01_baseline_py_structure.md)を参照
 
 ### 実行方法
 

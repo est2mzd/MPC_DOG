@@ -4,7 +4,7 @@
 #
 # 背景: 追従カメラの録画は、実際に前進していても画面上は常に「その場」に
 # 見えてしまい、CSVの数値だけでは前進を目視確認できないという問題があった
-# (2026-08-30、docs/quad_sdk_step01_investigation.md参照)。固定カメラでの
+# (2026-08-30、agent_reports/step01/quad_sdk_step01_investigation.md参照)。固定カメラでの
 # 録画と組み合わせて、歩行の成否をGIFで目視確認できるようにするための変換。
 #
 # 使い方: bash scripts/trial/make_gif.sh <入力mp4> <出力gif> [fps] [幅px]

@@ -2,7 +2,7 @@
 # Quad-SDK Step 01: 基準歩行トライアルの実行スクリプト。
 #
 # 背景: 2026-08-30時点までの調査で、以下2点が「歩けたり歩けなかったりする」
-# 再現性問題の確認済みの原因として特定されている(詳細: docs/quad_sdk_step01_investigation.md)。
+# 再現性問題の確認済みの原因として特定されている(詳細: agent_reports/step01/quad_sdk_step01_investigation.md)。
 #   1. 起動シーケンス: 固定sleepでSTANDを送ると、実際に関節へトルクを伝える
 #      ros2_controlの`joint_controller`がまだアクティブでないことがある
 #      → controller_manager_msgs/srv/ListControllersをポーリングして待つ。

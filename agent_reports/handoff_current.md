@@ -52,11 +52,11 @@ Step単位(Step 01=前進歩行確認、以降のStepは未着手)で検証し�
    方式へ変更**。未使用ロボットモデル(a1/a2/b2/go1/spirit/spot/vision60/
    underbrush、約554MB)を除外し、go2/go2wのみ追跡(約260MB)。
 8. **ドキュメント整備**:
-   - `docs/quad_sdk_step01_investigation.md`(1317行、全経緯の時系列ログ)
-   - `docs/quad_sdk_step01_changes_and_usage.md`(要点まとめ)
-   - `docs/quadsdk_step01_baseline_py_structure.md`(記録ハーネスの構造説明)
-   - `docs/pympc_step01_changes_and_usage.md`・
-     `docs/step_01_baseline_py_structure.md`(PyMPC側の同等ドキュメント。
+   - `agent_reports/step01/quad_sdk_step01_investigation.md`(1317行、全経緯の時系列ログ)
+   - `agent_reports/step01/quad_sdk_step01_changes_and_usage.md`(要点まとめ)
+   - `agent_reports/step01/quadsdk_step01_baseline_py_structure.md`(記録ハーネスの構造説明)
+   - `agent_reports/step01/pympc_step01_changes_and_usage.md`・
+     `agent_reports/step01/step_01_baseline_py_structure.md`(PyMPC側の同等ドキュメント。
      PyMPC本体には一切コード変更がないことを確認済み)
    - `README.md`から上記全てへリンク
 9. **`.gitignore`整備**: `artifacts/gifs/*.gif`・`artifacts/logs/quadsdk_step01/`・
@@ -91,7 +91,7 @@ Step単位(Step 01=前進歩行確認、以降のStepは未着手)で検証し�
 - 速度スイープの結果、**0.5〜1.1 m/sの安定性はまだ心許ない**
   (このセッションの初期に0.5 m/sが2/2転倒→プロセス残留修正後は改善したが、
   1/2で「一度も起立しない」新しい非決定的失敗パターンを確認しており、
-  完全に安定とは言い切れない。詳細は`docs/quad_sdk_step01_investigation.md`
+  完全に安定とは言い切れない。詳細は`agent_reports/step01/quad_sdk_step01_investigation.md`
   「進捗ログ 19:00時点」参照)。
 - **Step 02以降は完全に未着手**(`scripts/trial/run_step_02.sh`・
   `src/trial/step_02_frequency.py`はファイルとして存在するが、このセッションの
@@ -198,7 +198,7 @@ Step単位(Step 01=前進歩行確認、以降のStepは未着手)で検証し�
 
 ## 11. 次のチャットで最初に読むべきファイル
 
-1. `docs/quad_sdk_step01_investigation.md` — 全経緯・根拠となる実測値
-2. `docs/quad_sdk_step01_changes_and_usage.md` — 変更点・実行方法の要点
+1. `agent_reports/step01/quad_sdk_step01_investigation.md` — 全経緯・根拠となる実測値
+2. `agent_reports/step01/quad_sdk_step01_changes_and_usage.md` — 変更点・実行方法の要点
 3. `scripts/trial/run_quadsdk_step01_baseline.sh` — 現在の実行スクリプト本体
 4. 本ファイル(`agent_reports/handoff_current.md`)

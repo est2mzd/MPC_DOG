@@ -110,4 +110,4 @@ quad-sdk版の同名関数と全く同じロジック(先にこちらが作ら�
 | GIF生成 | このファイル内で完結(`imageio`) | 別スクリプト(`make_gif.sh`、ffmpeg)が録画mp4から変換 |
 | 脚順序 | `FL, FR, RL, RR` | `FL, BL, FR, BR` |
 | 転倒時リセット | コード上は存在するがコメントアウトで無効 | リセット処理自体が無い(1試行=1回きりの記録) |
-| `external/`への変更 | なし | あり(承認を得た上で複数箇所、詳細は`docs/quad_sdk_step01_changes_and_usage.md`) |
+| `external/`への変更 | なし | あり(承認を得た上で複数箇所、詳細は`agent_reports/step01/quad_sdk_step01_changes_and_usage.md`) |
