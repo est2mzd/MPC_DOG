@@ -26,7 +26,7 @@ papers/                 ← 論文PDFとその翻訳(1件、明示的に保持�
 .gitignore / .gitmodules / pyproject.toml / uv.lock / .venv/ 等のプラムビング
 ```
 
-`archive/`・`papers/`はいずれも過去のセッションで意図的に整理・保持されたものであり、`external/`の内容や本Stepの作業には影響しない。事実として報告した上で、指示書4節の「推奨ディレクトリ構成」に従って`src/mpc_dog/`・`scripts/`・`tests/`・`configs/`・`docs/steps/`・`artifacts/`を`external/`と並べて新規作成する方針で進めた。
+`archive/`・`papers/`はいずれも過去のセッションで意図的に整理・保持されたものであり、`external/`の内容や本Stepの作業には影響しない。事実として報告した上で、指示書4節の「推奨ディレクトリ構成」に従って`src/mpc_dog/`・`scripts/`・`tests/`・`configs/`・`agent_reports/steps/`・`artifacts/`を`external/`と並べて新規作成する方針で進めた。
 
 ## 4. `external/`の実際の構成(調査結果)
 
@@ -125,7 +125,7 @@ simulation/simulation.py (134行) QuadrupedPyMPC_Wrapper 生成
 
 `external/`配下は無変更(後述「15. 事実」で、ビルド・実行の前後とも`git status`により確認)。MPC_DOG側で新規作成したのは以下の3点で、いずれも制御ロジックの実装は一切含まない。
 
-- `docs/steps/step_01_reference_baseline.md`(本ドキュメント)
+- `agent_reports/steps/step_01_reference_baseline.md`(本ドキュメント)
 - `scripts/trial/run_reference_baseline.sh`:環境の前提条件(ビルドツールチェイン・acadosビルド済み・`ACADOS_SOURCE_DIR`)を検査し、問題があれば理由を明示して停止する起動スクリプト
 - `src/trial/record_step01_baseline.py`:`simulation.py`の`run_simulation()`内部ループ(169〜327行目)を、**呼び出す関数・引数の順序を一切変えずに**そのまま呼び出しながら、(a)オフスクリーンレンダリングでGIF用フレームを取得し、(b)Base状態・接触状態・GRF・関節トルク・MPC計算時間をCSVへ記録する、記録専用のハーネス。PyMPC自体の計算式は含まれておらず、各ブロックの直前コメントに対応する`simulation.py`の行番号を明記した(ファイル冒頭のdocstring参照)。
 

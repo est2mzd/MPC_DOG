@@ -232,6 +232,6 @@ Step 03 では 2.0〜3.0 Hz で 0.3〜0.7 m/s すべて成立した(歩幅 ≈ 0
   - `quadruped_pympc/helpers/foothold_reference_generator.py`(Raibert 則)
   - `<venv>/gym_quadruped/utils/mujoco/terrain.py`(`generate_terrain`)
 - 関連ドキュメント
-  - `docs/steps/step_02_frequency.md`(平地・歩容周波数)
+  - `agent_reports/steps/step_02_frequency.md`(平地・歩容周波数)
   - `agent_reports/quadsdk_step01_gait_and_mpc.md`(歩容と MPC の役割分担)
   - `agent_reports/quadsdk_step01_simple_model_terrain_and_gaps.md`(穴超えの整理)

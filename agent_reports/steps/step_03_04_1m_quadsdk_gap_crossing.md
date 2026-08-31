@@ -407,7 +407,7 @@ bash scripts/trial/make_gif.sh \
 **MPC_DOG 側:**
 - `src/trial/assets/gen_quadsdk_gap_world.py`(地形 PLY を平面 + 本物の穴へ)
 - `scripts/trial/run_quadsdk_gap_1m.sh`
-- `docs/steps/step_03_04_1m_quadsdk_gap_crossing.md`(本ファイル)
+- `agent_reports/steps/step_03_04_1m_quadsdk_gap_crossing.md`(本ファイル)
 - `artifacts/gifs/quadsdk_step03_1m_v0p5.gif` / `quadsdk_step04_1m_v0p3.gif`
 
 **external/quad-sdk(新規):**
@@ -427,7 +427,7 @@ bash scripts/trial/make_gif.sh \
 
 ## 10. 関連
 
-- `docs/steps/step_03_gap_crossing.md` / `step_04_gap_crossing_1p5m.md`
+- `agent_reports/steps/step_03_gap_crossing.md` / `step_04_gap_crossing_1p5m.md`
   (PyMPC、浅い轍、成功)
 - `agent_reports/quadsdk_step01_gait_and_mpc.md`(歩容と MPC の役割分担)
 - `agent_reports/quadsdk_step01_terrain_map.md`(地形マップ = PLY 由来)

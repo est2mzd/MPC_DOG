@@ -173,6 +173,6 @@ go2 の前後の股関節間は約 0.39 m。対角トロットで同時に接地
 - `src/trial/assets/gen_scene_gaps.py`(マップ生成、引数 = 深さ[m] 間隔[m] 出力名)
 - `src/trial/assets/scene_gaps_1p5.xml`(生成物、間隔 1.5 m・深さ 5 cm)
 - `scripts/trial/run_step_04.sh`
-- 関連:`docs/steps/step_03_gap_crossing.md`(間隔 2.0 m、基本の解説)、
-  `docs/steps/step_02_frequency.md`、
+- 関連:`agent_reports/steps/step_03_gap_crossing.md`(間隔 2.0 m、基本の解説)、
+  `agent_reports/steps/step_02_frequency.md`、
   `agent_reports/quadsdk_step01_gait_and_mpc.md`

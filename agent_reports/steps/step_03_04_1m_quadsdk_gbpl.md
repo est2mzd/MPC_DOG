@@ -282,6 +282,6 @@ go2 の NMPC+WBC が実現できない過大な leap 参照を出す(1〜2 本)�
 
 ## 7. 関連(本リポジトリ)
 
-- `docs/steps/step_03_04_1m_quadsdk_gap_crossing.md`(main、twist + クロール、成功・姿勢きれい)
+- `agent_reports/steps/step_03_04_1m_quadsdk_gap_crossing.md`(main、twist + クロール、成功・姿勢きれい)
 - `scripts/trial/run_quadsdk_gap_gbpl.sh`
 - `agent_reports/quadsdk_step01_gait_and_mpc.md`

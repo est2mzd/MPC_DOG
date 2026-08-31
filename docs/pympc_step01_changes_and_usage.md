@@ -1,7 +1,7 @@
 # Quadruped-PyMPC Step 01: 元リポジトリからの変更点と実行方法
 
 対象: `external/Quadruped-PyMPC`(Quadruped-PyMPC本体)。詳細な調査経緯は
-`docs/steps/step_01_reference_baseline.md`を参照。本ドキュメントは要点のみ。
+`agent_reports/steps/step_01_reference_baseline.md`を参照。本ドキュメントは要点のみ。
 
 ## 1. 元リポジトリ(`external/Quadruped-PyMPC`)から変更する必要があったもの
 
