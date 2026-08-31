@@ -70,9 +70,14 @@ GBP-L で step03_1m / step04_1m の深い穴を渡れるか確かめる。
 
 → **step03/04 の課題(穴の連なる区間を姿勢を保って渡り切る)は GBP-L では
 未達**。main の **twist + クロール解**(0.15〜0.5 m/s で連続 5〜6 本を
-姿勢を保って踏破)が実用解。**このブランチは main へマージしない**
-(`external/quad-sdk` への設定変更は一切コミットしていない。追加物は
-実験ハーネスと本 doc のみ)。
+姿勢を保って踏破)が引き続き実用解。
+
+本ブランチ `feature/apply_global_planner` は、**「GBP-L を試したが未達」
+という調査結果 + 工程別のボトルネック分析(5 節)+ 実験ハーネス**を残す
+ものとして `--no-ff` で main にマージする(`external/quad-sdk` への
+設定変更は一切コミットしていない ── ハーネスが一時パッチして trap で
+必ず戻すため、追加されるのは実験ハーネスと本 doc、README リンクのみ)。
+どの工程で精度が落ちるかは 5 節にまとめた。
 
 ---
 
@@ -124,9 +129,10 @@ GAP_WORLD=flat_gaps_2m.xml GAP_TAG=step03_1m_gbpl GOAL_X=2.0 DURATION_S=50 \
 | 2 | flat_gaps_2m | 12.0 | 1.0 | 素トロット | x≈0.6 まで歩いて停止 → 遅れて転倒。GBP-L「partially valid」のみ、stamp 更新されず |
 | 3 | flat_gaps_2m | 2.0 | 1.0 | 素トロット | 同上。x≈0.56 で停止 → 転倒 |
 | 4 | gap_40cm(素材) | 1.7 | 1.0 | 素トロット | 一歩も動かず。「Start is sufficiently close to goal」即時(素材 PLY の座標が壊れており地形マップが退化) |
-| 5 | flat_gaps_2m | 2.0 | 10.0 | 素トロット | **成功。** 穴 1 本を渡り goal (2.0, 0) で直立静止。ただし途中の横スイング y=−1.9→0 |
+| 5 | flat_gaps_2m | 2.0 | 10.0 | 素トロット | **成功(2 回中 1 回)。** 穴 1 本を渡り goal (2.0, 0) で直立静止。ただし途中の横スイング y=−1.9→0 |
 | 6 | flat_gaps_2m | 6.0 | 18.0 | 素トロット | **失敗。** 1 本目を跨ぐ leap も張れず、x≈0.55 で停止 → 転落。GBP-L「partially valid」1 回のみ |
 | 7 | flat_gaps_2m | 4.0 | 22.0 | 素トロット | **不成立。** 複合 leap で x 0.2→2.9 を一気に跳び穴 2 本を越えるが、**着地で背面へ転倒**(roll→π) |
+| 8 | flat_gaps_2m | 2.0 | 10.0 | 素トロット | **失敗(run5 と同一条件)。** 跳躍が制御不能に発散、goal を大きく行き過ぎて x≈3.6 で転倒。→ **run5 の成功は非決定的**(2 回中 1 回) |
 
 ### run5 の軌跡(CSV、成功)
 
@@ -172,7 +178,99 @@ t=22.5 x= 3.52  z=0.058  roll=-π               (着地で背面転倒)
   これはパラメータ数点では届かない研究レベルの作業。実用解は main の
   twist + クロール。
 
-## 5. 参考(Quad-SDK 公式)
+## 5. パイプラインのどの工程で精度が落ちるか(シナリオ別)
+
+**問い**: センシング → foot plan(GBP-L + local_footstep_planner)→ MPC(NMPC)
+→ WBC(逆動力学)→ トルク のどこで精度が落ちて転ぶのか。
+CSV(`plan_nmpc_cost` / `plan_nmpc_iterations` / `plan_compute_time_ms` /
+`plan_age_s` / 接触フラグ / 各脚 GRF)とノードログ(NMPC fail、
+robot_driver の effort 超過警告、GBP-L のプラン状態)で工程ごとに切り分けた。
+
+### 各工程で見た指標
+
+| 工程 | 見た指標 | 健全時の値(平地歩行〜穴手前) |
+|---|---|---|
+| センシング | `state/ground_truth`(シムなので真値) | 誤差なし(ground truth) |
+| 大域プラン(GBP-L) | 「New plan published」の stamp が更新されるか / VALID or PARTIAL | 1 本渡りは 1 プラン発行、複数穴は「partially valid」のまま |
+| foot plan / 接触スケジュール | `computeFootPlan` DIAG、接触フラグ列、LEAP/FLIGHT/LAND への切替 | トロットの TFFT/FTTF が規則的に交替、snap_calls 正常 |
+| MPC(NMPC) | `plan_nmpc_cost`、`plan_nmpc_iterations`、`plan_compute_time_ms`、`plan_age_s` | cost ≈ 0.005〜0.03、iter = 1、compute ≈ 6 ms、age ≈ 0 |
+| WBC(逆動力学) | 各脚 GRF、robot_driver「total effort … exceeds threshold」警告数 | GRF ≈ 70〜80 N/脚、effort 警告 = 0 |
+| トルク → シム | 胴体 z / roll / pitch | z ≈ 0.31、roll・pitch < 0.02 rad |
+
+### シナリオ 1:穴 3 本(goal x=6.0、run6)── **大域プラン(GBP-L)で破綻**
+
+- **GBP-L**: 「New plan published」の stamp は **34.882 のまま一度も更新されず**、
+  毎回「partially valid and closer to the goal」= **ゴールまでの完全なプランを
+  一度も出せない**。「Planner was unable to make any progress, start state
+  likely trapped」も出る。→ RRT-Connect が `max_planning_time`(18 s に
+  延長しても)内で穴を跨ぐ leap 枝を張れていない。
+- **下流(foot plan / MPC / WBC)**: 上流から届くのは x≈0.55 までの部分プラン
+  だけ。ロボットはそこまで**普通に歩き**(cost・iter・age 正常、GRF 70〜80 N、
+  effort 警告 0)、プラン終端(穴の手前)で止まる。
+- **転倒の直接原因**: プラン終端で前進指令が尽き、穴の縁で静止 → バランスを
+  失って 1 本目の穴へ転落。NMPC fail(580 回)と effort 警告(40 回)は
+  **転落後**に出る従属現象。
+- **結論**: この工程図では **foot plan の一段目(= 大域プラン)** が
+  ボトルネック。MPC/WBC は健全な参照を与えられていない。
+
+### シナリオ 2:穴 2 本(goal x=4.0、run7 / および goal x=2.0 の run8)── **MPC(NMPC)で破綻、WBC が増幅**
+
+- **GBP-L**: プランは出る(積極的な複合 leap)。stamp は 1 回だけ更新。
+  `replanning: true` でも**空中に出た後は再計画されず**、局所側は固定参照を
+  握り続ける(`plan_age_s` が後で 1〜2 s まで伸びる)。
+- **foot plan / 接触**: LEAP_STANCE → FLIGHT → LAND_STANCE を素直に展開。
+  ただし LAND を **降下速度 vz ≈ −2 m/s の瞬間に TTTT 固定**で当てる
+  (緩衝なし)。
+- **MPC(NMPC)── ここが最初に崩れる**:
+  - 離陸前、胴体がまだ水平で接地しているのに
+    **`plan_nmpc_cost` が 0.01 → 0.99 → 6.6 と急上昇**(run7/run8 とも
+    t≈17.5〜18.0)。= 与えられた参照(GBP-L の body plan + 目前の leap
+    foot schedule)を、**go2 では高コストでしか追従できない**。
+  - 着地衝撃の後、**NMPC が収束しなくなる**:
+    `iter` 1 → 14 → 46 → 53、`compute_time` 6 ms → 38 → 90 → **116 ms**
+    (replan 周期 ≈ 30 ms を大きく超過)→ `plan_age_s` 0 → **2.3 s**
+    (プランが完全に陳腐化)。`cost` → 130 → **1100+**。
+- **WBC(逆動力学)── 増幅役**:
+  - 崩れた/陳腐化した NMPC の GRF を受けて、GRF を **±150 N 上限に貼り付け、
+    (10, 150, 10, 150) のバンバン制御**に。
+  - robot_driver の「total effort exceeds threshold(33.5 / 50 Nm)」警告が
+    **run7 で 2158 回、run8 で 212 回**。WBC は**誤差の発生源ではなく、
+    NMPC の破綻をそのままトルクに変換して増幅している**。
+- **トルク → シム**: 飽和したバンバントルク → roll が発散(+0.4 → +1 →
+  +2 → π)→ 背面着地、x≈3.5 で反転して停止。
+- **結論**: 破綻の起点は **MPC(NMPC)**。原因は上流(GBP-L の leap 参照が
+  go2 には過大 + 空中で再計画しない)だが、**精度が最初に落ちて不可逆に
+  なるのは NMPC の工程**。WBC はそれを飽和トルクへ忠実に写すだけ。
+
+### シナリオ 3:穴 1 本・成功時(goal x=2.0、run5)── 全工程が辛うじて健全、ただし foot plan/MPC の横方向が甘い
+
+- 発進〜穴手前(t≈15.4〜17.2):**cost 0.004〜0.27、iter 1、compute 6 ms、
+  age 0** = 完全に健全。
+- 渡り(t≈17.5〜):cost が一時 6 まで上がる(シナリオ 2 と同じ入口)が、
+  この試行では NMPC が収束を保ち、胴体 z・roll・pitch は制御下。
+- ただし **y が一時 −1.9 m まで振れて**からゴール (2.0, 0) に戻る。
+  = foot plan(Raibert + スナップ)と NMPC の**横方向トラッキングが
+  大きくオーバーシュート**。「横位置中央を保って渡る」要件は未達。
+- run8(同一条件)は同じ入口(cost → 6)からシナリオ 2 と同じ発散をたどって
+  転倒 → **成功は 2 回に 1 回。NMPC がこの参照で収束できるかどうかが
+  紙一重**。
+
+### まとめ
+
+| シナリオ | 精度が最初に落ちる工程 | 下流の効果 |
+|---|---|---|
+| 穴 3 本(run6) | **大域プラン(GBP-L RRT)** ── 完全なプランを出せない | foot plan/MPC/WBC は健全な参照を与えられず、プラン終端で失速・転落 |
+| 穴 2 本(run7 / run8) | **MPC(NMPC)** ── leap 参照が go2 に過大で cost 発散、着地後は非収束(compute 116 ms ≫ 予算、age 2.3 s) | **WBC** が飽和 GRF/トルク(effort 警告 200〜2000 回)へ増幅、roll→π で反転 |
+| 穴 1 本・成功時(run5) | **foot plan / MPC の横方向** ── y が ±1.9 m オーバーシュート(姿勢は保持) | 復帰してゴールに静止。ただし同条件の run8 は同じ入口から発散・転倒(成功 1/2) |
+
+**共通の根**: センシングは常に健全。**WBC は誤差の発生源ではなく増幅器**。
+上流の **GBP-L(大域プラン)がボトルネック** ── 解けない(3 本)か、
+go2 の NMPC+WBC が実現できない過大な leap 参照を出す(1〜2 本)。
+`global_body_planner.yaml` の leap パラメータ(`dz0 1–2 m/s`, `t_s`,
+`grf_max 5` bw)は spirit 前提で、go2 向けの再チューニング手順は
+マニュアルに無い(3 節)。
+
+## 6. 参考(Quad-SDK 公式)
 
 - [Wiki: 5. Using the Software (ROS2)](https://github.com/robomechanics/quad-sdk/wiki/5.-Using-the-Software-(ROS2))
 - [Wiki: 2. Using the Software](https://github.com/robomechanics/quad-sdk/wiki/2.-Using-the-Software)
@@ -182,7 +280,7 @@ t=22.5 x= 3.52  z=0.058  roll=-π               (着地で背面転倒)
 - [doxygen: LocalFootstepPlanner Class Reference](https://robomechanics.github.io/quad-sdk/classLocalFootstepPlanner.html)
 - [GitHub: robomechanics/quad-sdk](https://github.com/robomechanics/quad-sdk)
 
-## 6. 関連(本リポジトリ)
+## 7. 関連(本リポジトリ)
 
 - `docs/steps/step_03_04_1m_quadsdk_gap_crossing.md`(main、twist + クロール、成功・姿勢きれい)
 - `scripts/trial/run_quadsdk_gap_gbpl.sh`
