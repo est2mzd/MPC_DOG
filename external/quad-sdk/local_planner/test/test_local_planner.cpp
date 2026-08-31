@@ -172,7 +172,7 @@ TEST(LocalPlannerTest, ConstructorLoadsYamlConfigurationAndInterfaces) {
   EXPECT_EQ(planner.map_frame_, "map");
   EXPECT_DOUBLE_EQ(planner.update_rate_, 333.0);
   EXPECT_DOUBLE_EQ(planner.dt_, 0.03);
-  EXPECT_EQ(planner.N_, 26);
+  EXPECT_EQ(planner.N_, 40);  // local_planner.yaml horizon_length (was 26; 40 since 9ccd639)
   EXPECT_NE(planner.terrain_map_sub_, nullptr);
   EXPECT_NE(planner.body_plan_sub_, nullptr);
   EXPECT_NE(planner.robot_state_sub_, nullptr);
