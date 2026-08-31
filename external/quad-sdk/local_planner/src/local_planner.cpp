@@ -549,7 +549,7 @@ bool LocalPlanner::computeLocalPlan() {
   if (stop_on_invalid_foothold_ && !foot_plan_result.ok) {
     RCLCPP_WARN_THROTTLE(
         node_->get_logger(), *node_->get_clock(),
-        static_cast<rcutils_duration_value_t>(5e8),
+        static_cast<rcutils_duration_value_t>(1000),
         "[safe-stop] withholding local plan: %d touchdown(s) without a valid "
         "foothold (first: leg=%d horizon_idx=%d status=%d)",
         foot_plan_result.failed_count, foot_plan_result.failed_leg,
