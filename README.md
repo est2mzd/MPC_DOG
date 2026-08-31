@@ -25,6 +25,15 @@
  - [Step 03_1m / 04_1m:1m 深の穴を「足を入れずに」複数本連続で渡る(成功／歩容をクロールに調整・大学院初心者向け解説つき)](./agent_reports/steps/step_03_04_1m_quadsdk_gap_crossing.md)
  - [Step 03_1m / 04_1m(gbpl 版):global_body_planner で穴を渡る試み + Quad-SDK 公式マニュアルに基づく正しい設定方法 + センシング→foot plan→MPC→WBC→トルクの工程別ボトルネック分析(穴 1 本は跳んで可・連続区間は未達)](./agent_reports/steps/step_03_04_1m_quadsdk_gbpl.md)
 
+### 溝渡りの実行例(1 m 深・0.3 m 幅の溝を、足を溝に入れずに連続で渡る／`reference:=twist` + クロール歩容)
+
+固定カメラ。凸条の目盛りは 5 m 間隔。詳細・CSV 根拠は
+[Step 03_1m / 04_1m の検証記録](./agent_reports/steps/step_03_04_1m_quadsdk_gap_crossing.md)。
+
+| step03(溝の間隔 2.0 m、0.15 m/s) | step04(溝の間隔 1.5 m、0.3 m/s) |
+|---|---|
+| ![step03 溝渡り](./artifacts/gifs/quadsdk_step03_1m_v0p15.gif) | ![step04 溝渡り](./artifacts/gifs/quadsdk_step04_1m_v0p3.gif) |
+
 ## Quadruped-PyMPC
 
  - [環境構築(acadosビルド・インストール)と実行方法](./agent_reports/step01/pympc_step01_changes_and_usage.md)
