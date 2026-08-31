@@ -1,6 +1,8 @@
 #include "local_planner/local_footstep_planner.hpp"
 
 #include <chrono>
+#include <cmath>
+#include <limits>
 
 LocalFootstepPlanner::LocalFootstepPlanner(rclcpp::Node::SharedPtr node)
     : node_(node) {}
@@ -523,6 +525,30 @@ void LocalFootstepPlanner::loadFootPlanMsgs(
 Eigen::Vector3d LocalFootstepPlanner::getNearestValidFoothold(
     const Eigen::Vector3d& foot_position,
     const Eigen::Vector3d& foot_position_prev_solve) const {
+  // Wrapper: existing callers only need the position, and it is identical to
+  // what this function returned before the FootholdResult refactor.
+  return getNearestValidFootholdResult(foot_position, foot_position_prev_solve)
+      .position;
+}
+
+FootholdResult LocalFootstepPlanner::getNearestValidFootholdResult(
+    const Eigen::Vector3d& foot_position,
+    const Eigen::Vector3d& foot_position_prev_solve) const {
+  FootholdResult result;
+  // Default = nominal, matching the prior "return nominal" fallback path.
+  result.position = foot_position;
+
+  // Defensive: nominal outside the map. In the current call flow
+  // computeFootPlan() already `continue`s before reaching here, so this
+  // branch is inert today; it exists so the status can be reported once a
+  // later phase moves/adds the out-of-map handling.
+  if (!terrain_grid_.isInside(foot_position.head<2>())) {
+    result.status = FootholdStatus::NOMINAL_OUTSIDE_MAP;
+    return result;
+  }
+  result.traversability_nominal =
+      terrain_grid_.atPosition(obj_fun_layer_, foot_position.head<2>());
+
   Eigen::Vector3d foot_position_best = foot_position;
   grid_map::Position pos_center, pos_center_aligned, offset, pos_valid;
 
@@ -568,34 +594,50 @@ Eigen::Vector3d LocalFootstepPlanner::getNearestValidFoothold(
     }
   }
 
-  if (best_kin_cost == std::numeric_limits<double>::max()) {
+  const bool found = best_kin_cost != std::numeric_limits<double>::max();
+  if (!found) {
     RCLCPP_WARN_THROTTLE(
         node_->get_logger(), *node_->get_clock(),
         static_cast<rcutils_duration_value_t>(1e9),
         "No valid foothold found in radius of nominal, returning nominal");
+    result.status = FootholdStatus::NO_TRAVERSABLE_CANDIDATE;
   }
-  // [MPC_DOG DIAG] nominal vs snapped foothold + local traversability
-  {
-    static long diag_gnvf = 0;
-    if (diag_gnvf++ % 40 == 0) {
-      double trav_here = terrain_grid_.isInside(foot_position.head<2>())
-                             ? terrain_grid_.atPosition(obj_fun_layer_,
-                                                        foot_position.head<2>())
-                             : -99.0;
-      RCLCPP_INFO(node_->get_logger(),
-                  "[DIAG] gnvf #%ld: nominal x=%.3f trav=%.3f -> snapped "
-                  "x=%.3f (thr=%.2f rad=%.2f) found=%d",
-                  diag_gnvf, foot_position.x(), trav_here,
-                  foot_position_best.x(), foothold_obj_threshold_,
-                  foothold_search_radius_,
-                  best_kin_cost != std::numeric_limits<double>::max());
-    }
-  }
+
+  // Height query is unchanged: on the no-candidate path foot_position_best.xy
+  // is still the nominal, so this reproduces the prior return value exactly.
   foot_position_best.z() =
       terrain_grid_.atPosition("z_inpainted", foot_position_best.head<2>(),
                                grid_map::InterpolationMethods::INTER_LINEAR) +
       toe_radius_;
-  return foot_position_best;
+  result.position = foot_position_best;
+
+  if (found) {
+    if (!std::isfinite(foot_position_best.z())) {
+      result.status = FootholdStatus::NONFINITE_HEIGHT;
+    } else {
+      result.status = FootholdStatus::VALID;
+      result.traversability_selected =
+          terrain_grid_.atPosition(obj_fun_layer_, foot_position_best.head<2>());
+      result.snap_distance =
+          (foot_position_best.head<2>() - foot_position.head<2>()).norm();
+    }
+  }
+
+  // [MPC_DOG DIAG] nominal vs snapped foothold + status + snap distance
+  {
+    static long diag_gnvf = 0;
+    if (diag_gnvf++ % 40 == 0) {
+      RCLCPP_INFO(node_->get_logger(),
+                  "[DIAG] gnvf #%ld: nominal x=%.3f trav=%.3f -> snapped "
+                  "x=%.3f (thr=%.2f rad=%.2f) found=%d status=%d snap=%.3f",
+                  diag_gnvf, foot_position.x(), result.traversability_nominal,
+                  result.position.x(), foothold_obj_threshold_,
+                  foothold_search_radius_, found,
+                  static_cast<int>(result.status), result.snap_distance);
+    }
+  }
+
+  return result;
 }
 
 Eigen::Vector3d LocalFootstepPlanner::welzlMinimumCircle(

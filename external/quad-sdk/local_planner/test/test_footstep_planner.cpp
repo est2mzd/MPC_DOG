@@ -115,6 +115,52 @@ LocalFootstepPlanner makeGo2Planner() {
   return planner;
 }
 
+// Traversable everywhere, but z_inpainted left as NaN (never assigned).
+grid_map::GridMap makeTerrainNonfiniteHeight() {
+  grid_map::GridMap map({"z_inpainted", "z_smooth", "normal_vectors_x",
+                         "normal_vectors_y", "normal_vectors_z",
+                         "smooth_normal_vectors_x", "smooth_normal_vectors_y",
+                         "smooth_normal_vectors_z", "traversability"});
+  map.setGeometry(grid_map::Length(4.0, 4.0), 0.1);
+  for (grid_map::GridMapIterator it(map); !it.isPastEnd(); ++it) {
+    map.at("z_smooth", *it) = 0.0;
+    map.at("normal_vectors_x", *it) = 0.0;
+    map.at("normal_vectors_y", *it) = 0.0;
+    map.at("normal_vectors_z", *it) = 1.0;
+    map.at("smooth_normal_vectors_x", *it) = 0.0;
+    map.at("smooth_normal_vectors_y", *it) = 0.0;
+    map.at("smooth_normal_vectors_z", *it) = 1.0;
+    map.at("traversability", *it) = 1.0;
+    // z_inpainted deliberately left NaN
+  }
+  return map;
+}
+
+// A circular non-traversable hole of the given radius centred at the origin;
+// everything outside is traversable and flat at z = 0.
+grid_map::GridMap makeTerrainWithHole(double hole_radius) {
+  grid_map::GridMap map({"z_inpainted", "z_smooth", "normal_vectors_x",
+                         "normal_vectors_y", "normal_vectors_z",
+                         "smooth_normal_vectors_x", "smooth_normal_vectors_y",
+                         "smooth_normal_vectors_z", "traversability"});
+  map.setGeometry(grid_map::Length(4.0, 4.0), 0.1);
+  for (grid_map::GridMapIterator it(map); !it.isPastEnd(); ++it) {
+    grid_map::Position pos;
+    map.getPosition(*it, pos);
+    const bool in_hole = pos.norm() < hole_radius;
+    map.at("z_inpainted", *it) = 0.0;
+    map.at("z_smooth", *it) = 0.0;
+    map.at("normal_vectors_x", *it) = 0.0;
+    map.at("normal_vectors_y", *it) = 0.0;
+    map.at("normal_vectors_z", *it) = 1.0;
+    map.at("smooth_normal_vectors_x", *it) = 0.0;
+    map.at("smooth_normal_vectors_y", *it) = 0.0;
+    map.at("smooth_normal_vectors_z", *it) = 1.0;
+    map.at("traversability", *it) = in_hole ? 0.0 : 1.0;
+  }
+  return map;
+}
+
 void setFoot(quad_msgs::msg::MultiFootState& feet, int foot, double x, double y,
              double z, int traj_index) {
   feet.feet[foot].position.x = x;
@@ -266,6 +312,103 @@ TEST(LocalFootstepPlannerTest, FootholdSearchFallsBackWhenTerrainInvalid) {
   EXPECT_NEAR(foothold.x(), nominal.x(), kTol);
   EXPECT_NEAR(foothold.y(), nominal.y(), kTol);
   EXPECT_NEAR(foothold.z(), 0.17, kTol);
+}
+
+// ---- Phase 1: FootholdResult diagnostics (behaviour unchanged) ----
+
+TEST(LocalFootstepPlannerTest, FootholdResultReportsValidOnFlatTerrain) {
+  LocalFootstepPlanner planner = makePlanner();
+  const Eigen::Vector3d nominal(0.0, 0.0, 0.0);
+  const Eigen::Vector3d previous(0.0, 0.0, 0.0);
+
+  const FootholdResult r =
+      planner.getNearestValidFootholdResult(nominal, previous);
+
+  EXPECT_EQ(r.status, FootholdStatus::VALID);
+  EXPECT_NEAR(r.snap_distance, 0.0, 0.11);
+  EXPECT_NEAR(r.traversability_nominal, 1.0, kTol);
+  EXPECT_NEAR(r.traversability_selected, 1.0, kTol);
+  EXPECT_NEAR(r.position.z(), 0.02, kTol);
+  // Wrapper and result agree on the chosen position.
+  const Eigen::Vector3d pos = planner.getNearestValidFoothold(nominal, previous);
+  EXPECT_NEAR(pos.x(), r.position.x(), kTol);
+  EXPECT_NEAR(pos.y(), r.position.y(), kTol);
+  EXPECT_NEAR(pos.z(), r.position.z(), kTol);
+}
+
+TEST(LocalFootstepPlannerTest, FootholdResultReportsNoTraversableCandidate) {
+  LocalFootstepPlanner planner = makePlanner();
+  const auto invalid_grid = makeTerrain(0.15, 0.0);  // traversability 0 all over
+  FastTerrainMap terrain;
+  terrain.loadDataFromGridMap(invalid_grid);
+  planner.updateMap(invalid_grid);
+  planner.updateMap(terrain);
+
+  const Eigen::Vector3d nominal(0.32, -0.18, 0.0);
+  const Eigen::Vector3d previous(-0.5, 0.5, 0.0);
+  const FootholdResult r =
+      planner.getNearestValidFootholdResult(nominal, previous);
+
+  EXPECT_EQ(r.status, FootholdStatus::NO_TRAVERSABLE_CANDIDATE);
+  // Behaviour unchanged: falls back to the nominal x/y, z from z_inpainted.
+  EXPECT_NEAR(r.position.x(), nominal.x(), kTol);
+  EXPECT_NEAR(r.position.y(), nominal.y(), kTol);
+  EXPECT_NEAR(r.position.z(), 0.17, kTol);
+  EXPECT_NEAR(r.snap_distance, 0.0, kTol);
+}
+
+TEST(LocalFootstepPlannerTest, FootholdResultReportsNominalOutsideMap) {
+  LocalFootstepPlanner planner = makePlanner();
+  const Eigen::Vector3d nominal(10.0, 10.0, 0.0);  // map is only 4 x 4 m
+  const Eigen::Vector3d previous(0.0, 0.0, 0.0);
+
+  const FootholdResult r =
+      planner.getNearestValidFootholdResult(nominal, previous);
+
+  EXPECT_EQ(r.status, FootholdStatus::NOMINAL_OUTSIDE_MAP);
+  EXPECT_NEAR(r.position.x(), nominal.x(), kTol);
+  EXPECT_NEAR(r.position.y(), nominal.y(), kTol);
+}
+
+TEST(LocalFootstepPlannerTest, FootholdResultReportsNonfiniteHeight) {
+  LocalFootstepPlanner planner = makePlanner();
+  const auto grid = makeTerrainNonfiniteHeight();
+  FastTerrainMap terrain;
+  terrain.loadDataFromGridMap(grid);
+  planner.updateMap(grid);
+  planner.updateMap(terrain);
+
+  const Eigen::Vector3d nominal(0.0, 0.0, 0.0);
+  const Eigen::Vector3d previous(0.0, 0.0, 0.0);
+  const FootholdResult r =
+      planner.getNearestValidFootholdResult(nominal, previous);
+
+  EXPECT_EQ(r.status, FootholdStatus::NONFINITE_HEIGHT);
+  EXPECT_FALSE(std::isfinite(r.position.z()));
+}
+
+TEST(LocalFootstepPlannerTest, FootholdResultSnapDistanceMatchesSelection) {
+  LocalFootstepPlanner planner = makePlanner();
+  // Widen the search radius so a valid cell outside the hole is reachable.
+  planner.setSpatialParams(0.07, 0.1, 0.45, 0.03, nullptr, 0.6, 0.6,
+                           "traversability", 0.02);
+  const auto grid = makeTerrainWithHole(0.25);
+  FastTerrainMap terrain;
+  terrain.loadDataFromGridMap(grid);
+  planner.updateMap(grid);
+  planner.updateMap(terrain);
+
+  const Eigen::Vector3d nominal(0.0, 0.0, 0.0);
+  const Eigen::Vector3d previous(0.0, 0.0, 0.0);
+  const FootholdResult r =
+      planner.getNearestValidFootholdResult(nominal, previous);
+
+  EXPECT_EQ(r.status, FootholdStatus::VALID);
+  EXPECT_GT(r.snap_distance, 0.0);
+  const double d =
+      (r.position.head<2>() - nominal.head<2>()).norm();
+  EXPECT_NEAR(r.snap_distance, d, kTol);
+  EXPECT_NEAR(r.traversability_selected, 1.0, kTol);
 }
 
 TEST(LocalFootstepPlannerTest, WelzlMinimumCircleHandlesBoundaryCases) {

@@ -23,6 +23,41 @@
 #include <grid_map_ros/GridMapRosConverter.hpp>
 #include <grid_map_ros/grid_map_ros.hpp>
 
+#include <limits>
+
+//! Outcome of a single foothold-selection query.
+/*!
+   Phase 1 (diagnostics only): the four values below are the states
+   getNearestValidFootholdResult() can currently report. EDGE_TOO_CLOSE /
+   IK_UNREACHABLE / MAP_STALE are intentionally NOT here yet; they are added
+   in later phases together with the code that actually computes them, so the
+   cause and effect of each change stay easy to follow.
+*/
+enum class FootholdStatus {
+  VALID,                     //!< A traversable candidate was selected
+  NOMINAL_OUTSIDE_MAP,       //!< Nominal foothold lies outside the terrain map
+  NO_TRAVERSABLE_CANDIDATE,  //!< No cell in the search radius passed the threshold
+  NONFINITE_HEIGHT,          //!< Selected cell's inpainted height is not finite
+};
+
+//! Result of getNearestValidFootholdResult().
+/*!
+   Phase 1 fills only fields that are cheap to compute and do not change any
+   selection behaviour: the chosen position (identical to what
+   getNearestValidFoothold returns), the status, the objective-layer value at
+   the nominal and at the chosen cell, and the horizontal snap distance.
+   edge clearance and IK reachability are added in later phases.
+*/
+struct FootholdResult {
+  Eigen::Vector3d position = Eigen::Vector3d::Zero();  //!< Chosen foothold, world
+  FootholdStatus status = FootholdStatus::VALID;
+  double traversability_nominal =
+      std::numeric_limits<double>::quiet_NaN();  //!< obj-layer value at nominal
+  double traversability_selected =
+      std::numeric_limits<double>::quiet_NaN();  //!< obj-layer value at chosen
+  double snap_distance = 0.0;  //!< ||chosen.xy - nominal.xy||, metres
+};
+
 //! Local footstep planner for quadruped body plans
 /*!
    LocalFootstepPlanner converts a body plan and contact schedule into
@@ -279,8 +314,24 @@ class LocalFootstepPlanner {
    * @param[in] foot_position Foothold to optimize around
    * @param[in] foot_position_prev_solve Foothold in prior solve
    * @return Optimized foothold
+   *
+   * Thin wrapper over getNearestValidFootholdResult(); returns only .position
+   * so existing callers are byte-for-byte unchanged.
    */
   Eigen::Vector3d getNearestValidFoothold(
+      const Eigen::Vector3d& foot_position,
+      const Eigen::Vector3d& foot_position_prev_solve) const;
+
+  /**
+   * @brief Same search as getNearestValidFoothold, but also reports the
+   * outcome (FootholdStatus) and cheap diagnostics (FootholdResult).
+   * Phase 1: the chosen .position is identical to getNearestValidFoothold's
+   * return value in every case; only the extra fields are new.
+   * @param[in] foot_position Nominal foothold to optimize around
+   * @param[in] foot_position_prev_solve Foothold in prior solve
+   * @return FootholdResult with position + status + diagnostics
+   */
+  FootholdResult getNearestValidFootholdResult(
       const Eigen::Vector3d& foot_position,
       const Eigen::Vector3d& foot_position_prev_solve) const;
 
