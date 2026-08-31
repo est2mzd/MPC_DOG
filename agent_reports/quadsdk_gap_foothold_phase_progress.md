@@ -25,7 +25,7 @@
    何を入力に何を出力し、穴に対して誰が責任を持つのかを、
    推測でなくコードの関数・行から確定する。
 2. **訂正**:以前の作業メモに残っていた、コードと食い違う記述を直す。
-3. **改善**:「有効な足場が見つからないのに名目の足場で歩き続ける」等の
+3. **改善**:「有効な足場が無い(`status != FootholdStatus::VALID`)のに名目の足場で歩き続ける」等の
    危険な挙動を、**既存の成功挙動を壊さずに**、1 コミット = 1 目的で
    段階的に潰す。各フェーズは着手前に変更計画を出し、確認を取る。
 
@@ -144,7 +144,7 @@
 | 2 | Raibert 名目の速度は「並進=world 系 / 角速度=body 系」。RobotState 側の並進速度フレームは未確認 |
 | 3 | 実効摩擦係数 μ は **0.6**(launch 順で go2.yaml が上書き)。要ライブ `ros2 param get` |
 | 4 | 「NMPC 失敗後に壊れた GRF がそのままトルク化」は誤り。(a) 失敗継続→起立ホールド と (b) 求解成功だが低品質解→飽和 GRF 実行 を分離(転倒は (b)) |
-| 5 | 地図外は `getNearestValidFoothold` の手前で `continue` される。`FootholdResult` だけでは `found=false` にできない |
+| 5 | 地図外は `getNearestValidFoothold` の手前で `continue` される。現フローでは `getNearestValidFoothold` に到達しないため `FootholdResult.status` に `NOMINAL_OUTSIDE_MAP` が入らない(Phase 2A で `continue` 地点にフックを足す) |
 | 6 | 「遠い足場 → NMPC cost 増大 → 非収束」の因果は**推測**へ格下げ(cost 内訳・slack・制約違反・IPOPT status を記録するまで) |
 | 7 | `filter_chain.yaml` の `traversability_mask` 閾値 0.5 と `foothold_obj_threshold` 0.6 の不一致。足場選択は `traversability` レイヤを読むため現挙動への直接影響なし |
 

@@ -227,7 +227,8 @@ raw マップ `/mapping/terrain_map_raw` が `filter_chain.yaml` を通って
    position is outside the map …"); continue; }`。この `continue` で
    **その接地イベントの処理自体を打ち切り**、`getNearestValidFoothold` は
    呼ばれない。→ **`getNearestValidFoothold` の戻り値(将来の `FootholdResult`)
-   だけでは map 外を `found=false` として表現できない。** map 外の失敗伝播は
+   だけでは map 外を status で表現できない**(現フローでは map 外で
+   `getNearestValidFoothold` に到達せず `NOMINAL_OUTSIDE_MAP` が設定されない)。map 外の失敗伝播は
    この `continue` 地点に別途足す必要がある(§8 Phase 2 の注記)。
 
 ### 3.3 地図による足場補正(`getNearestValidFoothold`、523-596)
@@ -537,9 +538,9 @@ go2:`stand_joint_angles [0,0.8,-1.5]`、`stand_kp [60,60,60]`、`stand_kd [2,2,2
 |---|---|---|---|---|
 | 0 | `agent_reports/steps/step_03_04_1m_quadsdk_gbpl.md` ほか | §6 の 3 点(可到達制約 / horizon>period_ / 実センサ NaN)の記述訂正。**コード変更なし** | なし(doc のみ) | 差分レビュー |
 | 1 | `local_footstep_planner.{hpp,cpp}` `getNearestValidFoothold` | 戻り値を `FootholdResult{position, found, traversability, snap_distance, edge_clearance, reachable}` 相当へ。まず**診断値の算出と DIAG 出力のみ**、呼び出し側は `position` のみ使用。**§6.1 の NMPC 内訳ログ(cost 項別・slack・制約違反・IPOPT status)も同時に追加**(診断のみ) | なし(挙動不変、ログ追加) | §9 の単体試験(平面/穴中央/縁/広い穴/map 外) |
-| 2 | `getNearestValidFoothold` + **`computeFootPlan` の map 外 `continue` 地点**(`local_footstep_planner.cpp:255-261`)+ `local_planner.cpp` | `found==false` を下流へ伝播。**map 外は `getNearestValidFoothold` に到達しない**(§3.2-5)ので、`continue` 地点でも「その脚の接地が確定できなかった」を記録・伝播する必要がある。新しい一歩を確定しない / `cmd_vel`→0 / 全脚接地可なら STAND / `planner_failed` へ理由(map 外 / 未観測 / 広すぎ / map 期限切れ)通知 | 有効足場がある通常時は不変。無い時のみ挙動変化(現在は名目足場で継続 or `continue` で黙って前回踏襲 → 危険) | 「広い穴」「map 外」で停止すること + 回帰(§13) |
+| 2 | `getNearestValidFoothold` + **`computeFootPlan` の map 外 `continue` 地点**(`local_footstep_planner.cpp:255-261`)+ `local_planner.cpp` | `status != FootholdStatus::VALID` を下流へ伝播。**map 外は `getNearestValidFoothold` に到達しない**(§3.2-5)ので、`continue` 地点でも「その脚の接地が確定できなかった」を記録・伝播する必要がある。新しい一歩を確定しない / `cmd_vel`→0 / 全脚接地可なら STAND / `planner_failed` へ理由(map 外 / 未観測 / 広すぎ / map 期限切れ)通知 | 有効足場がある通常時は不変。無い時のみ挙動変化(現在は名目足場で継続 or `continue` で黙って前回踏襲 → 危険) | 「広い穴」「map 外」で停止すること + 回帰(§13) |
 | 3 | terrain map(`filter_chain.yaml` or 新レイヤ)+ `getNearestValidFoothold` | 穴縁からの安全距離 \(d_{\rm edge}(p) > r_{\rm toe}+e_{\rm map}+m_{\rm safety}\)。PLY 手作業マージンを地図上判定へ置換。候補:距離変換レイヤ / 円内無効セル判定 / マスクのモルフォロジー膨張 | スナップ先が現在より手前(安全側)に寄る。到達距離が落ちる可能性 | 最小穴縁距離、最大 snap distance、到達距離の変更前後比較 |
-| 4 | `getNearestValidFoothold` + `QuadKD2::worldToFootIKWorldFrame`(既存) | 予測接地時の胴体姿勢から `p_f^{leg}=R_{wb}^{\top}(p_f-p_{hip})` を作り、IK 解の存在・関節角限界・左右跨ぎ排除で候補を絞る。**新規 IK は書かない** | 到達不能候補が除外される。候補が減り `found=false` が増える可能性 → Phase 2 の停止と連動 | 「到達不能(traversability 高いが IK 範囲外)」試験 |
+| 4 | `getNearestValidFoothold` + `QuadKD2::worldToFootIKWorldFrame`(既存) | 予測接地時の胴体姿勢から `p_f^{leg}=R_{wb}^{\top}(p_f-p_{hip})` を作り、IK 解の存在・関節角限界・左右跨ぎ排除で候補を絞る。**新規 IK は書かない** | 到達不能候補が除外される。候補が減り `status != FootholdStatus::VALID` が増える可能性 → Phase 2 の停止と連動 | 「到達不能(traversability 高いが IK 範囲外)」試験 |
 | 5 | `local_planner` / `local_footstep_planner` | `d_snap = ‖p*−p_nom‖` を記録し、大補正時に探索半径拡大だけでなく減速/刻み歩行/停止を選べる設計。閾値は**提案値**としてパラメータ化 | 通常時は不変。大補正時のみ | snap distance と速度/転倒の関係を実測 |
 | 6 | terrain map 受信部 | header stamp 保存、現在時刻との差、最大許容 age、frame 整合、未観測/危険セルの区別、更新停止時の減速・停止 | 通常時は不変。map 停止時のみ | 「古い Map(stamp 超過)」試験 |
 
@@ -561,9 +562,9 @@ MuJoCo 全体試験の前に、`getNearestValidFoothold`(+ 診断値算出)だ�
 | 平面 | 名目=平面中央 | ほぼ移動なし、`found=true` |
 | 穴中央 | 名目=穴中央(NaN) | 安全領域へ移動、`found=true` |
 | 穴の縁 | 名目=縁付近 | 必要安全距離を確保(Phase 3 後) |
-| 広い穴 | 安全セルが R 外 | `found=false` |
-| Map 外 | 名目が map 外 | `found=false` |
-| 未観測 | 候補が未観測セル | `found=false`(Phase 6 後) |
+| 広い穴 | 安全セルが R 外 | `status == NO_TRAVERSABLE_CANDIDATE` |
+| Map 外 | 名目が map 外 | `status == NOMINAL_OUTSIDE_MAP` |
+| 未観測 | 候補が未観測セル | `status`=未観測用の値(Phase 6 で追加) |
 | 到達不能 | traversability 高いが IK 範囲外 | `reachable=false`(Phase 4 後) |
 | 古い Map | stamp 超過 | 計画停止(Phase 6 後) |
 
