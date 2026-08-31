@@ -84,13 +84,15 @@ std::shared_ptr<rclcpp::Node> makeGo2Node(const std::string& name) {
   return std::make_shared<rclcpp::Node>(name, options);
 }
 
-LocalFootstepPlanner makePlanner(double edge_clearance = 0.0) {
+LocalFootstepPlanner makePlanner(double edge_clearance = 0.0,
+                                 double max_crossable_gap = 0.0) {
   auto node = std::make_shared<rclcpp::Node>("local_footstep_planner_test");
   LocalFootstepPlanner planner(node);
   planner.setTemporalParams(0.1, 4, 6, {0.5, 0.5, 0.5, 0.5},
                             {0.0, 0.5, 0.5, 0.0});
   planner.setSpatialParams(0.07, 0.1, 0.45, 0.03, nullptr, 0.25, 0.6,
-                           "traversability", 0.02, edge_clearance);
+                           "traversability", 0.02, edge_clearance,
+                           max_crossable_gap);
   const auto terrain_grid = makeTerrain();
   FastTerrainMap terrain;
   terrain.loadDataFromGridMap(terrain_grid);
@@ -157,6 +159,31 @@ grid_map::GridMap makeTerrainWithHole(double hole_radius) {
     map.at("smooth_normal_vectors_y", *it) = 0.0;
     map.at("smooth_normal_vectors_z", *it) = 1.0;
     map.at("traversability", *it) = in_hole ? 0.0 : 1.0;
+  }
+  return map;
+}
+
+// Flat z=0 terrain, traversable everywhere except a non-traversable band
+// x in [gap_lo, gap_hi] (a straight gap with solid ground on both sides).
+grid_map::GridMap makeTerrainWithGapBand(double gap_lo, double gap_hi) {
+  grid_map::GridMap map({"z_inpainted", "z_smooth", "normal_vectors_x",
+                         "normal_vectors_y", "normal_vectors_z",
+                         "smooth_normal_vectors_x", "smooth_normal_vectors_y",
+                         "smooth_normal_vectors_z", "traversability"});
+  map.setGeometry(grid_map::Length(6.0, 4.0), 0.1);
+  for (grid_map::GridMapIterator it(map); !it.isPastEnd(); ++it) {
+    grid_map::Position pos;
+    map.getPosition(*it, pos);
+    const bool in_gap = pos.x() >= gap_lo && pos.x() <= gap_hi;
+    map.at("z_inpainted", *it) = 0.0;
+    map.at("z_smooth", *it) = 0.0;
+    map.at("normal_vectors_x", *it) = 0.0;
+    map.at("normal_vectors_y", *it) = 0.0;
+    map.at("normal_vectors_z", *it) = 1.0;
+    map.at("smooth_normal_vectors_x", *it) = 0.0;
+    map.at("smooth_normal_vectors_y", *it) = 0.0;
+    map.at("smooth_normal_vectors_z", *it) = 1.0;
+    map.at("traversability", *it) = in_gap ? 0.0 : 1.0;
   }
   return map;
 }
@@ -454,6 +481,39 @@ TEST(LocalFootstepPlannerTest, EdgeClearanceLeavesInteriorAndDisabledCaseValid) 
   const FootholdResult off = off_planner.getNearestValidFootholdResult(
       Eigen::Vector3d(0.65, 0.0, 0.0), Eigen::Vector3d(0.65, 0.0, 0.0));
   EXPECT_EQ(off.status, FootholdStatus::VALID);
+}
+
+// Phase 3 crossability: a foothold on the near lip of a NARROW gap (solid
+// ground resumes within max_crossable_gap ahead) is put back to VALID.
+TEST(LocalFootstepPlannerTest, EdgeTooCloseDowngradedToValidForCrossableGap) {
+  LocalFootstepPlanner planner = makePlanner(0.15, 0.6);
+  const auto grid = makeTerrainWithGapBand(0.0, 0.3);  // 0.3 m gap in x
+  FastTerrainMap terrain;
+  terrain.loadDataFromGridMap(grid);
+  planner.updateMap(grid);
+  planner.updateMap(terrain);
+
+  // Just before the gap: traversable, but within 0.15 m of it.
+  const Eigen::Vector3d nominal(-0.05, 0.0, 0.0);
+  const FootholdResult r =
+      planner.getNearestValidFootholdResult(nominal, nominal);
+  EXPECT_EQ(r.status, FootholdStatus::VALID);
+}
+
+// ... but a foothold on the near lip of a WIDE gap (no far side within reach)
+// keeps EDGE_TOO_CLOSE and so triggers the safe-stop.
+TEST(LocalFootstepPlannerTest, EdgeTooCloseKeptForUncrossableGap) {
+  LocalFootstepPlanner planner = makePlanner(0.15, 0.6);
+  const auto grid = makeTerrainWithGapBand(0.0, 1.2);  // 1.2 m gap in x
+  FastTerrainMap terrain;
+  terrain.loadDataFromGridMap(grid);
+  planner.updateMap(grid);
+  planner.updateMap(terrain);
+
+  const Eigen::Vector3d nominal(-0.05, 0.0, 0.0);
+  const FootholdResult r =
+      planner.getNearestValidFootholdResult(nominal, nominal);
+  EXPECT_EQ(r.status, FootholdStatus::EDGE_TOO_CLOSE);
 }
 
 TEST(LocalFootstepPlannerTest, WelzlMinimumCircleHandlesBoundaryCases) {
