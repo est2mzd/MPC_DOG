@@ -59,3 +59,6 @@ notebook_legged/_*
 artifacts/logs/quadsdk_step03_1m/
 artifacts/logs/quadsdk_step04_1m/
 artifacts/logs/quadsdk_gap_1m/
+artifacts/logs/quadsdk_step03_1m_gbpl/
+artifacts/logs/quadsdk_step04_1m_gbpl/
+artifacts/logs/quadsdk_gbpl_stockgap/
