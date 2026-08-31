@@ -33,18 +33,23 @@
 | Terrain Map | `quad_utils/config/filter_chain.yaml` | 全 18 フィルタ |
 | | `quad_utils/src/mjcf_to_grid_map_converter.cpp` | `meshToGridMap`(PLY→grid_map、`GridMapPclConverter`) |
 | | `quad_utils/src/fast_terrain_map.cpp` | `loadDataFromGridMap`(158-)、`getGroundHeight`(255-)、`getSurfaceNormalFiltered`(345-) |
-| Foot Placement | `local_planner/src/local_planner.cpp` | `initLocalFootstepPlanner`(157-)、`terrainMapCallback`(208-)、`getReference`(275-)、`computeLocalPlan`(514-) |
-| | `local_planner/src/local_footstep_planner.cpp` | `setTemporalParams`(8-)、`computeContactSchedule`(84-)、`cubicHermiteSpline`(121-)、`computeFootPlan`(160-)、`getNearestValidFoothold`(523-)、`computeSwingApex`(685-) |
+| Foot Placement | `local_planner/src/local_planner.cpp` | `initLocalFootstepPlanner`(157-)、`terrainMapCallback`(208-)、`getReference`(275-)、`computeLocalPlan`(514-)、`spin`(658-) |
+| | `local_planner/src/local_footstep_planner.cpp` | `setTemporalParams`(8-)、`computeContactSchedule`(84-)、`cubicHermiteSpline`(121-)、`computeFootPlan`(160-)、`getNearestValidFoothold`(523-)、`computeSwingApex`(685-)、`getFootPositionsBodyFrame`(61-) |
 | | `local_planner/include/local_planner/local_footstep_planner.hpp` | `getTerrainHeight`(188-)、`getTerrainSlope`(196-, 212-) |
 | | `local_planner/config/local_planner.yaml`、`quad_utils/config/go2.yaml` | gait / NMPC パラメータ |
-| NMPC | `nmpc_controller/src/nmpc_controller.cpp` | `NMPCController`(ctor、`enable_mixed_complexity_` の go2 無効化 206)、`computeLegPlan`(278-) |
-| | `nmpc_controller/src/quad_nlp.cpp` | `get_bounds_info`(236-)、`eval_f`(478-)、`eval_grad_f`、`eval_g`(≈545-) |
+| NMPC | `nmpc_controller/src/nmpc_controller.cpp` | `NMPCController`(ctor、`friction_coefficient` の読み込み 57、`enable_mixed_complexity_` の go2 無効化 206)、`computeLegPlan`(278-) |
+| | `nmpc_controller/src/quad_nlp.cpp` | `get_bounds_info`(236-)、`eval_f`(478-)、`eval_grad_f`、`eval_g`(≈545-)、`update_solver`(全体) |
 | | `nmpc_controller/scripts/dynamicsModel.m` | 全 139 行(離散 EOM + 摩擦錐の CasADi 生成) |
-| 下流 | `robot_driver/src/controllers/inverse_dynamics_controller.cpp` | `computeLegCommandArray`(8-) |
+| | `quad_utils/launch/planning.py` | `launch_local_planner`(196-216)のパラメータファイル読み込み順 |
+| 下流 | `robot_driver/src/controllers/inverse_dynamics_controller.cpp` | `computeLegCommandArray`(8-72)= plan age 判定 + stale bail |
+| | `robot_driver/src/robot_driver.cpp` | `computeLegCommandArray()==false` 時の stand fallback(≈ 795-830)、`leg_controller_` 初期化(273-328) |
+| | `robot_driver/src/estimators/comp_filter_estimator.cpp` | `body.twist.angular = imu.angular_velocity`(45、"IMU is in body frame" 61) |
 | | `quad_utils/include/quad_utils/quad_kd2.hpp` | FK/IK 在庫(`worldToFootIKWorldFrame` 317、`legbaseToFootIKLegbaseFrame` 330) |
 
-**未読(必要時に追加で読む)**:`quad_nlp.cpp` の `update_solver` / adaptive-complexity、
-`quad_kd2.cpp` の IK 実装本体、`robot_driver` の joint_controller。
+**未読(必要時に追加で読む)**:`quad_nlp.cpp` の adaptive-complexity 分岐、
+`quad_kd2.cpp` の IK 実装本体(FK/IK の宣言と bool 戻り値は確認済み、数値解法の中身は未読)、
+`robot_driver` の joint_controller、MuJoCo ハーネスで使う推定器
+(`state/ground_truth` か `mujoco_estimator` か)の並進速度フレーム。
 
 ---
 
@@ -61,9 +66,9 @@
 | 7 | toe 半径は水平安全距離の判定に使われない | コード事実 | `toe_radius_` の使用箇所:`getNearestValidFoothold:594` `foot_position_best.z() = z_inpainted + toe_radius_`(**z のみ**)、`local_planner.cpp:544-549` `grf_positions_*.col(3i+2) -= toe_radius_`(GRF 点の z 補正)。水平判定に登場しない | 一致 | `toe_radius: 0.022`(`go2.yaml`) |
 | 8 | 有効足場がない場合、名目足場を返す | コード事実 | `getNearestValidFoothold:526` `foot_position_best = foot_position`(初期化=nominal)。`568-573` `best_kin_cost==max` のとき `RCLCPP_WARN_THROTTLE("No valid foothold found …, returning nominal")` して `return foot_position_best`(=nominal) | 一致 | この WARN_THROTTLE は第1引数 `1e9` ns → ミリ秒扱いで sim 時刻が小さいと**実質出ない**(§4.3 補足)。成功/失敗が下流へ伝わらない ← Phase 1/2 の対象 |
 | 9 | Go2 の NMPC では足場位置を最適化しない | コード事実 | `dynamicsModel.m:40-41` `p=[dt; mu; feet_location]`(**パラメータ**)、`w=[x0; u; x1]`(決定変数)。`quad_nlp.cpp:eval_g` は `pk.segment(14,12)=foot_pos_world_.row(i+1)` を CasADi 関数へ**パラメータ渡し**。`nmpc_controller.cpp:206` `if (robot_ns_ != "spirit") enable_mixed_complexity_ = false` → go2 は 12 状態 simple model のみ | 一致 | complex/feet モデル(spirit)は足位置を状態に持つ(`go2.yaml` `feet:` ブロック)が go2 では未使用 |
-| 10 | Go2 の NMPC には脚の IK 可到達制約がない | コード事実 | `dynamicsModel.m:43` `g = [EOM; friction]` のみ。`quad_nlp.cpp` に関節角・足到達性の制約なし。`get_bounds_info`(236-284)は入力境界(接触脚 `f_z∈[10,150]`、遊脚 `f=0`)+ EOM 等式 + 摩擦錐のみ | 一致 | §7.1(資料の「脚可到達制約が破れた」記述の訂正)へ |
-| 11 | `horizon_length > period_` はコード上の必須条件か | コード事実 | `computeContactSchedule:99` `nominal_contact_schedule_[(i + phase) % period_]`(i∈[0,horizon_length_))。剰余ラップするので **horizon と period_ の大小に必須条件はない**。`computeFutureBodyPlan`(`local_footstep_planner.cpp:197-200, 349-352`)は stance 窓がホライズンを超える場合に胴体プランを外挿するもので、period_ とは独立 | **不一致(要分離)** | 「26→40 で改善」は実験事実。「horizon>period_ が必須」はコード上の事実ではない(§7.2) |
-| 12 | 実センサの穴が必ず NaN になる保証があるか | コード事実 | この repo に LiDAR/深度カメラ → `z` レイヤの処理は**無い**。`mjcf_to_grid_map_converter.cpp` が静的 PLY を `GridMapPclConverter::addLayerFromPolygonMesh` でラスタライズするのみ。面が無いセルが NaN になるのは PLY 由来 | **未確認** | no-return / occlusion / 未観測 / 期限切れの扱いは未検証(§7.3) |
+| 10 | Go2 の NMPC には脚の IK 可到達制約がない | コード事実 | `dynamicsModel.m:43` `g = [EOM; friction]` のみ。`quad_nlp.cpp` に関節角・足到達性の制約なし。`get_bounds_info`(236-284)は入力境界(接触脚 `f_z∈[10,150]`、遊脚 `f=0`)+ EOM 等式 + 摩擦錐のみ | 一致 | §6.1(資料の「脚可到達制約が破れた」記述の訂正)へ |
+| 11 | `horizon_length > period_` はコード上の必須条件か | コード事実 | `computeContactSchedule:99` `nominal_contact_schedule_[(i + phase) % period_]`(i∈[0,horizon_length_))。剰余ラップするので **horizon と period_ の大小に必須条件はない**。`computeFutureBodyPlan`(`local_footstep_planner.cpp:197-200, 349-352`)は stance 窓がホライズンを超える場合に胴体プランを外挿するもので、period_ とは独立 | **不一致(要分離)** | 「26→40 で改善」は実験事実。「horizon>period_ が必須」はコード上の事実ではない(§6.2) |
+| 12 | 実センサの穴が必ず NaN になる保証があるか | コード事実 | この repo に LiDAR/深度カメラ → `z` レイヤの処理は**無い**。`mjcf_to_grid_map_converter.cpp` が静的 PLY を `GridMapPclConverter::addLayerFromPolygonMesh` でラスタライズするのみ。面が無いセルが NaN になるのは PLY 由来 | **未確認** | no-return / occlusion / 未観測 / 期限切れの扱いは未検証(§6.3) |
 | A | `twist` + trot → crawl で深さ1m・幅0.3m の穴を複数連続で通過(0.15/0.3/0.5 m/s、5〜6本) | 実験事実 | ― | ― | `agent_reports/steps/step_03_04_1m_quadsdk_gap_crossing.md` §5。CSV+GIF 確認済み |
 | B | `period 0.9` / `duty [0.75]×4` / `phase [0,0.75,0.5,0.25]` / `horizon_length 40` / `foothold_search_radius 0.7` / `ground_clearance 0.1` | 実験事実(設定値) | `go2.yaml` `local_footstep_planner:`、`local_planner.yaml` `horizon_length` | 一致 | 現在の main のコミット値と一致 |
 | C | 地形 PLY の穴を物理穴より左右 0.05 m 広く。穴部の生 `z`=NaN、穴上 `traversability`=NaN | 実験事実 | PLY 生成:`src/trial/assets/gen_quadsdk_gap_world.py`。NaN は実行ログの `[DIAG] gnvf … trav=nan` で確認 | 一致 | §3 で伝播を詳述 |
@@ -106,7 +111,7 @@ raw マップ `/mapping/terrain_map_raw` が `filter_chain.yaml` を通って
 | 15 | `..._upper_threshold` | Threshold | `traversability`(上限 1、`set_to 1`) | 1 で頭打ち |
 | 16 | `delete` | Deletion | `z_finite`,`H`,`H_filtered` を削除 | 中間層の掃除 |
 | 17 | `duplicate` | Duplication | `traversability` → `traversability_mask` | 複製 |
-| 18 | `..._mask_lower_threshold` | Threshold | `traversability_mask`(下限 **0.5**、`set_to 0`) | 0.5 未満を 0 に(footstep planner の `foothold_obj_threshold` に一致させるコメントあり) |
+| 18 | `..._mask_lower_threshold` | Threshold | `traversability_mask`(下限 **0.5**、`set_to 0`) | 0.5 未満を 0 に。コメントに「`/local_footstep_planner/foothold_obj_threshold` に一致させること」とあるが、実際の値は **0.5 ≠ 0.6**(§2.5) |
 
 ### 2.3 NaN 伝播(式だけで断定せず、実行ログで確認したこと)
 
@@ -135,6 +140,19 @@ raw マップ `/mapping/terrain_map_raw` が `filter_chain.yaml` を通って
 → 足場計画は穴を見る。**胴体参照は穴を見ない(埋めた地形を見る)。**
 凸条を完全に水平・同一高さの平面にすると、`getTerrainSlope` が偽のピッチ指令を
 出さない(実験事実、gbpl doc §3.2 / gap_crossing doc §3.2)。
+
+### 2.5 `traversability_mask` の閾値 0.5 と `foothold_obj_threshold` 0.6 の不一致
+
+- **コード事実**:`filter_chain.yaml` フィルタ 18 は `traversability_mask` の下限を
+  **0.5** にし、コメントで「footstep planner の `foothold_obj_threshold` に
+  一致させること」と書いている。だが `local_planner.yaml` の
+  `foothold_obj_threshold` は **0.6**(§3.3)。→ **不一致**。
+- **現挙動への直接影響はない**:`getNearestValidFoothold` が読むのは
+  `obj_fun_layer_ = traversability`(`local_planner.yaml` `obj_fun_layer: traversability`)
+  であり、`traversability_mask` **ではない**。しきい値比較(`> 0.6`)も
+  この関数の中で行う。`traversability_mask` レイヤは足場選択の経路では使われない。
+- したがってこの不一致は「潜在的な設定齟齬(将来 `traversability_mask` を使う
+  コードを足すと 0.5 で切られてしまう)」であり、今の穴対応の挙動は変えない。
 
 ---
 
@@ -184,17 +202,33 @@ raw マップ `/mapping/terrain_map_raw` が `filter_chain.yaml` を通って
    c_{\mathrm{centrifugal}}=\frac{h}{g}\,\big(v_{b}(i)\times\omega_{\mathrm{ref}}(i)\big),\qquad
    c_{\mathrm{vel}}=\sqrt{\tfrac{h}{g}}\,\big(v_{b}(i)-v_{\mathrm{ref}}(i)\big)
    \]
-   `v_b = body_plan.block<1,3>(i,6)`(**現在**の胴体並進速度)、
-   `v_ref = ref_body_plan.block<1,3>(i,6)`(**参照**速度)、
-   `ω_ref = ref_body_plan.block<1,3>(i,9)`。すべて world 系。
+   `v_b = body_plan.block<1,3>(i,6)`(**現在**の胴体並進速度、cols 6-8)、
+   `v_ref = ref_body_plan.block<1,3>(i,6)`(**参照**並進速度)、
+   `ω_ref = ref_body_plan.block<1,3>(i,9)`(参照角速度、cols 9-11)。
+   **座標系(要注意)**:`dynamicsModel.m:66` は NMPC 状態を
+   「並進速度 `p_dot` = **world 系**、角速度 `omega` = **body 系**」と定義している
+   (`feet_location` は「foot-to-body ベクトルの **world 系**」)。`body_plan_` /
+   `ref_body_plan_` は NMPC の状態規約に従うので、cols 6-8 = 並進速度 world、
+   cols 9-11 = 角速度 **body**。よって `centrifugal = h/g·(v_b × ω_ref)` は
+   world 並進 × body 角速度 の混在積になる。以前の「すべて world 系」は誤り。
+   なお **RobotState → `current_state_`(`bodyStateMsgToEigen`)の並進速度が
+   どのフレームか**は本レポートでは未確定。角速度は
+   `comp_filter_estimator.cpp:45,61` で IMU=body 系と分かるが、MuJoCo ハーネスの
+   推定器(`state/ground_truth` か `mujoco_estimator` か)と並進速度フレームは
+   未追跡 ← **未確認**。
 3. **名目足場**(249-251):
    \[
    p_{\mathrm{nom}} = p_{\mathrm{hip,midstance}} + c_{\mathrm{centrifugal}} + c_{\mathrm{vel}}
    \]
    これは Raibert 型。地形は 2. の `h`(埋めた地形の高さ)にしか入らない。
 4. z の暫定値(264-269):`p_nom.z = z_inpainted(closest_in_map(p_nom.xy)) + toe_radius`。
-5. map 外なら(255-261)`RCLCPP_WARN("Foot position is outside the map …")` して
-   **その接地はスキップ**(`continue`)。
+5. **map 外判定は `getNearestValidFoothold` の手前で行われる**(`computeFootPlan:255-261`):
+   `if (!terrain_grid_.isInside(foot_position_grid_map)) { RCLCPP_WARN("Foot
+   position is outside the map …"); continue; }`。この `continue` で
+   **その接地イベントの処理自体を打ち切り**、`getNearestValidFoothold` は
+   呼ばれない。→ **`getNearestValidFoothold` の戻り値(将来の `FootholdResult`)
+   だけでは map 外を `found=false` として表現できない。** map 外の失敗伝播は
+   この `continue` 地点に別途足す必要がある(§8 Phase 2 の注記)。
 
 ### 3.3 地図による足場補正(`getNearestValidFoothold`、523-596)
 
@@ -231,7 +265,7 @@ p^{*}=\arg\min_{p\in\mathcal{P}}\Big[\ \|p-p_{\mathrm{nom}}\| \;+\; 0.5\,\|p-p_{
 |---|---|---|---|
 | `contact_schedule_` | `vector<vector<bool>>` [horizon_length_][4] | ― | `computeContactSchedule` |
 | `foot_positions_world_` | `Eigen::MatrixXd` N×12(脚順 FL,BL,FR,BR、各 xyz) | world [m] | `computeFootPlan` |
-| `foot_positions_body_` | N×12 | body [m] | `getFootPositionsBodyFrame`(`local_planner.cpp:540`)= `foot_world − body_pos` |
+| `foot_positions_body_` | N×12 | **胴体原点からの相対ベクトルを world 軸で表現** [m] | `getFootPositionsBodyFrame`(`local_footstep_planner.cpp:61-69`)= `foot_positions_world − body_plan.segment<3>(0)`。**姿勢回転(`R_wb^⊤`)を掛けていない**ので真の body フレームではない。名前が紛らわしい |
 | `foot_velocities_world_` | N×12 | world [m/s] | `computeFootPlan`(swing 補間の微分) |
 | `foot_accelerations_world_` | N×12 | world [m/s²] | `computeFootPlan` |
 | `grf_positions_body_/world_` | N×12 | body/world [m] | `computeLocalPlan`:`foot_positions_* − (0,0,toe_radius)` を NMPC へ |
@@ -266,6 +300,12 @@ p^{*}=\arg\min_{p\in\mathcal{P}}\Big[\ \|p-p_{\mathrm{nom}}\| \;+\; 0.5\,\|p-p_{
 `computeLegPlan`(`nmpc_controller.cpp:278-`):
 `mynlp_->foot_pos_body_ = -foot_positions_body`、`mynlp_->foot_pos_world_ = foot_positions_world`
 を**メンバ行列にコピー**(288-289)してから `update_solver` → IPOPT 求解。
+`foot_positions_body`(= `foot_world − body_pos`、world 軸)を **符号反転**して
+`foot_pos_body_ = body_pos − foot_world` としている。`dynamicsModel.m:24,67` の
+`feet_location` コメント「Foot to body vectors in **world frame**」と一致
+(= 足先から胴体原点へ向かう world 軸ベクトル)。`eval_g` では
+`pk.segment(2,12) = foot_pos_body_.row(i+1)`、`pk.segment(14,12) = foot_pos_world_.row(i+1)`
+をパラメータ渡し。
 Go2 では `enable_mixed_complexity_ = false`(206)→ 全ホライズンで simple model。
 
 ### 4.2 Simple model の次元(`dynamicsModel.m`、`go2.yaml` `nmpc_controller.body:`)
@@ -309,7 +349,19 @@ u_k=\begin{bmatrix}f_{FL} & f_{BL} & f_{FR} & f_{BR}\end{bmatrix}^{\!\top}\in\ma
   \begin{bmatrix}1&0&-\mu\\-1&0&-\mu\\0&1&-\mu\\0&-1&-\mu\end{bmatrix}f_j \le 0
   \quad\Longleftrightarrow\quad |f_{j,x}|\le\mu f_{j,z},\ \ |f_{j,y}|\le\mu f_{j,z}
   \]
-  \(\mu\)=`friction_coefficient: 0.3`(`nmpc_controller.yaml`)。**摩擦ピラミッド**。
+  **実効 \(\mu\) = 0.6**(下記)。**摩擦ピラミッド**。
+
+  - `nmpc_controller.cpp:57` は `loadROSParam(node_, "nmpc_controller.friction_coefficient", mu)`
+    で読む。この値は 2 か所で定義:`nmpc_controller.yaml` に **0.3**、
+    `go2.yaml`(`nmpc_controller:` ブロック直下、6 スペース字下げ)に **0.6**。
+  - `planning.py:201-204` の `local_planner` ノードの `parameters=[…]` は
+    `[local_planner.yaml, nmpc_controller.yaml, local_planner_topics.yaml,
+    go2.yaml(robot_specific), {dict}]` の順。**ROS 2 launch は後勝ち**なので
+    `go2.yaml`(4 番目)が `nmpc_controller.yaml`(2 番目)を上書きする。
+  - → **実効値は 0.6**(nmpc_controller.yaml の 0.3 ではない)。
+    `pk[1] = mu_`(`quad_nlp.cpp:eval_g`)として CasADi の摩擦錐へ渡る。
+  - **要ライブ確認**:`ros2 param get /robot_1/local_planner nmpc_controller.friction_coefficient`
+    で実行時の値を突き合わせること(本レポートは launch 順からの推定)。
 - 状態境界(`go2.yaml` `body:` `x_lb/x_ub`):\(p_{b,z}\ge 0\)、
   roll・pitch \(\in[-\pi,\pi]\)(hard)、yaw \(\in[-10,10]\)、他は自由。
   `x_lb_soft/x_ub_soft` も同値でスラック緩和対象。
@@ -336,20 +388,36 @@ J=\sum_{k=0}^{N-2}\Big[\tfrac12 (x_{k+1}-x_{k+1}^{\mathrm{ref}})^{\!\top}Q_k(x_{
 - **`traversability` は `quad_nlp.cpp` に一切現れない**(検索結果 0 件)。
   Go2 simple model の目的関数・制約は地形通行性に依存しない。
 
-### 4.6 下流(`inverse_dynamics_controller.cpp:computeLegCommandArray` 8-181)
+### 4.6 下流(`inverse_dynamics_controller.cpp` + `robot_driver.cpp`)
 
-- 入力:`last_local_plan_msg_`(NMPC の `body_plan_` + `grf_plan_`)、`ref_state_msg_`。
-  → `ref_body_state`(12)、`grf_array`(12)、`ref_foot_acceleration`、`contact_mode`。
+**plan の鮮度ガード**(`inverse_dynamics_controller.cpp:12-15`):
+`if (last_local_plan_msg_ == NULL || (now − header.stamp).seconds() >= 0.1) return false;`。
+さらに `t_now` が plan の `[states.front, states.back]` 時刻窓の外なら
+`RCLCPP_ERROR("ID node couldn't find the correct ref state!")`(44-68)して `return false`。
+
+**`computeLegCommandArray()==false` 時のフォールバック**(`robot_driver.cpp` ≈ 795-830):
+全脚の `motor_commands` を **`stand_joint_angles_` への PD 制御**へ差し替える
+(`loadMotorCommandMsg(stand_joint_angles_[j], 0, 0, stand_kp_[j], stand_kd_[j], …)`)。
+go2:`stand_joint_angles [0,0.8,-1.5]`、`stand_kp [60,60,60]`、`stand_kd [2,2,2]`。
+
+**plan が新しく有効な場合のみ**(`computeLegCommandArray` 本体、16-181):
+- 入力:`last_local_plan_msg_`(NMPC の `body_plan_` + `grf_plan_`)を時刻補間 →
+  `ref_body_state`、`grf_array`、`ref_foot_acceleration`、`contact_mode`。
 - `grf_array` は指数フィルタ(`grf_exp_filter_const_`)。
 - **接地脚**:`quadKD_->computeInverseDynamics(ref_foot_acceleration, grf_array,
   contact_mode, tau_array)` → フィードフォワード関節トルク。`kp/kd = stance_kp_/stance_kd_`。
-- **遊脚**:Cartesian PD
-  `swing_cart_fb = swing_kp∘(p_foot^{ref}−p_foot) + swing_kd∘(ṗ_foot^{ref}−ṗ_foot)`、
+- **遊脚**:Cartesian PD `swing_cart_fb = swing_kp∘Δp_foot + swing_kd∘Δṗ_foot`、
   `J^{\top}` で関節トルクへ(143-146)。`kp/kd = swing_kp_/swing_kd_`。
-- 出力:`leg_command.motor_commands[j]` = `torque_ff` + `kp,kd`(→ joint_controller が
-  `τ = torque_ff + kp(q^{ref}−q) + kd(\dot q^{ref}−\dot q)`)。
-- **この段は足場を選ばない・IK 可到達性を見ない。** NMPC が出した GRF を
-  そのまま(飽和していても)トルクへ変換する。
+- 出力:`leg_command.motor_commands[j]` = `torque_ff` + `kp,kd`。
+
+**したがって「NMPC 失敗後に壊れた GRF がそのままトルク化される」は誤り。** 分けて扱う:
+
+| 事象 | plan の状態 | 下流の挙動 |
+|---|---|---|
+| **(a) NMPC 求解失敗が継続**(`computeLocalPlan()` が false) | 新しい `local_plan` を publish しない → plan が古くなる | 0.1 s 以内に ID コントローラが `false` → **robot_driver が `stand_joint_angles` へ PD ホールド**(安全側)。`local_planner::spin` は `consecutive_failures_ >= failure_threshold_` で `planner_failed` を publish |
+| **(b) NMPC は求解成功だが解の品質が悪い**(cost 大、スラック大、GRF が `f_z=150` に飽和) | plan は新しく publish され、時刻窓内 | ID コントローラが**その GRF をそのままトルク化**(飽和 GRF → 飽和トルク、effort 超過警告)。run7/run8 の**転倒はこの (b) の区間**で起きる。(a) の stand ホールドは既に反転した後に始まる(CSV:`plan_age_s` が 1〜2 s に伸びるのは転倒後) |
+
+- **この段は足場を選ばない・IK 可到達性を見ない。**
 
 ---
 
@@ -361,7 +429,7 @@ J=\sum_{k=0}^{N-2}\Big[\tfrac12 (x_{k+1}-x_{k+1}^{\mathrm{ref}})^{\!\top}Q_k(x_{
 | Contact Schedule | gait 設定(`period`/`duty`/`phase`) | 各脚の接地/遊脚時刻(固定表の tiling) | いつ足を上げるか決める。**twist では地形適応しない** |
 | Footstep Planner | 胴体予測、`terrain_grid_`、前回足場 | 着地点 `foot_positions_world_`、足先軌道(x/y 三次 Hermite、z 上昇/下降) | Raibert 名目 → `getNearestValidFoothold` で穴上(NaN)を避けて平面へスナップ |
 | NMPC(Go2 simple) | 胴体参照 `ref_body_plan_`、**固定足場** `foot_pos_*`、接触時刻、`ref_ground_height_` | 胴体状態列 `body_plan_`、GRF 列 `grf_plan_` | 与えられた足場で EOM + 摩擦 + 状態境界を満たす胴体軌道と GRF を最適化。足場は最適化しない |
-| Robot Driver(inverse_dynamics) | NMPC の胴体・GRF 計画、足先軌道 | 関節 `torque_ff` + `kp/kd` | 計画を MuJoCo/実機で実行する。足場選択・IK 可到達性判定はしない |
+| Robot Driver(inverse_dynamics) | NMPC の胴体・GRF 計画(0.1 s 以内に限る)、足先軌道 | 関節 `torque_ff` + `kp/kd` | 計画を MuJoCo/実機で実行する。**plan が 0.1 s 以上古い/時刻窓外なら `stand_joint_angles` へ PD ホールド**。足場選択・IK 可到達性判定はしない |
 
 > **断定(指示書 16 節)**:現在の Go2 構成では、MPC が穴を避けて足場を最適化して
 > いるのではない。**Local Footstep Planner が地図から足場を決定し、NMPC はその
@@ -375,17 +443,25 @@ J=\sum_{k=0}^{N-2}\Big[\tfrac12 (x_{k+1}-x_{k+1}^{\mathrm{ref}})^{\!\top}Q_k(x_{
 
 - **誤**(`agent_reports/steps/step_03_04_1m_quadsdk_gbpl.md` §3.4 の旧記述
   「接地脚が脚の可到達域の外 → セントロイダル NMPC の運動学・GRF 制約が破れ」)。
-- **コード事実**:Go2 simple model の制約 `g` は **EOM(Backward Euler)+ 摩擦錐のみ**
-  (`dynamicsModel.m:43`)。関節角・足位置・IK 可到達性の制約は**存在しない**。
-- **正しい整理**:遠い足場は
-  1. GRF のモーメントアーム \((p_{f,j}-p_b)\) を大きく変える、
-  2. その足場で `ref_body_plan_` を満たす GRF 配分が、\(f_z\in[10,150]\) と
-     摩擦錐の内側に**存在しにくくなる** → スラック(`panic`/`constraint_panic`)が
-     大きく立ち、目的関数(`plan_nmpc_cost`)が増大、反復・計算時間が増える、
-  3. 破れた/陳腐化した GRF を後段の逆動力学がそのままトルク化 → 追従できない。
-  → 「**NMPC 内の脚可到達制約違反**」とは言えない。「動力学的整合性の悪化 +
-  スラック増大 + 非収束 + 後段 ID の追従不能」が正しい。
-  gbpl doc の該当箇所は本レポート確認後に訂正する(Phase 0 扱い、コード変更なし)。
+- **コード事実**(確定):Go2 simple model の制約 `g` は
+  **EOM(Backward Euler)+ 摩擦錐のみ**(`dynamicsModel.m:43`、`g_dim: 28`)。
+  関節角・足位置・IK 可到達性の制約は**存在しない**。
+  → 「**NMPC 内の脚可到達制約違反**」という表現は**誤り**。この点だけは断定できる。
+- **推測**(未確定。因果の裏取りには下記のログ収集が必要):遠い足場が
+  1. GRF のモーメントアーム \((p_{f,j}-p_b)\) を変える、
+  2. その足場で `ref_body_plan_` を満たす GRF 配分が \(f_z\in[10,150]\) と
+     摩擦錐(実効 μ=0.6)の内側に取りにくくなり、スラック
+     (`panic`/`constraint_panic`)が立って `plan_nmpc_cost` が増える、
+  3. 反復・計算時間が増えて `compute_time` が replan 予算を超え、非収束・停滞、
+  という機序は**辻褄は合うが未検証**。CSV には `plan_nmpc_cost` の総和しか
+  無く、**どの項が増えたか(トラッキング項 vs スラック項)**、
+  **制約違反量**、**IPOPT の終了ステータス**を記録していない。
+- **確定に必要なログ**(Phase 1 と同時に足す。コード変更は診断のみ):
+  `eval_f` のトラッキング項/入力項/`panic`/`constraint_panic` の内訳、
+  `get_slack_state_var` / `get_slack_constraint_var` の値、
+  最大制約違反、IPOPT の `status` / `iter_count` / `obj_value`。
+- gbpl doc の該当記述は「脚可到達制約が破れた」を削除し、上を
+  「コード事実」と「推測(要ログ)」に分けて書き直す(Phase 0、コード変更なし)。
 
 ### 6.2 「`horizon_length` は `period_` より大きい必要がある」→ **要分離**
 
@@ -424,10 +500,16 @@ J=\sum_{k=0}^{N-2}\Big[\tfrac12 (x_{k+1}-x_{k+1}^{\mathrm{ref}})^{\!\top}Q_k(x_{
 - `reference="twist"` でも terrain map による足場補正は動作する(§1-2、§2.4)。
 - gait は地形から自動変更されない(固定表、§3.1)。
 - Go2 の simple NMPC は足場を最適化しない。足場は GRF のモーメントアーム
-  パラメータ(§4.3)。
+  パラメータ(`dynamicsModel.m` の `feet_location`、§4.3)。
 - 有効足場がない場合、現コードは(実質出ない)警告後に**名目足場を返す**(§3.3)。
+  ただし **map 外は `getNearestValidFoothold` 手前の `continue` で別処理**(§3.2-5)。
 - 足場選択には足裏面積・縁距離・IK 可到達性・map 鮮度が含まれない(§3.3)。
 - NMPC(Go2 simple)の目的関数・制約に `traversability` は現れない(§4.5)。
+- NMPC 求解失敗が続くと下流は `stand_joint_angles` へ PD ホールドする
+  (壊れた GRF を出し続けるのではない、§4.6)。転倒は「求解成功だが低品質な解」
+  を実行する区間で起きる(§4.6 (b)、§6.1)。
+- 実効摩擦係数 μ は `go2.yaml` の 0.6 が `nmpc_controller.yaml` の 0.3 を
+  上書きしている(launch 順、§4.4。ライブ `ros2 param get` で最終確認が要)。
 
 ### まだ確認できていないこと
 
@@ -436,6 +518,10 @@ J=\sum_{k=0}^{N-2}\Big[\tfrac12 (x_{k+1}-x_{k+1}^{\mathrm{ref}})^{\!\top}Q_k(x_{
   0.05 m 広げているだけ)。
 - `foothold_search_radius = 0.7` の候補が Go2 の脚で到達可能であること。
 - 有効足場がない状況で安全に停止できること。
+- **遠い足場 → NMPC cost 増大 → 非収束 の因果**(§6.1。cost 内訳・slack・
+  制約違反・IPOPT status を記録するまで推測)。
+- **RobotState → NMPC 状態の並進速度フレーム**(§3.2。角速度は body 系と確認済み)。
+- 実効 μ のライブ値(`ros2 param get`)。
 
 ### 次の最優先対策(実装は本レポート確認後)
 
@@ -450,8 +536,8 @@ J=\sum_{k=0}^{N-2}\Big[\tfrac12 (x_{k+1}-x_{k+1}^{\mathrm{ref}})^{\!\top}Q_k(x_{
 | 順番 | 主対象 | 目的 | 既存挙動への影響(想定) | 検証 |
 |---|---|---|---|---|
 | 0 | `agent_reports/steps/step_03_04_1m_quadsdk_gbpl.md` ほか | §6 の 3 点(可到達制約 / horizon>period_ / 実センサ NaN)の記述訂正。**コード変更なし** | なし(doc のみ) | 差分レビュー |
-| 1 | `local_footstep_planner.{hpp,cpp}` `getNearestValidFoothold` | 戻り値を `FootholdResult{position, found, traversability, snap_distance, edge_clearance, reachable}` 相当へ。まず**診断値の算出と DIAG 出力のみ**、呼び出し側は `position` のみ使用 | なし(挙動不変、ログ追加) | §12 の単体試験(平面/穴中央/縁/広い穴/map 外) |
-| 2 | 同上 + `local_planner.cpp` | `found==false` を下流へ伝播。新しい一歩を確定しない / `cmd_vel`→0 / 全脚接地可なら STAND / `planner_failed` へ理由通知 | 有効足場がある通常時は不変。無い時のみ挙動変化(現在は名目足場で継続 → 危険) | 「広い穴」「map 外」で停止すること + 回帰(§13) |
+| 1 | `local_footstep_planner.{hpp,cpp}` `getNearestValidFoothold` | 戻り値を `FootholdResult{position, found, traversability, snap_distance, edge_clearance, reachable}` 相当へ。まず**診断値の算出と DIAG 出力のみ**、呼び出し側は `position` のみ使用。**§6.1 の NMPC 内訳ログ(cost 項別・slack・制約違反・IPOPT status)も同時に追加**(診断のみ) | なし(挙動不変、ログ追加) | §9 の単体試験(平面/穴中央/縁/広い穴/map 外) |
+| 2 | `getNearestValidFoothold` + **`computeFootPlan` の map 外 `continue` 地点**(`local_footstep_planner.cpp:255-261`)+ `local_planner.cpp` | `found==false` を下流へ伝播。**map 外は `getNearestValidFoothold` に到達しない**(§3.2-5)ので、`continue` 地点でも「その脚の接地が確定できなかった」を記録・伝播する必要がある。新しい一歩を確定しない / `cmd_vel`→0 / 全脚接地可なら STAND / `planner_failed` へ理由(map 外 / 未観測 / 広すぎ / map 期限切れ)通知 | 有効足場がある通常時は不変。無い時のみ挙動変化(現在は名目足場で継続 or `continue` で黙って前回踏襲 → 危険) | 「広い穴」「map 外」で停止すること + 回帰(§13) |
 | 3 | terrain map(`filter_chain.yaml` or 新レイヤ)+ `getNearestValidFoothold` | 穴縁からの安全距離 \(d_{\rm edge}(p) > r_{\rm toe}+e_{\rm map}+m_{\rm safety}\)。PLY 手作業マージンを地図上判定へ置換。候補:距離変換レイヤ / 円内無効セル判定 / マスクのモルフォロジー膨張 | スナップ先が現在より手前(安全側)に寄る。到達距離が落ちる可能性 | 最小穴縁距離、最大 snap distance、到達距離の変更前後比較 |
 | 4 | `getNearestValidFoothold` + `QuadKD2::worldToFootIKWorldFrame`(既存) | 予測接地時の胴体姿勢から `p_f^{leg}=R_{wb}^{\top}(p_f-p_{hip})` を作り、IK 解の存在・関節角限界・左右跨ぎ排除で候補を絞る。**新規 IK は書かない** | 到達不能候補が除外される。候補が減り `found=false` が増える可能性 → Phase 2 の停止と連動 | 「到達不能(traversability 高いが IK 範囲外)」試験 |
 | 5 | `local_planner` / `local_footstep_planner` | `d_snap = ‖p*−p_nom‖` を記録し、大補正時に探索半径拡大だけでなく減速/刻み歩行/停止を選べる設計。閾値は**提案値**としてパラメータ化 | 通常時は不変。大補正時のみ | snap distance と速度/転倒の関係を実測 |
