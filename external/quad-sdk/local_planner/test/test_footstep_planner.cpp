@@ -501,6 +501,100 @@ TEST(LocalFootstepPlannerTest, ComputeFootPlanHandlesSwingAndTouchdown) {
   EXPECT_NEAR(feet(4, 1), feet(3, 1), kTol);
 }
 
+// ---- Phase 2A: FootPlanResult (safe-stop signal) ----
+
+// Helper: run the same swing/touchdown scenario as
+// ComputeFootPlanHandlesSwingAndTouchdown, optionally after swapping in a
+// terrain grid, and return both the FootPlanResult and the foot matrix.
+namespace {
+struct FootPlanRun {
+  FootPlanResult result;
+  Eigen::MatrixXd feet;
+};
+
+FootPlanRun runFootPlanScenario(LocalFootstepPlanner& planner) {
+  std::vector<std::vector<bool>> schedule = {
+      {true, true, true, true},   {false, true, true, true},
+      {false, true, true, true},  {true, true, true, true},
+      {true, true, true, true},   {true, true, true, true},
+  };
+  Eigen::MatrixXd body_plan = Eigen::MatrixXd::Zero(6, 12);
+  Eigen::MatrixXd ref_body_plan = Eigen::MatrixXd::Zero(6, 12);
+  for (int i = 0; i < 6; ++i) {
+    body_plan(i, 0) = 0.05 * i;
+    body_plan(i, 2) = 0.35;
+    body_plan(i, 6) = 0.2;
+    ref_body_plan.row(i) = body_plan.row(i);
+  }
+  Eigen::MatrixXd grf_plan = Eigen::MatrixXd::Zero(5, 12);
+  Eigen::VectorXd current_feet(12);
+  current_feet << 0.20, 0.12, 0.02, 0.20, -0.12, 0.02, -0.20, 0.12, 0.02, -0.20,
+      -0.12, 0.02;
+  Eigen::VectorXd current_vel = Eigen::VectorXd::Zero(12);
+  Eigen::MatrixXd feet = Eigen::MatrixXd::Zero(6, 12);
+  Eigen::MatrixXd foot_vel = Eigen::MatrixXd::Zero(6, 12);
+  Eigen::MatrixXd foot_acc = Eigen::MatrixXd::Zero(6, 12);
+  for (int i = 0; i < 6; ++i) {
+    feet.row(i) = current_feet;
+  }
+  quad_msgs::msg::MultiFootState past;
+  past.feet.resize(4);
+  past.traj_index = 0;
+  for (int foot = 0; foot < 4; ++foot) {
+    setFoot(past, foot, current_feet[3 * foot], current_feet[3 * foot + 1],
+            current_feet[3 * foot + 2], 0);
+  }
+  FootPlanRun run;
+  run.result =
+      planner.computeFootPlan(0, schedule, body_plan, grf_plan, ref_body_plan,
+                              current_feet, current_vel, 0.1, past, feet,
+                              foot_vel, foot_acc);
+  run.feet = feet;
+  return run;
+}
+}  // namespace
+
+// On flat traversable terrain every touchdown gets a valid foothold, so the
+// plan is safe to hand to NMPC (ok == true, no failures recorded).
+TEST(LocalFootstepPlannerTest, ComputeFootPlanReportsOkOnFlatTerrain) {
+  LocalFootstepPlanner planner = makeGo2Planner();
+  const FootPlanRun run = runFootPlanScenario(planner);
+
+  EXPECT_TRUE(run.result.ok);
+  EXPECT_EQ(run.result.failed_count, 0);
+  EXPECT_EQ(run.result.worst_status, FootholdStatus::VALID);
+  EXPECT_EQ(run.result.failed_leg, -1);
+  EXPECT_EQ(run.result.failed_touchdown_index, -1);
+}
+
+// When no cell is traversable, the leg-0 touchdown at horizon index 3 cannot be
+// placed. computeFootPlan must (a) report ok == false with the first failure's
+// details and a count, and (b) NOT write the hole nominal into the plan -- the
+// failed touchdown inherits the previous foothold instead.
+TEST(LocalFootstepPlannerTest, ComputeFootPlanReportsInvalidOverHole) {
+  LocalFootstepPlanner planner = makeGo2Planner();
+  const auto blocked_grid = makeTerrain(0.0, 0.0);  // traversability 0 everywhere
+  FastTerrainMap blocked_terrain;
+  blocked_terrain.loadDataFromGridMap(blocked_grid);
+  planner.updateMap(blocked_grid);
+  planner.updateMap(blocked_terrain);
+
+  const FootPlanRun run = runFootPlanScenario(planner);
+
+  EXPECT_FALSE(run.result.ok);
+  EXPECT_GE(run.result.failed_count, 1);
+  EXPECT_EQ(run.result.failed_leg, 0);
+  EXPECT_EQ(run.result.failed_touchdown_index, 3);
+  EXPECT_EQ(run.result.worst_status, FootholdStatus::NO_TRAVERSABLE_CANDIDATE);
+  // The leg-0 touchdown at horizon index 3 inherited the previous foothold
+  // (current_feet for leg 0 = {0.20, 0.12, 0.02}) instead of the raibert
+  // nominal over the hole (x was ~0.37 in the DIAG log). No NaN leaks through.
+  EXPECT_TRUE(run.feet.allFinite());
+  EXPECT_NEAR(run.feet(3, 0), 0.20, kTol);
+  EXPECT_NEAR(run.feet(3, 1), 0.12, kTol);
+  EXPECT_NEAR(run.feet(3, 2), 0.02, kTol);
+}
+
 TEST(LocalFootstepPlannerTest, FootPlanMessagesContainTouchdownsAndTimestamps) {
   LocalFootstepPlanner planner = makePlanner();
   std::vector<std::vector<bool>> schedule = {

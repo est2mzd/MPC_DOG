@@ -184,6 +184,18 @@ TEST(LocalPlannerTest, ConstructorLoadsYamlConfigurationAndInterfaces) {
   EXPECT_NE(planner.local_footstep_planner_, nullptr);
 }
 
+// Phase 2A: the safe-stop gate is on by default and can be opted out via param.
+TEST(LocalPlannerTest, StopOnInvalidFootholdParamDefaultsOnAndCanBeDisabled) {
+  auto default_node = makeNode();
+  LocalPlanner default_planner(default_node);
+  EXPECT_TRUE(default_planner.stop_on_invalid_foothold_);
+
+  auto off_node = makeNode(
+      {rclcpp::Parameter("local_planner.stop_on_invalid_foothold", false)});
+  LocalPlanner off_planner(off_node);
+  EXPECT_FALSE(off_planner.stop_on_invalid_foothold_);
+}
+
 TEST(LocalPlannerTest, InitFootstepPlannerClampsInvalidGrfWeight) {
   auto high_node = makeNode(
       {rclcpp::Parameter("local_footstep_planner.grf_weight", 4.0)});
