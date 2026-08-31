@@ -130,7 +130,8 @@ class LocalFootstepPlanner {
                         double foothold_search_radius,
                         double foothold_obj_threshold,
                         std::string obj_fun_layer, double toe_radius,
-                        double edge_clearance = 0.0);
+                        double edge_clearance = 0.0,
+                        double max_crossable_gap = 0.6);
 
   /**
    * @brief Transform a vector of foot positions from the world to the body
@@ -533,6 +534,12 @@ class LocalFootstepPlanner {
   /// may sit right on a hole lip, the pre-Phase-3 behaviour); > 0 marks a
   /// foothold with an unsafe cell within this radius as EDGE_TOO_CLOSE.
   double edge_clearance_ = 0.0;
+
+  /// Phase 3 (crossability): when an EDGE_TOO_CLOSE foothold has traversable
+  /// ground again within this distance ahead (past the hole), the hole is
+  /// treated as a crossable gap and the status is put back to VALID. Only holes
+  /// with no far side within this reach keep EDGE_TOO_CLOSE. Metres.
+  double max_crossable_gap_ = 0.6;
 };
 
 #endif  // LOCAL_FOOTSTEP_PLANNER_H
