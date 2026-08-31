@@ -374,6 +374,27 @@ STAND 遷移・`cmd_vel`→0・Map 期限切れ・edge clearance・IK は **入�
 **残**:go2 twist の非決定性があるため、複数速度(0.15/0.3/0.5)× 複数回の
 安全停止再現、および `edge_clearance` 値の感度は Step 05 と合わせて確認する。
 
+#### Phase 3 初版の欠陥と修正(2026-09-01、ユーザー指摘)
+
+初版の全方位 `edge_clearance` スキャンは **渡れる狭い穴(15 cm 等)の手前でも
+一律に停止**してしまった(step03/04 は 30 cm を跨げるのに)。原因:足場の
+**後ろにある穴**(渡り終えた穴の遠い縁)まで `EDGE_TOO_CLOSE` にしていた。
+
+**修正(A)**:全方位スキャンを **進行方向(+x)1 本の forward-probe** に置換。
+「`edge_clearance` 以内で穴が始まり、その先 `max_crossable_gap`(新パラメータ、
+既定 0.6 m)以内に固い地面が戻らない」ときだけ `EDGE_TOO_CLOSE`。後ろの穴・
+遠い穴・渡れる穴は `VALID`。`+x` 固定(全幅横断穴・Step 05 では妥当、斜め穴は
+将来課題)。
+
+**再検証(ユーザー指定 2 シナリオ、`edge_clearance:=0.15`、0.3 m/s)**:
+- **30 cm 穴**(`flat_gaps_2m`)→ **渡り切った**(x=0→9.74、`safe-stop` 0)。
+- **100 cm 穴**(新規 `flat_trench_1m`、深さ 1 m)→ **穴の約 0.63 m 手前で
+  安全停止・直立保持**(`safe-stop` 26)。
+
+→ 「渡れる穴は渡る / 渡れない穴の手前で安全に止まる」を両立。テスト **34/34**。
+証拠 GIF:`artifacts/gifs/quadsdk_phase3_gap30_cross.gif` /
+`quadsdk_phase3_gap100_safestop.gif`。詳細は step_05b。
+
 ### そのあと Phase 2B(未設計)
 
 WALKING / STOP_REQUESTED / WAITING_FOR_ALL_CONTACT / STAND / FAILURE_LATCHED

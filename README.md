@@ -28,7 +28,7 @@
  - [Step 03_1m / 04_1m:1m 深の穴を「足を入れずに」複数本連続で渡る(成功／歩容をクロールに調整・大学院初心者向け解説つき)](./agent_reports/steps/step_03_04_1m_quadsdk_gap_crossing.md)
  - [Step 03_1m / 04_1m(gbpl 版):global_body_planner で穴を渡る試み + Quad-SDK 公式マニュアルに基づく正しい設定方法 + センシング→foot plan→MPC→WBC→トルクの工程別ボトルネック分析(穴 1 本は跳んで可・連続区間は未達)](./agent_reports/steps/step_03_04_1m_quadsdk_gbpl.md)
  - [Step 05:15 cm 平地・15 cm 穴の連続区間(N=2〜5)— 事前調査(地形生成器は要改修・安全支持幅は地図 1 セル＝境界条件・Phase 2 安全停止は未実装・変更計画表)](./agent_reports/steps/step_05_quadsdk_repeated_15cm_gaps.md)
- - [Step 05b:安全停止の検証(幅 10 m の穴で「手前で 3 秒停止」できるか)— Phase 2A 単独では受動 PD ホールドが勢いを止めきれず転落。**Phase 3(`EDGE_TOO_CLOSE` 穴縁からの安全距離)を足すと穴の約 0.7 m 手前で停止し直立保持=成立**](./agent_reports/steps/step_05b_quadsdk_phase2a_safe_stop.md)
+ - [Step 05b:安全停止の検証 — Phase 2A 単独では受動 PD ホールドが勢いを止めきれず転落。**Phase 3(`EDGE_TOO_CLOSE`、進行方向 forward-probe)を足すと、30 cm の穴は跨いで渡り・100 cm の穴の手前で直立停止**(渡れる穴は渡る/渡れない穴の手前で安全に止まる)](./agent_reports/steps/step_05b_quadsdk_phase2a_safe_stop.md)
 
 ### 溝渡りの実行例(1 m 深・0.3 m 幅の溝を、足を溝に入れずに連続で渡る／`reference:=twist` + クロール歩容)
 

@@ -164,6 +164,40 @@ Phase 2A 単独の敗因は「足場が縁ぎりぎり(x≈1.95)にスナップ�
 `flat_gaps_2m`(step03_1m、0.3 m/s、既定設定)の実走回帰も実施(結果は
 `quadsdk_gap_foothold_phase_progress.md` に記録)。
 
+### Phase 3 初版の欠陥と修正(forward-probe 化)
+
+**初版**は「足場の全方位 `edge_clearance` 以内に穴セルがあれば `EDGE_TOO_CLOSE`」
+だった。これだと **15 cm など渡れる穴の手前でも一律に停止**してしまう
+(ユーザー指摘)。掃引でも strip/gap を 15/15〜50/15 と変えても全部
+「穴に届く前に安全停止」だった。step03/04 は **30 cm の穴**を「縁に足を置いて
+跨ぐ」で渡れているので、これは過剰。
+
+**修正(A、forward-probe)**:足場から**進行方向(+x)へ 1 本スキャン**する。
+「`edge_clearance` 以内で穴が始まり、その先 `max_crossable_gap`(既定 0.6 m)
+以内に固い地面が戻らない」ときだけ `EDGE_TOO_CLOSE`。
+
+- 足場の**手前(後ろ)にある穴**は無視(渡り終えた穴の遠い縁で止まらない)。
+- `edge_clearance` より遠い穴も無視。
+- 渡れる穴(向こう岸が届く)は `VALID` のまま。
+
+**再検証(ユーザー指定の 2 シナリオ、`edge_clearance:=0.15`、0.3 m/s、各 1 回)**:
+
+| シナリオ | 地形 | 結果 | 最終 |
+|---|---|---|---|
+| **30 cm 穴** | `flat_gaps_2m`(step03/04、深さ 1 m、間隔 2 m)| **渡り切った**(`safe-stop` 0 回)| x=9.74、z=0.31、roll/pitch < 0.03 rad、歩行継続 |
+| **100 cm 穴** | `flat_trench_1m`(新規、深さ 1 m)| **穴の約 0.63 m 手前で安全停止・直立保持**(`safe-stop` 26 回)| x=1.37、z=0.32、roll/pitch < 0.01 rad |
+
+→ **Phase 3(A)は「渡れる穴は渡る・渡れない穴/断崖の手前で安全に止まる」を
+両立できた。** 証拠 GIF:`artifacts/gifs/quadsdk_phase3_gap30_cross.gif` /
+`artifacts/gifs/quadsdk_phase3_gap100_safestop.gif`。
+単体テスト **34/34 green**(`makeTerrainWithGapBand` ベースに再構成:
+1.45 m 穴の手前→`EDGE_TOO_CLOSE`、0.30 m 穴の手前→`VALID`、
+穴が後ろ/遠い/`edge_clearance==0`→`VALID`)。
+
+**注意**:forward-probe は **+x(進行方向)固定**。本 Step の全幅横断穴・
+Step 05 では妥当だが、斜めの穴や旋回時は body 速度方向でのスキャンが要る
+(将来の一般化課題)。
+
 ## Phase 3 を含む追加・変更ファイル
 
 - 変更 `external/quad-sdk/local_planner/include/local_planner/local_footstep_planner.hpp`
