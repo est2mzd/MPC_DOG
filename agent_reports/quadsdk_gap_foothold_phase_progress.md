@@ -10,7 +10,9 @@
 - MPC_DOG では、四足ロボット **Go2** を Quad-SDK で走らせている。
   以前の作業で、シミュレーション上で **深さ 1 m・幅 0.3 m の溝を、
   足を溝に入れずに複数本連続で渡れる**ようになった
-  (`agent_reports/steps/step_03_04_1m_quadsdk_gap_crossing.md`)。
+  (`agent_reports/steps/step_03_04_1m_quadsdk_gap_crossing.md` §5。
+  GIF: `artifacts/gifs/quadsdk_step03_1m_v0p15.gif` /
+  `artifacts/gifs/quadsdk_step04_1m_v0p3.gif`、いずれも git 追跡対象)。
 - ただしそれは「**静的で位置ずれの無い既知の地形**」+「**手作業で付けた
   安全マージン**」に頼った成功であり、実センサ・実機で安全とは言えない。
 - そこで指示書

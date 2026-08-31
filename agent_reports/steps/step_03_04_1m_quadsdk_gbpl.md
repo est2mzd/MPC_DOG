@@ -58,7 +58,8 @@ GBP-L で step03_1m / step04_1m の深い穴を渡れるか確かめる。
 
 - GBP-L は **1 m 深・0.3 m 幅の穴 1 本**を、近いゴール(x=2.0)+
   `max_planning_time` を 1 → 10 s に延ばせば **跳んで渡れる**
-  (gbpl_run5、CSV + GIF 確認済み。ゴールで直立静止)。
+  (gbpl_run5、CSV + GIF 確認済み。ゴールで直立静止。
+  GIF: `artifacts/gifs/quadsdk_step03_1m_gbpl_goal2_success.gif`、git 追跡対象)。
 - **穴 2 本(x=4.0)**:GBP-L は積極的な複合 leap を出し、ロボットは
   x≈0.2→2.9 を一気に跳んで**両方の穴を越える**が、**着地で背面へ転倒**
   (gbpl_run7)。local NMPC が go2 でこの跳躍を追従しきれない。

@@ -23,6 +23,12 @@ docs/pympc_2day/assets/scenario_lab_results.json
 # Step 01検証で生成するGIF(容量が大きい、artifacts/gifs/配下のみ対象。
 # archive/配下の既存GIFはgit管理を継続するため対象外)
 artifacts/gifs/*.gif
+# ただし agent_reports/ の文書が「事実の根拠」として参照する少数のGIFは
+# 追跡する(各 <1MB)。文書からリンクが切れないようにするため。
+!artifacts/gifs/quadsdk_step03_1m_v0p15.gif
+!artifacts/gifs/quadsdk_step03_1m_v0p5.gif
+!artifacts/gifs/quadsdk_step04_1m_v0p3.gif
+!artifacts/gifs/quadsdk_step03_1m_gbpl_goal2_success.gif
 
 # backup/(2.0GB、未追跡)。archive/は履歴保持のため意図的にgit管理下にあり
 # (archive/README.md参照)、対象外とする

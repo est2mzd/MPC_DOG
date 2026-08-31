@@ -305,9 +305,13 @@ x ≈ 0.87〜0.90 ── **物理トレンチ(x∈[0.85, 1.15])の縁の上か�
   0.3 m/s の方がむしろ安定(推測: クロール歩容に対して指令速度が遅すぎると
   1 歩あたりの前進が小さく、穴を跨ぐのに余分な歩数=擾乱回数がかかる)。
 
-GIF: `artifacts/gifs/quadsdk_step03_1m_v0p5.gif`、
-`artifacts/gifs/quadsdk_step04_1m_v0p3.gif`(固定カメラ。凸条の目盛りで
-前進が目視できる)。
+GIF(いずれも固定カメラ。凸条の目盛りで前進が目視できる。git 追跡対象):
+
+| ファイル | 内容 |
+|---|---|
+| `artifacts/gifs/quadsdk_step03_1m_v0p15.gif` | step03_1m(間隔 2.0 m)0.15 m/s。t≈52 s 時点で画面右端まで到達、**凸条上に直立**(溝 5 本ほど通過) |
+| `artifacts/gifs/quadsdk_step04_1m_v0p3.gif` | step04_1m(間隔 1.5 m)0.3 m/s。t≈49 s、右側で**直立して静止**(溝を複数通過) |
+| `artifacts/gifs/quadsdk_step03_1m_v0p5.gif` | step03_1m 0.5 m/s。序盤で数本渡るところが見える(0.5 m/s は速く、途中で固定カメラの右端から外れる) |
 
 ### 5.3 残る弱点
 
@@ -425,7 +429,7 @@ bash scripts/trial/make_gif.sh \
 - `src/trial/assets/gen_quadsdk_gap_world.py`(地形 PLY を平面 + 本物の穴へ)
 - `scripts/trial/run_quadsdk_gap_1m.sh`
 - `agent_reports/steps/step_03_04_1m_quadsdk_gap_crossing.md`(本ファイル)
-- `artifacts/gifs/quadsdk_step03_1m_v0p5.gif` / `quadsdk_step04_1m_v0p3.gif`
+- `artifacts/gifs/quadsdk_step03_1m_v0p15.gif` / `quadsdk_step03_1m_v0p5.gif` / `quadsdk_step04_1m_v0p3.gif`(git 追跡対象。`.gitignore` に例外指定)
 
 **external/quad-sdk(新規):**
 - `quad_simulator/quad_sim_scripts/worlds/flat_gaps_2m.xml.xacro` / `flat_gaps_1p5m.xml.xacro`
