@@ -20,6 +20,7 @@
  - [NMPC の simple モデルと complex モデルの差分 / MPC でできることの違い(事実と推測を分離)](./agent_reports/quadsdk_step01_mpc_simple_vs_complex.md)
  - [simple モデルで地形対応(高さ考慮の足場選び・穴超え)はどこまでできるか(事実と推測を分離)](./agent_reports/quadsdk_step01_simple_model_terrain_and_gaps.md)
  - [go2 の寸法・質量・関節・パラメータ(Quad-SDK モデル + 公称スペック)](./agent_reports/quadsdk_go2_dimensions_and_params.md)
+ - [Step 03_1m / 04_1m:深い穴を「足を入れずに」渡る試み(WIP・足場回避は成功／縁でトロット転倒・大学院初心者向け解説つき)](./docs/steps/step_03_04_1m_quadsdk_gap_crossing.md)
 
 ## Quadruped-PyMPC
 

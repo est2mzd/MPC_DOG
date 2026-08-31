@@ -168,10 +168,13 @@ void LocalFootstepPlanner::computeFootPlan(
     quad_msgs::msg::MultiFootState& past_footholds_msg,
     Eigen::MatrixXd& foot_positions, Eigen::MatrixXd& foot_velocities,
     Eigen::MatrixXd& foot_accelerations) {
+  // [MPC_DOG DIAG]
+  int diag_new_contacts = 0, diag_snap_calls = 0, diag_outside = 0;
   // Place new footholds at touchdown events.
   for (int j = 0; j < num_feet_; j++) {
     for (size_t i = 1; i < contact_schedule.size(); i++) {
       if (isNewContact(contact_schedule, i, j)) {
+        ++diag_new_contacts;
         Eigen::Vector3d foot_position, foot_position_grf, foot_position_nominal,
             hip_position_midstance, centrifugal, vel_tracking,
             foot_position_raibert;
@@ -250,11 +253,13 @@ void LocalFootstepPlanner::computeFootPlan(
                                                      foot_position_nominal.y()};
 
         if (!terrain_grid_.isInside(foot_position_grid_map)) {
+          ++diag_outside;
           RCLCPP_WARN(node_->get_logger(),
                       "Foot position is outside the map. Steer the robot in "
                       "another direction");
           continue;
         }
+        ++diag_snap_calls;
         // Raise foothold by toe radius so the toe surface touches terrain.
         foot_position_nominal.z() =
             terrain_grid_.atPosition(
@@ -454,6 +459,15 @@ void LocalFootstepPlanner::computeFootPlan(
       }
     }
   }
+  static long diag_cfp_calls = 0;
+  if (diag_cfp_calls++ % 100 == 0) {
+    RCLCPP_INFO(
+        node_->get_logger(),
+        "[DIAG] computeFootPlan #%ld: new_contacts=%d snap_calls=%d outside=%d "
+        "plan_index=%d cs_len=%zu",
+        diag_cfp_calls, diag_new_contacts, diag_snap_calls, diag_outside,
+        current_plan_index, contact_schedule.size());
+  }
 }
 
 void LocalFootstepPlanner::loadFootPlanMsgs(
@@ -532,9 +546,18 @@ Eigen::Vector3d LocalFootstepPlanner::getNearestValidFoothold(
     }
 
     double traversability = terrain_grid_.atPosition(obj_fun_layer_, pos_valid);
+    // [MPC_DOG] Strong hysteresis (2.0x, was 0.5x) so the snapped target does
+    // not chatter between the near and far strip across planning cycles --
+    // chatter jerks the swing leg and topples the trot at the hole edge.
     double kin_cost =
         (pos_valid - foot_position.head<2>()).norm() +
-        0.5 * (pos_valid - foot_position_prev_solve.head<2>()).norm();
+        2.0 * (pos_valid - foot_position_prev_solve.head<2>()).norm();
+    // [MPC_DOG] When the nominal is over a hole, strongly prefer snapping
+    // FORWARD (direction of travel) so the robot commits to a crossing step
+    // instead of short-stepping at the near edge and stalling.
+    if (pos_valid.x() < foot_position.x()) {
+      kin_cost += 5.0 * (foot_position.x() - pos_valid.x());
+    }
 
     if (traversability > foothold_obj_threshold_ &&
         (kin_cost < best_kin_cost)) {
@@ -548,6 +571,23 @@ Eigen::Vector3d LocalFootstepPlanner::getNearestValidFoothold(
         node_->get_logger(), *node_->get_clock(),
         static_cast<rcutils_duration_value_t>(1e9),
         "No valid foothold found in radius of nominal, returning nominal");
+  }
+  // [MPC_DOG DIAG] nominal vs snapped foothold + local traversability
+  {
+    static long diag_gnvf = 0;
+    if (diag_gnvf++ % 40 == 0) {
+      double trav_here = terrain_grid_.isInside(foot_position.head<2>())
+                             ? terrain_grid_.atPosition(obj_fun_layer_,
+                                                        foot_position.head<2>())
+                             : -99.0;
+      RCLCPP_INFO(node_->get_logger(),
+                  "[DIAG] gnvf #%ld: nominal x=%.3f trav=%.3f -> snapped "
+                  "x=%.3f (thr=%.2f rad=%.2f) found=%d",
+                  diag_gnvf, foot_position.x(), trav_here,
+                  foot_position_best.x(), foothold_obj_threshold_,
+                  foothold_search_radius_,
+                  best_kin_cost != std::numeric_limits<double>::max());
+    }
   }
   foot_position_best.z() =
       terrain_grid_.atPosition("z_inpainted", foot_position_best.head<2>(),

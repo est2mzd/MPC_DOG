@@ -54,3 +54,8 @@ scratch/external/*
 notebook/_*
 notebook_pympc/_*
 notebook_legged/_*
+
+# Quad-SDK 深い穴クロス(WIP、未成功)の実行ログ・mp4
+artifacts/logs/quadsdk_step03_1m/
+artifacts/logs/quadsdk_step04_1m/
+artifacts/logs/quadsdk_gap_1m/

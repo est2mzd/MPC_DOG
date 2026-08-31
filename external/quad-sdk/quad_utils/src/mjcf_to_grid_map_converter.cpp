@@ -130,16 +130,43 @@ void MjcfToGridMapConverter::meshCallback(  // UPDATED
 bool MjcfToGridMapConverter::meshToGridMap(
     const pcl::PolygonMesh& polygon_mesh, const std::string& mesh_frame_id,
     const uint64_t& time_stamp_nano_seconds) {
+  // [MPC_DOG DIAG] instrumentation to trace where mesh->grid_map fails for
+  // hand-authored PLYs (see agent_reports gap-crossing work). Remove/keep as
+  // needed; all unconditional so it shows without the verbose flag.
+  RCLCPP_INFO(node_->get_logger(),
+              "[DIAG] meshToGridMap: polygons=%zu, cloud bytes=%u, res=%.4f, "
+              "frame=%s",
+              polygon_mesh.polygons.size(), polygon_mesh.cloud.row_step,
+              grid_map_resolution_, mesh_frame_id.c_str());
+
   // Creating the grid map
   grid_map::GridMap map;
   map.setFrameId(mesh_frame_id);
 
   // Converting
-  grid_map::GridMapPclConverter::initializeFromPolygonMesh(
+  const bool init_ok = grid_map::GridMapPclConverter::initializeFromPolygonMesh(
       polygon_mesh, grid_map_resolution_, map);
+  RCLCPP_INFO(node_->get_logger(),
+              "[DIAG] initializeFromPolygonMesh -> %s, size=(%d x %d), "
+              "length=(%.3f x %.3f), pos=(%.3f, %.3f)",
+              init_ok ? "true" : "false", map.getSize()(0), map.getSize()(1),
+              map.getLength().x(), map.getLength().y(),
+              map.getPosition().x(), map.getPosition().y());
+
   const std::string layer_name(layer_name_);
-  grid_map::GridMapPclConverter::addLayerFromPolygonMesh(polygon_mesh,
-                                                         layer_name, map);
+  const bool layer_ok = grid_map::GridMapPclConverter::addLayerFromPolygonMesh(
+      polygon_mesh, layer_name, map);
+  int finite_cells = 0, total_cells = 0;
+  if (map.exists(layer_name)) {
+    const grid_map::Matrix& m = map[layer_name];
+    total_cells = static_cast<int>(m.size());
+    finite_cells = static_cast<int>(m.array().isFinite().count());
+  }
+  RCLCPP_INFO(node_->get_logger(),
+              "[DIAG] addLayerFromPolygonMesh -> %s, layer '%s' exists=%d, "
+              "finite=%d/%d cells",
+              layer_ok ? "true" : "false", layer_name.c_str(),
+              map.exists(layer_name), finite_cells, total_cells);
 
   // Setup x and y matrices for loading
   grid_map::Size map_size = map.getSize();

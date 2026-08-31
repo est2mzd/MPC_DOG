@@ -209,8 +209,35 @@ void LocalPlanner::terrainMapCallback(
     const grid_map_msgs::msg::GridMap::SharedPtr msg) {
   grid_map::GridMapRosConverter::fromMessage(*msg, terrain_grid_);
 
+  // [MPC_DOG DIAG] one-shot: what layers / traversability range did we get?
+  static bool diag_done = false;
+  if (!diag_done) {
+    diag_done = true;
+    std::string layers;
+    for (const auto& l : terrain_grid_.getLayers()) layers += l + " ";
+    RCLCPP_INFO(node_->get_logger(), "[DIAG] terrain_map layers: %s",
+                layers.c_str());
+    if (terrain_grid_.exists("traversability")) {
+      const grid_map::Matrix& t = terrain_grid_["traversability"];
+      RCLCPP_INFO(node_->get_logger(),
+                  "[DIAG] traversability min=%.3f max=%.3f mean=%.3f "
+                  "(<0.6: %ld / %ld cells)",
+                  t.minCoeffOfFinites(), t.maxCoeffOfFinites(),
+                  t.array().isFinite().select(t, 0).sum() /
+                      std::max<long>(1, t.array().isFinite().count()),
+                  (t.array().isFinite() && (t.array() < 0.6f)).count(),
+                  t.array().isFinite().count());
+    } else {
+      RCLCPP_WARN(node_->get_logger(),
+                  "[DIAG] terrain_map has NO 'traversability' layer!");
+    }
+  }
+
   // Convert to FastTerrainMap structure for faster querying
   terrain_.loadDataFromGridMap(terrain_grid_);
+  RCLCPP_INFO(node_->get_logger(),
+              "[DIAG] after loadDataFromGridMap: terrain_.isEmpty()=%d",
+              terrain_.isEmpty());
   local_footstep_planner_->updateMap(terrain_);
   local_footstep_planner_->updateMap(terrain_grid_);
 }
@@ -647,6 +674,13 @@ void LocalPlanner::spin() {
     // Wait until all required data has been received
     if (terrain_.isEmpty() || (body_plan_msg_ == NULL && !use_twist_input_) ||
         robot_state_msg_ == NULL) {
+      RCLCPP_WARN_THROTTLE(
+          node_->get_logger(), *node_->get_clock(),
+          static_cast<rcutils_duration_value_t>(1e9),
+          "[DIAG] spin skip: terrain_empty=%d body_plan_null=%d "
+          "use_twist=%d robot_state_null=%d",
+          terrain_.isEmpty(), body_plan_msg_ == NULL, use_twist_input_,
+          robot_state_msg_ == NULL);
       continue;
     }
     // Get the reference plan and robot state into the desired data
