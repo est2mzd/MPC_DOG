@@ -655,71 +655,41 @@ FootholdResult LocalFootstepPlanner::getNearestValidFootholdResult(
     }
   }
 
-  // Phase 3: reject a VALID foothold that sits too close to a hole edge or the
-  // map boundary. Scan cells within edge_clearance_ of the chosen cell; a cell
-  // that is off-map, has a non-finite objective value, or is below the
-  // traversability threshold counts as an "edge". edge_clearance_ == 0 keeps the
-  // pre-Phase-3 behaviour (footholds may sit on the lip).
+  // Phase 3: forward probe from the chosen foothold along the travel direction
+  // (+x for the transverse full-width gaps in these scenarios and Step 05). If a
+  // hole starts within edge_clearance_ (the foothold is on a lip) AND solid
+  // ground does not resume within max_crossable_gap_ past the hole start (no
+  // reachable far side), the foothold is EDGE_TOO_CLOSE and Phase 2A withholds
+  // the plan. A lip before a *crossable* gap (step03/04's 0.3 m trench) stays
+  // VALID. A hole further ahead than edge_clearance_, or one behind the
+  // foothold, does not matter. edge_clearance_ == 0 disables the check
+  // (pre-Phase-3 behaviour); max_crossable_gap_ == 0 makes any lip
+  // EDGE_TOO_CLOSE.
   if (result.status == FootholdStatus::VALID && edge_clearance_ > 0.0) {
-    const grid_map::Position sel = foot_position_best.head<2>();
-    grid_map::Index sel_idx;
-    grid_map::Position sel_aligned;
-    terrain_grid_.getIndex(sel, sel_idx);
-    terrain_grid_.getPosition(sel_idx, sel_aligned);
-    const grid_map::Position sub_cell = sel - sel_aligned;
-
-    double nearest_edge = edge_clearance_;
-    for (grid_map::SpiralIterator it(terrain_grid_, sel_aligned, edge_clearance_);
-         !it.isPastEnd(); ++it) {
-      grid_map::Position p;
-      terrain_grid_.getPosition(*it, p);
-      p += sub_cell;
-      const double d = (p - sel).norm();
-      if (d >= edge_clearance_) {
-        continue;
-      }
+    const Eigen::Vector2d fwd(1.0, 0.0);
+    const double step = std::max(terrain_grid_.getResolution(), 1e-3);
+    const double max_d = edge_clearance_ + std::max(max_crossable_gap_, 0.0);
+    bool on_lip = false;
+    double hole_start = 0.0;
+    for (double d = step; d <= max_d; d += step) {
+      const grid_map::Position p = foot_position_best.head<2>() + d * fwd;
       bool unsafe = !terrain_grid_.isInside(p);
       if (!unsafe) {
         const double t = terrain_grid_.atPosition(obj_fun_layer_, p);
         unsafe = !std::isfinite(t) || t <= foothold_obj_threshold_;
       }
-      if (unsafe && d < nearest_edge) {
-        nearest_edge = d;
+      if (!on_lip) {
+        if (unsafe) {
+          if (d > edge_clearance_) break;  // hole too far ahead -> foothold ok
+          on_lip = true;
+          hole_start = d;
+          result.edge_clearance = d;
+        }
+        continue;
       }
-    }
-    result.edge_clearance = nearest_edge;
-    if (nearest_edge < edge_clearance_) {
-      result.status = FootholdStatus::EDGE_TOO_CLOSE;
-    }
-  }
-
-  // Phase 3 (crossability): an EDGE_TOO_CLOSE foothold next to a *crossable* gap
-  // is fine -- step03/04 crosses a 0.3 m trench by planting a foot on the lip.
-  // March from the chosen cell toward where the robot wanted to step (the snap
-  // direction, or +x if there was no snap) up to max_crossable_gap_; if solid
-  // ground resumes past the hole within that reach, put the status back to
-  // VALID. Only a hole with no far side within reach (a cliff / wide trench)
-  // keeps EDGE_TOO_CLOSE and triggers the safe-stop.
-  if (result.status == FootholdStatus::EDGE_TOO_CLOSE && max_crossable_gap_ > 0.0) {
-    Eigen::Vector2d dir =
-        foot_position.head<2>() - foot_position_best.head<2>();
-    if (dir.norm() < 1e-3) {
-      dir = Eigen::Vector2d(1.0, 0.0);  // no snap -> assume forward (+x) travel
-    }
-    dir.normalize();
-    const double step = std::max(terrain_grid_.getResolution(), 1e-3);
-    bool passed_hole = false;
-    for (double d = step; d <= max_crossable_gap_; d += step) {
-      const grid_map::Position p = foot_position_best.head<2>() + d * dir;
-      if (!terrain_grid_.isInside(p)) {
-        break;  // off the map ahead -> treat as no far side
-      }
-      const double t = terrain_grid_.atPosition(obj_fun_layer_, p);
-      const bool unsafe = !std::isfinite(t) || t <= foothold_obj_threshold_;
-      if (unsafe) {
-        passed_hole = true;
-      } else if (passed_hole) {
-        result.status = FootholdStatus::VALID;  // crossable gap, not a cliff
+      if (!unsafe) break;  // far side within reach -> crossable, stays VALID
+      if (d - hole_start >= max_crossable_gap_) {
+        result.status = FootholdStatus::EDGE_TOO_CLOSE;  // no far side in reach
         break;
       }
     }

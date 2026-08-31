@@ -438,82 +438,82 @@ TEST(LocalFootstepPlannerTest, FootholdResultSnapDistanceMatchesSelection) {
   EXPECT_NEAR(r.traversability_selected, 1.0, kTol);
 }
 
-// ---- Phase 3: EDGE_TOO_CLOSE (edge clearance from a hole / map boundary) ----
+// ---- Phase 3: EDGE_TOO_CLOSE (forward probe: lip before an uncrossable gap) --
 
-// With edge_clearance > 0, a foothold that is traversable but sits within that
-// radius of the non-traversable hole is downgraded to EDGE_TOO_CLOSE.
-TEST(LocalFootstepPlannerTest, FootholdResultReportsEdgeTooCloseNearHole) {
-  LocalFootstepPlanner planner = makePlanner(0.3);
-  const auto grid = makeTerrainWithHole(0.5);  // trav 0 for |pos| < 0.5
-  FastTerrainMap terrain;
-  terrain.loadDataFromGridMap(grid);
+// makeEdgeGrid: flat terrain with a non-traversable band x in [lo, hi].
+static FastTerrainMap loadTerrain(const grid_map::GridMap& grid) {
+  FastTerrainMap t;
+  t.loadDataFromGridMap(grid);
+  return t;
+}
+
+// A foothold just before a WIDE gap (no far side within max_crossable_gap ahead)
+// is EDGE_TOO_CLOSE, and edge_clearance records how far ahead the hole starts.
+TEST(LocalFootstepPlannerTest, EdgeTooCloseForLipBeforeUncrossableGap) {
+  LocalFootstepPlanner planner = makePlanner(0.15, 0.6);
+  const auto grid = makeTerrainWithGapBand(0.05, 1.5);  // 1.45 m gap ahead in x
   planner.updateMap(grid);
-  planner.updateMap(terrain);
+  planner.updateMap(loadTerrain(grid));
 
-  // Traversable (|pos| = 0.65 > 0.5) but only ~0.15 m from the hole boundary.
-  const Eigen::Vector3d nominal(0.65, 0.0, 0.0);
-  const Eigen::Vector3d previous(0.65, 0.0, 0.0);
+  const Eigen::Vector3d nominal(0.0, 0.0, 0.0);  // hole starts ~0.05 m ahead
   const FootholdResult r =
-      planner.getNearestValidFootholdResult(nominal, previous);
+      planner.getNearestValidFootholdResult(nominal, nominal);
 
   EXPECT_EQ(r.status, FootholdStatus::EDGE_TOO_CLOSE);
   EXPECT_GT(r.edge_clearance, 0.0);
-  EXPECT_LT(r.edge_clearance, 0.3);
+  EXPECT_LE(r.edge_clearance, 0.15);
 }
 
-// The same near-hole foothold is VALID once far enough from the hole, and VALID
-// again with edge_clearance disabled (== 0, the pre-Phase-3 behaviour).
-TEST(LocalFootstepPlannerTest, EdgeClearanceLeavesInteriorAndDisabledCaseValid) {
-  const auto grid = makeTerrainWithHole(0.5);
-  FastTerrainMap terrain;
-  terrain.loadDataFromGridMap(grid);
-
-  LocalFootstepPlanner far_planner = makePlanner(0.3);
-  far_planner.updateMap(grid);
-  far_planner.updateMap(terrain);
-  const FootholdResult far = far_planner.getNearestValidFootholdResult(
-      Eigen::Vector3d(1.5, 0.0, 0.0), Eigen::Vector3d(1.5, 0.0, 0.0));
-  EXPECT_EQ(far.status, FootholdStatus::VALID);
-
-  LocalFootstepPlanner off_planner = makePlanner(0.0);  // check disabled
-  off_planner.updateMap(grid);
-  off_planner.updateMap(terrain);
-  const FootholdResult off = off_planner.getNearestValidFootholdResult(
-      Eigen::Vector3d(0.65, 0.0, 0.0), Eigen::Vector3d(0.65, 0.0, 0.0));
-  EXPECT_EQ(off.status, FootholdStatus::VALID);
-}
-
-// Phase 3 crossability: a foothold on the near lip of a NARROW gap (solid
-// ground resumes within max_crossable_gap ahead) is put back to VALID.
-TEST(LocalFootstepPlannerTest, EdgeTooCloseDowngradedToValidForCrossableGap) {
+// A foothold on the near lip of a CROSSABLE gap (solid ground resumes within
+// max_crossable_gap ahead, as in step03/04's 0.3 m trench) stays VALID.
+TEST(LocalFootstepPlannerTest, ValidForLipBeforeCrossableGap) {
   LocalFootstepPlanner planner = makePlanner(0.15, 0.6);
-  const auto grid = makeTerrainWithGapBand(0.0, 0.3);  // 0.3 m gap in x
-  FastTerrainMap terrain;
-  terrain.loadDataFromGridMap(grid);
+  const auto grid = makeTerrainWithGapBand(0.05, 0.35);  // 0.30 m gap ahead
   planner.updateMap(grid);
-  planner.updateMap(terrain);
+  planner.updateMap(loadTerrain(grid));
 
-  // Just before the gap: traversable, but within 0.15 m of it.
-  const Eigen::Vector3d nominal(-0.05, 0.0, 0.0);
+  const Eigen::Vector3d nominal(0.0, 0.0, 0.0);
   const FootholdResult r =
       planner.getNearestValidFootholdResult(nominal, nominal);
   EXPECT_EQ(r.status, FootholdStatus::VALID);
 }
 
-// ... but a foothold on the near lip of a WIDE gap (no far side within reach)
-// keeps EDGE_TOO_CLOSE and so triggers the safe-stop.
-TEST(LocalFootstepPlannerTest, EdgeTooCloseKeptForUncrossableGap) {
-  LocalFootstepPlanner planner = makePlanner(0.15, 0.6);
-  const auto grid = makeTerrainWithGapBand(0.0, 1.2);  // 1.2 m gap in x
-  FastTerrainMap terrain;
-  terrain.loadDataFromGridMap(grid);
-  planner.updateMap(grid);
-  planner.updateMap(terrain);
+// A hole that is behind the foothold, or further ahead than edge_clearance, or
+// with edge_clearance disabled (== 0), all leave the foothold VALID.
+TEST(LocalFootstepPlannerTest, EdgeProbeIgnoresHoleBehindFarAndWhenDisabled) {
+  const auto wide = makeTerrainWithGapBand(0.05, 1.5);
 
-  const Eigen::Vector3d nominal(-0.05, 0.0, 0.0);
-  const FootholdResult r =
-      planner.getNearestValidFootholdResult(nominal, nominal);
-  EXPECT_EQ(r.status, FootholdStatus::EDGE_TOO_CLOSE);
+  // Hole is 0.4 m ahead -> beyond edge_clearance 0.15 -> VALID.
+  LocalFootstepPlanner far_planner = makePlanner(0.15, 0.6);
+  const auto far_grid = makeTerrainWithGapBand(0.4, 1.9);
+  far_planner.updateMap(far_grid);
+  far_planner.updateMap(loadTerrain(far_grid));
+  EXPECT_EQ(far_planner
+                .getNearestValidFootholdResult(Eigen::Vector3d(0.0, 0.0, 0.0),
+                                               Eigen::Vector3d(0.0, 0.0, 0.0))
+                .status,
+            FootholdStatus::VALID);
+
+  // Same wide hole but it is BEHIND the foothold (foothold at x = 1.7, gap
+  // [0.05, 1.5]) -> the +x probe sees only solid ground -> VALID.
+  LocalFootstepPlanner behind_planner = makePlanner(0.15, 0.6);
+  behind_planner.updateMap(wide);
+  behind_planner.updateMap(loadTerrain(wide));
+  EXPECT_EQ(behind_planner
+                .getNearestValidFootholdResult(Eigen::Vector3d(1.7, 0.0, 0.0),
+                                               Eigen::Vector3d(1.7, 0.0, 0.0))
+                .status,
+            FootholdStatus::VALID);
+
+  // edge_clearance == 0 disables the check entirely.
+  LocalFootstepPlanner off_planner = makePlanner(0.0, 0.6);
+  off_planner.updateMap(wide);
+  off_planner.updateMap(loadTerrain(wide));
+  EXPECT_EQ(off_planner
+                .getNearestValidFootholdResult(Eigen::Vector3d(0.0, 0.0, 0.0),
+                                               Eigen::Vector3d(0.0, 0.0, 0.0))
+                .status,
+            FootholdStatus::VALID);
 }
 
 TEST(LocalFootstepPlannerTest, WelzlMinimumCircleHandlesBoundaryCases) {
