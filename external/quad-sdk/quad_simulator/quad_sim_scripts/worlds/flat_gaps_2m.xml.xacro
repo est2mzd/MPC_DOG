@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mujoco model="flat_gaps_2m" xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <!-- Gap world: 1.70 m box strips (top z=0) with 0.30 m,
+       1.00 m-deep, full-width (5 m) trenches every 2.00 m in x.
+       Hole centres x = [-5.0, -3.0, -1.0, 1.0, 3.0, 5.0, 7.0, 9.0] ...
+       Simple box primitives only (no detail mesh) to avoid the big_flat.xml
+       instability. Terrain MAP comes from models/flat_gaps_2m/meshes/flat_gaps_2m.ply. -->
+  <xacro:arg name="meshdir" default=""/>
+  <xacro:arg name="mjcf_path" default=""/>
+  <compiler angle="radian" meshdir="$(arg meshdir)" texturedir="$(arg meshdir)" autolimits="true"/>
+  <include file="$(arg mjcf_path)"/>
+  <worldbody>
+    <light directional="true" diffuse=".8 .8 .8" specular=".2 .2 .2" pos="0 0 5" dir="0 0 -1"/>
+    <geom name="trench_floor" type="box" size="18 2.5 0.05" pos="11 0 -1.0500" rgba="0.55 0.45 0.4 1"/>
+    <geom name="strip_0" type="box" size="0.8500 2.5 0.5000" pos="-6.0 0 -0.5000" rgba="0.8 0.9 0.8 1"/>
+    <geom name="strip_1" type="box" size="0.8500 2.5 0.5000" pos="-4.0 0 -0.5000" rgba="0.8 0.9 0.8 1"/>
+    <geom name="strip_2" type="box" size="0.8500 2.5 0.5000" pos="-2.0 0 -0.5000" rgba="0.8 0.9 0.8 1"/>
+    <geom name="floor" type="box" size="0.8500 2.5 0.5000" pos="0.0 0 -0.5000" rgba="0.8 0.9 0.8 1"/>
+    <geom name="strip_4" type="box" size="0.8500 2.5 0.5000" pos="2.0 0 -0.5000" rgba="0.8 0.9 0.8 1"/>
+    <geom name="strip_5" type="box" size="0.8500 2.5 0.5000" pos="4.0 0 -0.5000" rgba="0.8 0.9 0.8 1"/>
+    <geom name="strip_6" type="box" size="0.8500 2.5 0.5000" pos="6.0 0 -0.5000" rgba="0.8 0.9 0.8 1"/>
+    <geom name="strip_7" type="box" size="0.8500 2.5 0.5000" pos="8.0 0 -0.5000" rgba="0.8 0.9 0.8 1"/>
+    <geom name="strip_8" type="box" size="0.8500 2.5 0.5000" pos="10.0 0 -0.5000" rgba="0.8 0.9 0.8 1"/>
+    <geom name="strip_9" type="box" size="0.8500 2.5 0.5000" pos="12.0 0 -0.5000" rgba="0.8 0.9 0.8 1"/>
+    <geom name="strip_10" type="box" size="0.8500 2.5 0.5000" pos="14.0 0 -0.5000" rgba="0.8 0.9 0.8 1"/>
+    <geom name="strip_11" type="box" size="0.8500 2.5 0.5000" pos="16.0 0 -0.5000" rgba="0.8 0.9 0.8 1"/>
+    <geom name="strip_12" type="box" size="0.8500 2.5 0.5000" pos="18.0 0 -0.5000" rgba="0.8 0.9 0.8 1"/>
+    <geom name="strip_13" type="box" size="0.8500 2.5 0.5000" pos="20.0 0 -0.5000" rgba="0.8 0.9 0.8 1"/>
+    <geom name="strip_14" type="box" size="0.8500 2.5 0.5000" pos="22.0 0 -0.5000" rgba="0.8 0.9 0.8 1"/>
+    <geom name="strip_15" type="box" size="0.8500 2.5 0.5000" pos="24.0 0 -0.5000" rgba="0.8 0.9 0.8 1"/>
+    <geom name="strip_16" type="box" size="0.8500 2.5 0.5000" pos="26.0 0 -0.5000" rgba="0.8 0.9 0.8 1"/>
+    <geom name="grid_x0" type="box" size="0.02 2.5 0.001" pos="0 0 0.002" rgba="0.3 0.3 0.3 1" contype="0" conaffinity="0"/>
+    <geom name="grid_x5" type="box" size="0.02 2.5 0.001" pos="5 0 0.002" rgba="0.3 0.3 0.3 1" contype="0" conaffinity="0"/>
+    <geom name="grid_x10" type="box" size="0.02 2.5 0.001" pos="10 0 0.002" rgba="0.3 0.3 0.3 1" contype="0" conaffinity="0"/>
+    <geom name="grid_x15" type="box" size="0.02 2.5 0.001" pos="15 0 0.002" rgba="0.3 0.3 0.3 1" contype="0" conaffinity="0"/>
+    <geom name="grid_x20" type="box" size="0.02 2.5 0.001" pos="20 0 0.002" rgba="0.3 0.3 0.3 1" contype="0" conaffinity="0"/>
+  </worldbody>
+</mujoco>
