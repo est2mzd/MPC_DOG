@@ -38,6 +38,7 @@ enum class FootholdStatus {
   NOMINAL_OUTSIDE_MAP,       //!< Nominal foothold lies outside the terrain map
   NO_TRAVERSABLE_CANDIDATE,  //!< No cell in the search radius passed the threshold
   NONFINITE_HEIGHT,          //!< Selected cell's inpainted height is not finite
+  EDGE_TOO_CLOSE,  //!< Selected cell is within edge_clearance of a hole/off-map cell
 };
 
 //! Result of getNearestValidFootholdResult().
@@ -56,6 +57,12 @@ struct FootholdResult {
   double traversability_selected =
       std::numeric_limits<double>::quiet_NaN();  //!< obj-layer value at chosen
   double snap_distance = 0.0;  //!< ||chosen.xy - nominal.xy||, metres
+  double edge_clearance =
+      std::numeric_limits<double>::quiet_NaN();  //!< Phase 3: distance from the
+                                                 //!< chosen cell to the nearest
+                                                 //!< unsafe cell (clamped to the
+                                                 //!< scan radius); NaN if the
+                                                 //!< check is disabled
 };
 
 //! Aggregate outcome of one computeFootPlan() call over the whole horizon.
@@ -122,7 +129,8 @@ class LocalFootstepPlanner {
                         std::shared_ptr<quad_utils::QuadKD2> kinematics,
                         double foothold_search_radius,
                         double foothold_obj_threshold,
-                        std::string obj_fun_layer, double toe_radius);
+                        std::string obj_fun_layer, double toe_radius,
+                        double edge_clearance = 0.0);
 
   /**
    * @brief Transform a vector of foot positions from the world to the body
@@ -519,6 +527,12 @@ class LocalFootstepPlanner {
 
   /// Toe radius
   double toe_radius_;
+
+  /// Phase 3: required clear distance from a chosen foothold to the nearest
+  /// non-traversable / off-map cell, in metres. 0 disables the check (footholds
+  /// may sit right on a hole lip, the pre-Phase-3 behaviour); > 0 marks a
+  /// foothold with an unsafe cell within this radius as EDGE_TOO_CLOSE.
+  double edge_clearance_ = 0.0;
 };
 
 #endif  // LOCAL_FOOTSTEP_PLANNER_H

@@ -21,3 +21,4 @@
       standing_error_threshold: 0.03     # Foot position error tolerated while standing, m
       foothold_obj_threshold: 0.6        # Minimum terrain score for candidate footholds
       obj_fun_layer: traversability      # Grid map layer used for foothold scoring
+      edge_clearance: 0.0                # [MPC_DOG Phase 3] m. 0 = off (foothold may sit on a hole lip, pre-Phase-3). >0 = a foothold with a hole/off-map cell within this radius is EDGE_TOO_CLOSE (-> Phase 2A withholds the plan). Kept 0 so step03/04 gap-crossing is unchanged; opt in per run.

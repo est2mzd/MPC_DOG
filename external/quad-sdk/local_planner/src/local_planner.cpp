@@ -163,6 +163,7 @@ void LocalPlanner::initLocalFootstepPlanner() {
   // Load parameters from server
   double grf_weight, ground_clearance, hip_clearance, standing_error_threshold,
       period_d, foothold_search_radius, foothold_obj_threshold;
+  double edge_clearance = 0.0;  // Phase 3; 0 = disabled (pre-Phase-3 behaviour)
   std::string obj_fun_layer;
   int period;
   std::vector<double> duty_cycles, phase_offsets;
@@ -188,6 +189,8 @@ void LocalPlanner::initLocalFootstepPlanner() {
                            duty_cycles);
   quad_utils::loadROSParam(node_, "local_footstep_planner.phase_offsets",
                            phase_offsets);
+  quad_utils::loadROSParamDefault(
+      node_, "local_footstep_planner.edge_clearance", edge_clearance, 0.0);
 
   period = period_d / dt_;
 
@@ -205,7 +208,7 @@ void LocalPlanner::initLocalFootstepPlanner() {
   local_footstep_planner_->setSpatialParams(
       ground_clearance, hip_clearance, grf_weight, standing_error_threshold,
       quadKD_, foothold_search_radius, foothold_obj_threshold, obj_fun_layer,
-      toe_radius_);
+      toe_radius_, edge_clearance);
 
   past_footholds_msg_.feet.resize(num_feet_);
 }

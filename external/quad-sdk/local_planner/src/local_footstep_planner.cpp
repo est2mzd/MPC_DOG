@@ -40,7 +40,7 @@ void LocalFootstepPlanner::setSpatialParams(
     double standing_error_threshold,
     std::shared_ptr<quad_utils::QuadKD2> kinematics,
     double foothold_search_radius, double foothold_obj_threshold,
-    std::string obj_fun_layer, double toe_radius) {
+    std::string obj_fun_layer, double toe_radius, double edge_clearance) {
   ground_clearance_ = ground_clearance;
   hip_clearance_ = hip_clearance;
   standing_error_threshold_ = standing_error_threshold;
@@ -50,6 +50,7 @@ void LocalFootstepPlanner::setSpatialParams(
   foothold_obj_threshold_ = foothold_obj_threshold;
   obj_fun_layer_ = obj_fun_layer;
   toe_radius_ = toe_radius;
+  edge_clearance_ = edge_clearance;
 }
 
 void LocalFootstepPlanner::updateMap(const FastTerrainMap& terrain) {
@@ -652,17 +653,57 @@ FootholdResult LocalFootstepPlanner::getNearestValidFootholdResult(
     }
   }
 
+  // Phase 3: reject a VALID foothold that sits too close to a hole edge or the
+  // map boundary. Scan cells within edge_clearance_ of the chosen cell; a cell
+  // that is off-map, has a non-finite objective value, or is below the
+  // traversability threshold counts as an "edge". edge_clearance_ == 0 keeps the
+  // pre-Phase-3 behaviour (footholds may sit on the lip).
+  if (result.status == FootholdStatus::VALID && edge_clearance_ > 0.0) {
+    const grid_map::Position sel = foot_position_best.head<2>();
+    grid_map::Index sel_idx;
+    grid_map::Position sel_aligned;
+    terrain_grid_.getIndex(sel, sel_idx);
+    terrain_grid_.getPosition(sel_idx, sel_aligned);
+    const grid_map::Position sub_cell = sel - sel_aligned;
+
+    double nearest_edge = edge_clearance_;
+    for (grid_map::SpiralIterator it(terrain_grid_, sel_aligned, edge_clearance_);
+         !it.isPastEnd(); ++it) {
+      grid_map::Position p;
+      terrain_grid_.getPosition(*it, p);
+      p += sub_cell;
+      const double d = (p - sel).norm();
+      if (d >= edge_clearance_) {
+        continue;
+      }
+      bool unsafe = !terrain_grid_.isInside(p);
+      if (!unsafe) {
+        const double t = terrain_grid_.atPosition(obj_fun_layer_, p);
+        unsafe = !std::isfinite(t) || t <= foothold_obj_threshold_;
+      }
+      if (unsafe && d < nearest_edge) {
+        nearest_edge = d;
+      }
+    }
+    result.edge_clearance = nearest_edge;
+    if (nearest_edge < edge_clearance_) {
+      result.status = FootholdStatus::EDGE_TOO_CLOSE;
+    }
+  }
+
   // [MPC_DOG DIAG] nominal vs snapped foothold + status + snap distance
   {
     static long diag_gnvf = 0;
     if (diag_gnvf++ % 40 == 0) {
       RCLCPP_INFO(node_->get_logger(),
                   "[DIAG] gnvf #%ld: nominal x=%.3f trav=%.3f -> snapped "
-                  "x=%.3f (thr=%.2f rad=%.2f) found=%d status=%d snap=%.3f",
+                  "x=%.3f (thr=%.2f rad=%.2f) found=%d status=%d snap=%.3f "
+                  "edge_clr=%.3f",
                   diag_gnvf, foot_position.x(), result.traversability_nominal,
                   result.position.x(), foothold_obj_threshold_,
                   foothold_search_radius_, found,
-                  static_cast<int>(result.status), result.snap_distance);
+                  static_cast<int>(result.status), result.snap_distance,
+                  result.edge_clearance);
     }
   }
 
