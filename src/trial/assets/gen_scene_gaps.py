@@ -1,31 +1,42 @@
-"""Generate src/trial/assets/scene_gaps.xml.
+"""Generate a gap-walkway MuJoCo scene for Step 03 / 04.
 
-Walkway y in [-2.5, 2.5] (5 m wide). Along +x: 1.7 m solid strips whose top
+    python gen_scene_gaps.py <depth_m> [spacing_m] [out_name]
+
+Walkway y in [-2.5, 2.5] (5 m wide). Along +x: solid raised strips whose top
 surface is flush at z = 0, separated by 0.30 m full-width trenches ("holes")
-every 2.0 m. Strip centers x = ..., -2, 0, 2, 4, ...; trench centers the odd
-x = ..., -1, 1, 3, ....
+spaced `spacing_m` apart in x. Strip length = spacing_m - 0.30 m.
 
-The trench floor is a continuous slab at z = -DEPTH: the "holes" are
-DEPTH-deep, 0.30 m-long, 5 m-wide ruts you can put a foot into, not a
-bottomless void. DEPTH is the knob tuned for Step 03.
+The trench floor is a continuous slab at z = -depth: the "holes" are
+depth-deep, 0.30 m-long, 5 m-wide ruts you can put a foot into, not a
+bottomless void. `depth` is the knob tuned per step.
+
+  Step 03: spacing 2.0 m -> scene_gaps.xml
+  Step 04: spacing 1.5 m -> scene_gaps_1p5.xml
 """
 from __future__ import annotations
 import sys
 from pathlib import Path
 
-DEPTH = float(sys.argv[1]) if len(sys.argv) > 1 else 0.10  # trench depth [m]
+DEPTH = float(sys.argv[1]) if len(sys.argv) > 1 else 0.05      # trench depth [m]
+SPACING = float(sys.argv[2]) if len(sys.argv) > 2 else 2.0     # hole centre spacing [m]
+OUT_NAME = sys.argv[3] if len(sys.argv) > 3 else "scene_gaps.xml"
 
-xs = [2 * k for k in range(-1, 16)]  # raised-strip centers, x = -2 .. 30
+HOLE_LEN = 0.30
+STRIP_LEN = SPACING - HOLE_LEN
+HALF = STRIP_LEN / 2.0
+
+# Strip centres at x = k * SPACING. Hole centres at x = k * SPACING + SPACING/2.
+# Start one strip before the origin so the robot spawns on solid ground.
+strip_centres = [round(k * SPACING, 4) for k in range(-1, int(30 / SPACING) + 2)]
 strips = []
-for i, xc in enumerate(xs):
-    name = "floor" if xc == 0 else f"gap_strip_{i}"
-    # Raised strip: DEPTH tall, sitting on the base slab, top flush at z = 0.
+for i, xc in enumerate(strip_centres):
+    name = "floor" if abs(xc) < 1e-9 else f"gap_strip_{i}"
     strips.append(
-        f'        <geom name="{name}" type="box" size="0.85 2.5 {DEPTH/2:.4f}" '
+        f'        <geom name="{name}" type="box" size="{HALF:.4f} 2.5 {DEPTH/2:.4f}" '
         f'pos="{xc} 0 {-DEPTH/2:.4f}" material="groundplane" friction="1.0 0.005 0.0"/>'
     )
 strip_xml = "\n".join(strips)
-gap_centers = [2 * k + 1 for k in range(-1, 15)]
+hole_centres = [round(k * SPACING + SPACING / 2.0, 4) for k in range(-1, len(strip_centres))]
 
 xml = f"""<mujoco model="scene">
     <statistic center="0 0 0.1" extent="0.8"/>
@@ -43,16 +54,16 @@ xml = f"""<mujoco model="scene">
     <worldbody>
         <light pos="0 0 5.0" dir="0 0 -1" directional="true" castshadow="true"/>
         <!-- Continuous trench floor at z = -{DEPTH} (the "hole" bottom). -->
-        <geom name="trench_floor" type="box" size="20 2.5 0.05" pos="14 0 {-DEPTH-0.05:.4f}"
+        <geom name="trench_floor" type="box" size="24 2.5 0.05" pos="16 0 {-DEPTH-0.05:.4f}"
               material="groundplane" friction="1.0 0.005 0.0"/>
-        <!-- Walkway y in [-2.5, 2.5] (5 m). 1.7 m raised strips (top z = 0) + 0.30 m
-             full-width holes every 2.0 m in x. Hole centers x = {gap_centers}.
-             Hole depth {DEPTH} m. -->
+        <!-- Walkway y in [-2.5, 2.5] (5 m). {STRIP_LEN:.2f} m raised strips (top z = 0) +
+             {HOLE_LEN:.2f} m full-width holes every {SPACING:.2f} m in x.
+             Hole centres x = {hole_centres[:8]}...  Hole depth {DEPTH} m. -->
 {strip_xml}
     </worldbody>
 </mujoco>
 """
 
-out = Path(__file__).with_name("scene_gaps.xml")
+out = Path(__file__).with_name(OUT_NAME)
 out.write_text(xml)
-print(f"wrote {out} with hole depth {DEPTH} m")
+print(f"wrote {out}  |  depth {DEPTH} m  spacing {SPACING} m  strip {STRIP_LEN:.2f} m")

@@ -28,3 +28,4 @@
  - [記録ハーネス(step_01_baseline.py)の構造説明](./docs/step_01_baseline_py_structure.md)
  - [Step 02 検証記録(平面マップ・歩容周波数と前進速度／成功)](./docs/steps/step_02_frequency.md)
  - [Step 03 検証記録(前進方向に並ぶ穴／轍を落ちずに越える・大学院初心者向け解説つき／成功)](./docs/steps/step_03_gap_crossing.md)
+ - [Step 04 検証記録(穴の間隔を 1.5 m に詰めて同様／大学院初心者向け解説つき／成功)](./docs/steps/step_04_gap_crossing_1p5m.md)
