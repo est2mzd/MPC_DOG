@@ -84,13 +84,13 @@ std::shared_ptr<rclcpp::Node> makeGo2Node(const std::string& name) {
   return std::make_shared<rclcpp::Node>(name, options);
 }
 
-LocalFootstepPlanner makePlanner() {
+LocalFootstepPlanner makePlanner(double edge_clearance = 0.0) {
   auto node = std::make_shared<rclcpp::Node>("local_footstep_planner_test");
   LocalFootstepPlanner planner(node);
   planner.setTemporalParams(0.1, 4, 6, {0.5, 0.5, 0.5, 0.5},
                             {0.0, 0.5, 0.5, 0.0});
   planner.setSpatialParams(0.07, 0.1, 0.45, 0.03, nullptr, 0.25, 0.6,
-                           "traversability", 0.02);
+                           "traversability", 0.02, edge_clearance);
   const auto terrain_grid = makeTerrain();
   FastTerrainMap terrain;
   terrain.loadDataFromGridMap(terrain_grid);
@@ -409,6 +409,51 @@ TEST(LocalFootstepPlannerTest, FootholdResultSnapDistanceMatchesSelection) {
       (r.position.head<2>() - nominal.head<2>()).norm();
   EXPECT_NEAR(r.snap_distance, d, kTol);
   EXPECT_NEAR(r.traversability_selected, 1.0, kTol);
+}
+
+// ---- Phase 3: EDGE_TOO_CLOSE (edge clearance from a hole / map boundary) ----
+
+// With edge_clearance > 0, a foothold that is traversable but sits within that
+// radius of the non-traversable hole is downgraded to EDGE_TOO_CLOSE.
+TEST(LocalFootstepPlannerTest, FootholdResultReportsEdgeTooCloseNearHole) {
+  LocalFootstepPlanner planner = makePlanner(0.3);
+  const auto grid = makeTerrainWithHole(0.5);  // trav 0 for |pos| < 0.5
+  FastTerrainMap terrain;
+  terrain.loadDataFromGridMap(grid);
+  planner.updateMap(grid);
+  planner.updateMap(terrain);
+
+  // Traversable (|pos| = 0.65 > 0.5) but only ~0.15 m from the hole boundary.
+  const Eigen::Vector3d nominal(0.65, 0.0, 0.0);
+  const Eigen::Vector3d previous(0.65, 0.0, 0.0);
+  const FootholdResult r =
+      planner.getNearestValidFootholdResult(nominal, previous);
+
+  EXPECT_EQ(r.status, FootholdStatus::EDGE_TOO_CLOSE);
+  EXPECT_GT(r.edge_clearance, 0.0);
+  EXPECT_LT(r.edge_clearance, 0.3);
+}
+
+// The same near-hole foothold is VALID once far enough from the hole, and VALID
+// again with edge_clearance disabled (== 0, the pre-Phase-3 behaviour).
+TEST(LocalFootstepPlannerTest, EdgeClearanceLeavesInteriorAndDisabledCaseValid) {
+  const auto grid = makeTerrainWithHole(0.5);
+  FastTerrainMap terrain;
+  terrain.loadDataFromGridMap(grid);
+
+  LocalFootstepPlanner far_planner = makePlanner(0.3);
+  far_planner.updateMap(grid);
+  far_planner.updateMap(terrain);
+  const FootholdResult far = far_planner.getNearestValidFootholdResult(
+      Eigen::Vector3d(1.5, 0.0, 0.0), Eigen::Vector3d(1.5, 0.0, 0.0));
+  EXPECT_EQ(far.status, FootholdStatus::VALID);
+
+  LocalFootstepPlanner off_planner = makePlanner(0.0);  // check disabled
+  off_planner.updateMap(grid);
+  off_planner.updateMap(terrain);
+  const FootholdResult off = off_planner.getNearestValidFootholdResult(
+      Eigen::Vector3d(0.65, 0.0, 0.0), Eigen::Vector3d(0.65, 0.0, 0.0));
+  EXPECT_EQ(off.status, FootholdStatus::VALID);
 }
 
 TEST(LocalFootstepPlannerTest, WelzlMinimumCircleHandlesBoundaryCases) {
