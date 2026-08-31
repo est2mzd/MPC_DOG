@@ -441,7 +441,7 @@ go2:`stand_joint_angles [0,0.8,-1.5]`、`stand_kp [60,60,60]`、`stand_kd [2,2,2
 
 ### 6.1 「NMPC の脚可到達制約が破れた」→ **訂正**
 
-- **誤**(`agent_reports/steps/step_03_04_1m_quadsdk_gbpl.md` §3.4 の旧記述
+- **誤**(`agent_reports/steps/step_03_04_1m_quadsdk_gap_crossing.md` §3.4 の旧記述
   「接地脚が脚の可到達域の外 → セントロイダル NMPC の運動学・GRF 制約が破れ」)。
 - **コード事実**(確定):Go2 simple model の制約 `g` は
   **EOM(Backward Euler)+ 摩擦錐のみ**(`dynamicsModel.m:43`、`g_dim: 28`)。
@@ -460,7 +460,7 @@ go2:`stand_joint_angles [0,0.8,-1.5]`、`stand_kp [60,60,60]`、`stand_kd [2,2,2
   `eval_f` のトラッキング項/入力項/`panic`/`constraint_panic` の内訳、
   `get_slack_state_var` / `get_slack_constraint_var` の値、
   最大制約違反、IPOPT の `status` / `iter_count` / `obj_value`。
-- gbpl doc の該当記述は「脚可到達制約が破れた」を削除し、上を
+- gap_crossing doc §3.4 の該当記述は「脚可到達制約が破れた」を削除し、上を
   「コード事実」と「推測(要ログ)」に分けて書き直す(Phase 0、コード変更なし)。
 
 ### 6.2 「`horizon_length` は `period_` より大きい必要がある」→ **要分離**

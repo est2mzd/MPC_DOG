@@ -52,8 +52,13 @@ Step 03/04(Quadruped-PyMPC、浅い轍)とは**別実装・別ロボットスタ
      **胴体の偽の高さ/ピッチ指令**を作る。足場だけ直して胴体参照を壊すと、
      足は穴の外なのに縁で胴体が突っ込む。
    - 配線用の設定(`obj_fun_layer: traversability`, `foothold_obj_threshold: 0.6`)
-     は既定のままで正しい。実機ではマップが知覚由来になるが、本物の穴は
-     自然に NaN/低値セルになるので同じ機構がそのまま効く。
+     は既定のままで正しい。
+   - **【未確認】実機で同じ機構が効くか**は本リポジトリのコードからは言えない。
+     この repo に LiDAR/深度カメラ → grid_map の `z` レイヤを作る処理は無く、
+     `mjcf_to_grid_map_converter` が静的 PLY をラスタライズするのみ。実センサでは
+     no-return / occlusion / 未観測セル / 古いセルの扱い、および「穴」と「単なる
+     未観測領域」の区別が別問題になる(詳細:
+     `agent_reports/quadsdk_gap_foothold_mpc_code_analysis.md` §6.3)。
 
 3. この 2 つ(静的安定なクロール歩容 + 本物の穴のメッシュ)が揃えば、
    **セントロイダル NMPC + Raibert 足場の twist モードのまま**、go2 は
@@ -227,21 +232,33 @@ x ≈ 0.87〜0.90 ── **物理トレンチ(x∈[0.85, 1.15])の縁の上か�
 0.05 → 0.3 → 1.0 → 10 と発散**し、その後で胴体が物理的に崩れていた
 (確認済み、CSV)。
 
-- 原因(推測 → コードで裏取り): ホライズン内の**前脚接地予定が向こうの
+- 現象(確認済み、CSV): ホライズン内の**前脚接地予定が向こうの
   凸条(x ≈ 1.2)に置かれる**一方、`computeFutureBodyPlan` で延長しても
-  胴体は x ≈ 0.9 までしか進まない。→ **接地脚が脚の可到達域の外**
-  → セントロイダル NMPC の運動学・GRF 制約が破れ、目的関数が発散
-  → 破れた解のトルクで胴体が前へ突っ込む。
+  胴体は x ≈ 0.9 までしか進まない。この状態で `plan_nmpc_cost` が発散した。
+- **【訂正】機序**: 「NMPC 内の脚可到達制約が破れた」は**誤り**。go2 の
+  simple NMPC の制約 `g` は **EOM(Backward Euler)+ 摩擦錐のみ**で、関節角・
+  足位置・IK 可到達性の制約は**存在しない**(`nmpc_controller/scripts/dynamicsModel.m`。
+  詳細:`agent_reports/quadsdk_gap_foothold_mpc_code_analysis.md` §4.3・§6.1)。
+- **推測(要ログ、未検証)**: 遠い足場が GRF のモーメントアーム
+  \((p_f-p_b)\) を変え、`ref_body_plan_` を満たす GRF 配分が
+  \(f_z\in[10,150]\) と摩擦錐(実効 μ=0.6)の内側に取りにくくなり、
+  スラック(`panic`/`constraint_panic`)が立って `plan_nmpc_cost` が増える、
+  という筋は辻褄が合う。ただし cost 内訳(トラッキング項 vs スラック項)・
+  制約違反量・IPOPT 終了ステータスを記録するまで**確定ではない**。
 - 以前ここに入れていた「近端スナップ禁止(前方バイアス 100×)」は
   **逆効果**だった:向こう側の縁への一歩を強制していた。**素の
   `kin_cost` に戻す**と、前回足場が後ろにあるぶん近端の `kin_cost` が
   小さく、**自然に段階を踏む**:①まず穴の手前の縁に足を置く → ②胴体を
   寄せる → ③次の一歩は「スナップ不要の普通の足場」として向こうの凸条に
   乗る(確認済み: DIAG で near→far の 2 段が見える)。
-- さらに **`horizon_length` は `period_ = period / timestep` を上回る必要が
-  ある**(推測 → 実測で確認)。`timestep` = 0.03 s なので `period` 0.9 s
-  → `period_` = 30。既定 `horizon_length` = 26 では**ホライズンが 1 歩容
-  周期を覆えない**。40 へ上げた。
+- **`horizon_length` 26 → 40 で追従が改善したのは実験事実。** ただし
+  **「`horizon_length > period_` がコード上の必須条件」ではない**
+  (`computeContactSchedule` は `nominal_contact_schedule_[(i+phase) % period_]`
+  で剰余ラップし、大小関係に必須条件は無い。詳細:
+  `agent_reports/quadsdk_gap_foothold_mpc_code_analysis.md` §6.2)。
+  `period` 0.9 s → `period_` = 30 に対し既定 26 では NMPC が最適化する接触列が
+  1 歩容周期を覆わない、という**機序は推測**(要 A/B)。このパラメータ組で
+  40 が有利だった、という位置づけで扱う。
 
 ## 4. 施した変更(すべて設定のみ。C++ の挙動変更は無し)
 
