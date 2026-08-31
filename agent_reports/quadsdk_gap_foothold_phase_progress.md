@@ -56,8 +56,14 @@
   `robot_driver` が起立姿勢へ PD ホールド。**`status==VALID` の経路では
   挙動は不変**。`local_planner` テスト **31/31 green**(既存 + 新規 3 本)。
   詳細は下記「Phase 2A — 実装完了」。
-- **Phase 2B〜6 は未着手。** 次は Phase 2A のシミュレーション検証
-  (幅 10 m の穴の手前で 3 秒停止できるか)。
+- **Phase 3 完了(コード変更あり、既定 OFF)。** 足場選択後に
+  `edge_clearance`(m)以内の穴/地図外セルを検出したら
+  `FootholdStatus::EDGE_TOO_CLOSE` にする。`VALID` でないので Phase 2A が
+  そのまま拾い、plan を withhold する。**既定 `edge_clearance: 0.0`(無効)で
+  step03/04 は不変**。`edge_clearance:=0.15` で幅 10 m トレンチの安全停止が
+  **成立**(穴の約 0.7 m 手前で停止・直立保持・転落なし)。テスト **33/33**。
+  詳細は下記「Phase 3」。
+- **Phase 2B / 4 / 5 / 6 は未着手。** 次は Step 05(15 cm 連続穴の掃引)。
 
 ---
 
@@ -320,7 +326,53 @@ STAND 遷移・`cmd_vel`→0・Map 期限切れ・edge clearance・IK は **入�
 **結論:このシナリオを安定して通すには最低でも Phase 2B(能動的な停止
 シーケンス)が必要。Phase 3(穴縁からの安全距離)があれば停止位置に余裕が
 できてなお良い。** 指示書 §18 の想定どおり「Phase 2A だけでは安全停止に
-不十分」を実測で確認した。次はユーザーに Phase 2B/3 の変更計画を諮る。
+不十分」を実測で確認した。
+
+**ユーザー判断(2026-09-01)**:「Phase 3 のあとに Step 5」。→ Phase 2B は保留し、
+先に Phase 3 を実装した(下記)。結果、幅 10 m トレンチの安全停止は **Phase 3 で
+成立**(Phase 2B は当面不要)。
+
+### Phase 3 — `EDGE_TOO_CLOSE`(穴縁からの安全距離)
+
+**目的:足場が縁ぎりぎりへスナップして `VALID` を返し続ける前に無効判定を出し、
+安全停止をもっと手前で発火させる。**
+
+| # | 変更ファイル | 実装 |
+|---|---|---|
+| 3-1 | `local_footstep_planner.hpp` | `FootholdStatus` に `EDGE_TOO_CLOSE` 追加。`FootholdResult` に `edge_clearance`(選択セルから最寄りの危険セルまでの距離、スキャン半径でクランプ、無効時 NaN) |
+| 3-2 | `local_footstep_planner.{hpp,cpp}` | `setSpatialParams(..., double edge_clearance = 0.0)` + メンバ `edge_clearance_`(既定 0.0) |
+| 3-3 | `getNearestValidFootholdResult()` | `status==VALID` 確定後、`edge_clearance_ > 0` なら選択セル周囲を `SpiralIterator`(半径 `edge_clearance_`)で走査。**地図外 / 非有限 / `traversability ≤ foothold_obj_threshold_`** のセルが半径内にあれば `status = EDGE_TOO_CLOSE`、距離を `edge_clearance` に記録 |
+| 3-4 | `local_planner.cpp` + `local_planner.yaml` | `local_footstep_planner.edge_clearance` を `loadROSParamDefault(..., 0.0)` で読み `setSpatialParams` へ。yaml にキー追加(既定 **0.0 = OFF**) |
+| 3-5 | Phase 2A 連携 | **追加不要**。`EDGE_TOO_CLOSE` は `status != VALID` なので `record_foothold_failure` が拾い、`computeLocalPlan` が withhold |
+
+**設計判断(委譲、明記)**:enum は新値 `EDGE_TOO_CLOSE`(既存の再利用でなく、失敗
+分類のため)/ param 既定 0.0(step03/04 を壊さない・run ごと opt-in)/ 走査は
+スパイラル・危険セル = 地図外 or 非有限 or 閾値以下 / `.position` は選択セルのまま。
+
+**検証**:
+- 新規テスト 2 本 green:`FootholdResultReportsEdgeTooCloseNearHole`
+  (`edge_clearance 0.3`、穴から ~0.15 m の足場 → `EDGE_TOO_CLOSE`)/
+  `EdgeClearanceLeavesInteriorAndDisabledCaseValid`(穴から遠い → VALID、
+  `edge_clearance == 0` → VALID = opt-out)。
+- `colcon test --packages-select local_planner` → **33 tests, 0 failures**
+  (既存 31 + 新規 2)。
+- **sim(`edge_clearance:=0.15`、幅 10 m トレンチ、0.3 m/s、1 回)**:
+  go2 は **x≈1.30(縁の約 0.7 m 手前)で停止し、直立を保持**(z≈0.32、
+  roll/pitch < 0.02 rad、vx→0、試行終了 t≈36 まで転落なし)。
+  `[safe-stop]` 20 回、`status=4` 200 回。DIAG:`gnvf nominal x=1.938
+  status=4 edge_clr=0.100`(縁まで 0.10 m < 0.15 でトリップ)。
+  → **ユーザー基準「穴の手前で 3 秒止まれたら OK」を満たす。**
+  証拠 GIF `artifacts/gifs/quadsdk_phase3_trench10m_safestop.gif`。
+- **step03/04 回帰**:`edge_clearance` 既定 0.0 では Phase 3 ブロックは
+  `edge_clearance_ > 0.0` ガードで丸ごとスキップ → 挙動不変。
+  `flat_gaps_2m`(step03_1m、0.3 m/s、既定設定)の実走回帰を実施:
+  **go2 は x=0 → x=11.3 まで溝を連続で渡り切った**(z≈0.31 保持、
+  roll/pitch < 0.03 rad、`safe-stop`/`status=4` は 0 回)。既存の
+  step03_1m 0.3 m/s 成功記録(到達 x≈11.5 m)と一致。**Phase 3 既定 OFF は
+  溝渡りを壊さない。**
+
+**残**:go2 twist の非決定性があるため、複数速度(0.15/0.3/0.5)× 複数回の
+安全停止再現、および `edge_clearance` 値の感度は Step 05 と合わせて確認する。
 
 ### そのあと Phase 2B(未設計)
 

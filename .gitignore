@@ -36,6 +36,8 @@ artifacts/gifs/*.gif
 !artifacts/gifs/quadsdk_step03_1m_gbpl_goal2_success.gif
 # Step 05b(Phase 2A 安全停止検証):縁で一瞬止まってから穴へ前傾転落:
 !artifacts/gifs/quadsdk_phase2a_trench10m_fall.gif
+# Step 05b(Phase 3 で安全停止成立):穴の 0.7 m 手前で停止して直立保持:
+!artifacts/gifs/quadsdk_phase3_trench10m_safestop.gif
 
 # backup/(2.0GB、未追跡)。archive/は履歴保持のため意図的にgit管理下にあり
 # (archive/README.md参照)、対象外とする
@@ -78,3 +80,5 @@ artifacts/logs/quadsdk_gbpl_stockgap/
 artifacts/logs/quadsdk_quadsdk_phase2a_trench10m/
 artifacts/logs/quadsdk_quadsdk_phase2a_trench10m_v0p15/
 artifacts/logs/quadsdk_quadsdk_phase2a_trench10m_v3/
+artifacts/logs/quadsdk_quadsdk_phase3_trench10m_ec0p15/
+artifacts/logs/quadsdk_quadsdk_step03_1m_p3regr/

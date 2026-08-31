@@ -1,4 +1,12 @@
-# Step 05b:Phase 2A 安全停止の検証(幅 10 m の穴・穴の手前で止まれるか)
+# Step 05b:安全停止の検証(幅 10 m の穴・穴の手前で止まれるか)— Phase 2A → Phase 3 で成立
+
+> **更新(Phase 3 実施後)**:Phase 2A だけでは転落したが、**Phase 3
+> (`EDGE_TOO_CLOSE` = 穴縁からの安全距離)を有効(`edge_clearance:=0.15`)に
+> すると、go2 は穴の約 0.7 m 手前で停止し、そのまま直立を保った(≈10 s、
+> 試行終了まで転落せず)。ユーザー基準「穴の手前で 3 秒止まれたら OK」を満たす。**
+> 証拠 GIF: `artifacts/gifs/quadsdk_phase3_trench10m_safestop.gif`。
+> 以下、Phase 2A 単独の記録(§1〜)と Phase 3 の結果(§末尾「Phase 3 で解決」)。
+
 
 対象: `external/quad-sdk`(go2、`reference:=twist`)。Step 05(15 cm 連続穴)の
 前に、ユーザー指定で **安全停止を先に検証** した記録。
@@ -116,8 +124,74 @@ bash scripts/trial/make_gif.sh \
 - 変更 `external/quad-sdk/local_planner/src/local_planner.cpp`(`[safe-stop]` throttle 間隔 `5e8`→`1000` ms のバグ修正のみ。挙動ロジックは不変)
 - 新規 `artifacts/gifs/quadsdk_phase2a_trench10m_fall.gif`
 
+---
+
+## Phase 3 で解決(`EDGE_TOO_CLOSE` = 穴縁からの安全距離)
+
+Phase 2A 単独の敗因は「足場が縁ぎりぎり(x≈1.95)にスナップして `VALID` を
+返し続け、無効判定が出るのが遅い」だった。そこで **Phase 3** を実装:
+
+- 足場選択後、`edge_clearance`(m)以内に **地図外 / 非有限 /
+  `traversability ≤ 0.6` のセル** があれば `FootholdStatus::EDGE_TOO_CLOSE`
+  にする(`getNearestValidFootholdResult`)。
+- `EDGE_TOO_CLOSE` は `VALID` でないので **Phase 2A がそのまま拾い**、
+  `computeLocalPlan()` が plan を withhold する。追加配線は不要。
+- 既定 `edge_clearance: 0.0`(無効=Phase 3 前の挙動)。**step03/04 の溝渡りは
+  縁へのスナップを前提にしているので、既定 0 で不変。run ごとに opt-in。**
+- 詳細:`agent_reports/quadsdk_gap_foothold_phase_progress.md` §Phase 3。
+
+### 結果(`edge_clearance:=0.15`、幅 10 m トレンチ、0.3 m/s)
+
+| 項目 | Phase 2A 単独 | Phase 3 有効 |
+|---|---|---|
+| 停止時の胴体 x | x≈1.8〜2.0(縁の直上) | **x≈1.30(縁の約 0.7 m 手前)** |
+| 停止時の前進速度 | 0.5〜0.7 m/s(勢いあり) | 0.16 m/s → 0 |
+| 停止後 | 前傾 →(5〜11 s 後)穴へ転落 | **直立を保持(≈10 s、試行終了まで転落なし)** |
+| 最終姿勢 | 穴底で上下反転 / 横倒れ | **x=1.30, z=0.32, roll/pitch < 0.02 rad、直立** |
+| ガードの status | `NO_TRAVERSABLE_CANDIDATE`(2) | `EDGE_TOO_CLOSE`(4)。DIAG:`nominal x=1.938 status=4 edge_clr=0.100`(縁まで 0.10 m < 0.15 でトリップ)|
+
+- `[safe-stop]` ログ 20 回、`status=4`(EDGE_TOO_CLOSE)200 回。
+- **判定:成立**(穴に落ちない・転ばない・無効足場を NMPC へ渡さない・
+  穴の手前で 3 秒以上停止 → すべて満たす)。
+- go2 twist の非決定性はあるため、複数回・複数速度での再現確認は次イテレーションで
+  行う(現時点は 1 回)。
+
+### 追加検証:step03/04 の回帰
+
+`edge_clearance` 既定 0.0 では `getNearestValidFootholdResult` の Phase 3 ブロックは
+`if (... && edge_clearance_ > 0.0)` で丸ごとスキップされる → 挙動はバイト単位で不変。
+単体 `EdgeClearanceLeavesInteriorAndDisabledCaseValid` で opt-out を確認済み。
+`flat_gaps_2m`(step03_1m、0.3 m/s、既定設定)の実走回帰も実施(結果は
+`quadsdk_gap_foothold_phase_progress.md` に記録)。
+
+## Phase 3 を含む追加・変更ファイル
+
+- 変更 `external/quad-sdk/local_planner/include/local_planner/local_footstep_planner.hpp`
+  (`FootholdStatus::EDGE_TOO_CLOSE`、`FootholdResult.edge_clearance`、
+  `setSpatialParams` に `edge_clearance` 引数、`edge_clearance_` メンバ)
+- 変更 `external/quad-sdk/local_planner/src/local_footstep_planner.cpp`
+  (edge-clearance スパイラル走査、DIAG に `edge_clr` 追記)
+- 変更 `external/quad-sdk/local_planner/src/local_planner.cpp`
+  (`local_footstep_planner.edge_clearance` を `loadROSParamDefault` で読む、既定 0.0)
+- 変更 `external/quad-sdk/local_planner/config/local_planner.yaml`(`edge_clearance: 0.0` キー追加)
+- 変更 `external/quad-sdk/local_planner/test/test_footstep_planner.cpp`(Phase 3 テスト 2 本)
+- 新規 `artifacts/gifs/quadsdk_phase3_trench10m_safestop.gif`
+
+### Phase 3 の再現
+
+```bash
+# local_planner.yaml の edge_clearance を一時的に 0.15 にして実行(実行後 0.0 へ戻す)
+YAML=external/quad-sdk/local_planner/config/local_planner.yaml
+sed -i 's/^\(      edge_clearance: \)0.0\b/\10.15/' "$YAML"
+( cd ros2_ws && source /opt/ros/jazzy/setup.bash && \
+  colcon build --packages-select local_planner --symlink-install --allow-overriding local_planner )
+GAP_WORLD=flat_trench_10m.xml GAP_TAG=quadsdk_phase3_trench10m_ec0p15 \
+  FORWARD_VEL_MPS=0.3 DURATION_S=25 bash scripts/trial/run_quadsdk_gap_1m.sh
+sed -i 's/^\(      edge_clearance: \)0.15\b/\10.0/' "$YAML"
+```
+
 ## 関連
 
-- `agent_reports/quadsdk_gap_foothold_phase_progress.md` §Phase 2A(実装詳細)
+- `agent_reports/quadsdk_gap_foothold_phase_progress.md` §Phase 2A / §Phase 3(実装詳細)
 - `agent_reports/steps/step_05_quadsdk_repeated_15cm_gaps.md`(Step 05 事前調査)
 - `agent_reports/handoff/quadsdk_gap_foothold_handoff.md`(Phase 2B 設計項目)
