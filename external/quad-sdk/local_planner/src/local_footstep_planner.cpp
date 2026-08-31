@@ -159,7 +159,7 @@ void LocalFootstepPlanner::cubicHermiteSpline(double pos_prev, double vel_prev,
             duration2;
 }
 
-void LocalFootstepPlanner::computeFootPlan(
+FootPlanResult LocalFootstepPlanner::computeFootPlan(
     int current_plan_index,
     const std::vector<std::vector<bool>>& contact_schedule,
     const Eigen::MatrixXd& body_plan, const Eigen::MatrixXd& grf_plan,
@@ -172,12 +172,26 @@ void LocalFootstepPlanner::computeFootPlan(
     Eigen::MatrixXd& foot_accelerations) {
   // [MPC_DOG DIAG]
   int diag_new_contacts = 0, diag_snap_calls = 0, diag_outside = 0;
+
+  // Phase 2A: track whether every touchdown got a traversable in-map foothold.
+  // Records the first failure and a total count; does not alter selection.
+  FootPlanResult plan_result;
+  auto record_foothold_failure = [&](FootholdStatus status, int leg,
+                                     int touchdown_index) {
+    if (plan_result.ok) {
+      plan_result.ok = false;
+      plan_result.worst_status = status;
+      plan_result.failed_leg = leg;
+      plan_result.failed_touchdown_index = touchdown_index;
+    }
+    ++plan_result.failed_count;
+  };
   // Place new footholds at touchdown events.
   for (int j = 0; j < num_feet_; j++) {
     for (size_t i = 1; i < contact_schedule.size(); i++) {
       if (isNewContact(contact_schedule, i, j)) {
         ++diag_new_contacts;
-        Eigen::Vector3d foot_position, foot_position_grf, foot_position_nominal,
+        Eigen::Vector3d foot_position_grf, foot_position_nominal,
             hip_position_midstance, centrifugal, vel_tracking,
             foot_position_raibert;
 
@@ -256,6 +270,10 @@ void LocalFootstepPlanner::computeFootPlan(
 
         if (!terrain_grid_.isInside(foot_position_grid_map)) {
           ++diag_outside;
+          // Phase 2A: the bare `continue` below leaves this touchdown without a
+          // fresh foothold; flag it so computeLocalPlan() can withhold the plan.
+          record_foothold_failure(FootholdStatus::NOMINAL_OUTSIDE_MAP, j,
+                                  static_cast<int>(i));
           RCLCPP_WARN(node_->get_logger(),
                       "Foot position is outside the map. Steer the robot in "
                       "another direction");
@@ -272,10 +290,20 @@ void LocalFootstepPlanner::computeFootPlan(
 
         Eigen::Vector3d foot_position_previous =
             foot_positions.block<1, 3>(i, 3 * j);
-        foot_position = getNearestValidFoothold(foot_position_nominal,
-                                                foot_position_previous);
+        const FootholdResult foothold =
+            getNearestValidFootholdResult(foot_position_nominal,
+                                          foot_position_previous);
 
-        foot_positions.block<1, 3>(i, 3 * j) = foot_position;
+        if (foothold.status == FootholdStatus::VALID) {
+          foot_positions.block<1, 3>(i, 3 * j) = foothold.position;
+        } else {
+          // Phase 2A: no traversable / finite cell was found. Do NOT write the
+          // hole/NaN nominal into the plan; inherit the previous touchdown value
+          // (same as the non-touchdown branch) and flag the failure.
+          record_foothold_failure(foothold.status, j, static_cast<int>(i));
+          foot_positions.block<1, 3>(i, 3 * j) =
+              getFootData(foot_positions, i - 1, j);
+        }
 
       } else {
         // Non-touchdown samples inherit the previous foothold.
@@ -470,6 +498,7 @@ void LocalFootstepPlanner::computeFootPlan(
         diag_cfp_calls, diag_new_contacts, diag_snap_calls, diag_outside,
         current_plan_index, contact_schedule.size());
   }
+  return plan_result;
 }
 
 void LocalFootstepPlanner::loadFootPlanMsgs(

@@ -141,6 +141,13 @@ class LocalPlanner {
   /// Threshold of consecutive failures before publishing
   int failure_threshold_ = 10;
 
+  /// Phase 2A: when true, computeLocalPlan() withholds the local plan (returns
+  /// false, so publishLocalPlan() is not called and the plan goes stale ->
+  /// robot_driver PD-holds the stand pose) if computeFootPlan() could not place
+  /// every touchdown on a traversable in-map cell. Set false to fall back to the
+  /// pre-Phase-2A behaviour (plan with the last-good foothold held).
+  bool stop_on_invalid_foothold_ = true;
+
   /// Define map frame
   std::string map_frame_;
 

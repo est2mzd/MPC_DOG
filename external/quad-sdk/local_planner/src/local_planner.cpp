@@ -79,6 +79,11 @@ LocalPlanner::LocalPlanner(rclcpp::Node::SharedPtr node)
   // nh.param<bool>("local_planner/use_twist_input", use_twist_input_, false);
   quad_utils::loadROSParamDefault(node_, "local_planner.use_twist_input",
                                   use_twist_input_, false);
+  // Phase 2A safe-stop toggle (default on). Withhold the local plan when a
+  // touchdown could not be placed on a traversable in-map cell.
+  quad_utils::loadROSParamDefault(node_,
+                                  "local_planner.stop_on_invalid_foothold",
+                                  stop_on_invalid_foothold_, true);
 
   // Convert kinematics
   quadKD_ = std::make_shared<quad_utils::QuadKD2>(node_, robot_ns_);
@@ -530,12 +535,28 @@ bool LocalPlanner::computeLocalPlan() {
 
   // Compute the new footholds if we have a valid existing plan (i.e. if
   // grf_plan is filled)
-  local_footstep_planner_->computeFootPlan(
+  const FootPlanResult foot_plan_result =
+      local_footstep_planner_->computeFootPlan(
       current_plan_index_, contact_schedule_, body_plan_, grf_plan_,
       ref_body_plan_, current_foot_positions_world_,
       current_foot_velocities_world_, first_element_duration_,
       past_footholds_msg_, foot_positions_world_, foot_velocities_world_,
       foot_accelerations_world_);
+
+  // Phase 2A: never hand an invalid foothold plan to NMPC. Returning false here
+  // skips publishLocalPlan(); the local plan then goes stale and robot_driver
+  // PD-holds the stand pose (existing 0.1 s timeout path).
+  if (stop_on_invalid_foothold_ && !foot_plan_result.ok) {
+    RCLCPP_WARN_THROTTLE(
+        node_->get_logger(), *node_->get_clock(),
+        static_cast<rcutils_duration_value_t>(5e8),
+        "[safe-stop] withholding local plan: %d touchdown(s) without a valid "
+        "foothold (first: leg=%d horizon_idx=%d status=%d)",
+        foot_plan_result.failed_count, foot_plan_result.failed_leg,
+        foot_plan_result.failed_touchdown_index,
+        static_cast<int>(foot_plan_result.worst_status));
+    return false;
+  }
   // Transform the new foot positions into the body frame for body planning
   local_footstep_planner_->getFootPositionsBodyFrame(
       body_plan_, foot_positions_world_, foot_positions_body_);

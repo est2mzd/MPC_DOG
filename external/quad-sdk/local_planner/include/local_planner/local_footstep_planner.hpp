@@ -58,6 +58,24 @@ struct FootholdResult {
   double snap_distance = 0.0;  //!< ||chosen.xy - nominal.xy||, metres
 };
 
+//! Aggregate outcome of one computeFootPlan() call over the whole horizon.
+/*!
+   Phase 2A: computeFootPlan() walks every touchdown event of every leg. If any
+   touchdown could not be placed on a traversable cell (status != VALID, or the
+   nominal fell outside the map) the plan is not safe to hand to NMPC. This
+   struct reports that so LocalPlanner::computeLocalPlan() can withhold the
+   local plan (see local_planner.stop_on_invalid_foothold). It carries the
+   first failure's details plus a total count; it never changes the footholds.
+*/
+struct FootPlanResult {
+  bool ok = true;                //!< false if any touchdown failed placement
+  FootholdStatus worst_status =  //!< status of the first failing touchdown
+      FootholdStatus::VALID;
+  int failed_leg = -1;              //!< leg index of the first failure, -1 if none
+  int failed_touchdown_index = -1;  //!< horizon index of the first failure
+  int failed_count = 0;             //!< total failing touchdowns this call
+};
+
 //! Local footstep planner for quadruped body plans
 /*!
    LocalFootstepPlanner converts a body plan and contact schedule into
@@ -169,19 +187,22 @@ class LocalFootstepPlanner {
    * @param[out] foot_positions Foot positions over the horizon
    * @param[out] foot_velocities Foot velocities over the horizon
    * @param[out] foot_accelerations Foot accelerations over the horizon
+   * @return FootPlanResult: ok=false (with first-failure details + count) if any
+   * touchdown could not be placed on a traversable in-map cell. Footholds are
+   * unchanged relative to the pre-Phase-2A behaviour except that a failed
+   * touchdown now inherits the previous foothold instead of a hole/NaN cell.
    */
-  void computeFootPlan(int current_plan_index,
-                       const std::vector<std::vector<bool>>& contact_schedule,
-                       const Eigen::MatrixXd& body_plan,
-                       const Eigen::MatrixXd& grf_plan,
-                       const Eigen::MatrixXd& ref_body_plan,
-                       const Eigen::VectorXd& foot_positions_current,
-                       const Eigen::VectorXd& foot_velocities_current,
-                       double first_element_duration,
-                       quad_msgs::msg::MultiFootState& past_footholds_msg,
-                       Eigen::MatrixXd& foot_positions,
-                       Eigen::MatrixXd& foot_velocities,
-                       Eigen::MatrixXd& foot_accelerations);
+  FootPlanResult computeFootPlan(
+      int current_plan_index,
+      const std::vector<std::vector<bool>>& contact_schedule,
+      const Eigen::MatrixXd& body_plan, const Eigen::MatrixXd& grf_plan,
+      const Eigen::MatrixXd& ref_body_plan,
+      const Eigen::VectorXd& foot_positions_current,
+      const Eigen::VectorXd& foot_velocities_current,
+      double first_element_duration,
+      quad_msgs::msg::MultiFootState& past_footholds_msg,
+      Eigen::MatrixXd& foot_positions, Eigen::MatrixXd& foot_velocities,
+      Eigen::MatrixXd& foot_accelerations);
 
   /**
    * @brief Convert the foot positions and contact schedule into ros messages
