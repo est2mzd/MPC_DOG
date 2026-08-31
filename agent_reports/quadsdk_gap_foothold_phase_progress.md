@@ -42,9 +42,12 @@
   分けて書き直した。
 - **Phase 1 完了(コード変更あり、ただし挙動は不変)。** 足場選択関数を、
   「位置だけ返す」から「**成功/失敗の種類 + 診断値**も返す」型へ拡張した。
-  返す位置は従来と 1 バイトも変わらない(既存テストで確認済み)。
-  これは Phase 2 以降(安全停止・縁の余裕・逆運動学チェック)の足場になる。
-- **Phase 2〜6 は未着手。** 次は「有効足場が無いとき安全に止まる」。
+  返す位置は従来と 1 バイトも変わらない。付随して、以前から red だった
+  無関係なテスト(`horizon_length` 期待値の古い 26)を実値 40 へ揃えた結果、
+  **`local_planner` の全 29 テストが green**。
+- **Phase 2 は「2A(NMPC へ無効足場を渡さない)」と「2B(遊脚を考慮した停止
+  シーケンス設計)」に分割。** Phase 2A の変更計画(表)は提示済み・**未実装**。
+- **Phase 2〜6 は未着手。** 次は Phase 2A の実装(確認後)。
 
 ---
 
@@ -100,8 +103,9 @@
 |---|---|---|---|
 | 解析 | 資料 ⇔ コード照合、terrain map / foot placement / NMPC を数式とコードで整理 | ✅ | `3a6c705` `c9cf853` |
 | 0 | 解析で判明した資料の 3 誤りを訂正。**コード変更なし** | ✅ | `6e089e1` |
-| 1 | 足場選択器を「位置だけ」→「成功/失敗 + 診断値」を返す型へ。**挙動不変** | ✅ | `484ea13` |
-| 2 | 有効足場なし / 地図外を下流へ伝播し、安全に減速・停止 | ⬜ 変更計画を提示してから | ― |
+| 1 | 足場選択器を「位置だけ」→「成功/失敗 + 診断値」を返す型へ。**挙動不変** | ✅ | `484ea13` `88605aa` `6282643` |
+| 2A | NMPC へ無効足場(穴上・地図外・高さ非有限)を渡さない | ⬜ 変更計画提示済み・未実装 | ― |
+| 2B | 遊脚を考慮した安全な減速・停止シーケンスを設計 | ⬜ 2A 完了後 | ― |
 | 3 | 穴縁からの安全距離を地図上で明示判定 | ⬜ | ― |
 | 4 | 逆運動学の可到達性で候補を絞る | ⬜ | ― |
 | 5 | 大きな足場補正時の減速/刻み歩行 | ⬜ | ― |
@@ -215,30 +219,58 @@ struct FootholdResult {
   → 足場選択の結果は変わっていない。
 - `LocalFootstepPlannerTest` **17/17 pass**。
 
-**既知の無関係な失敗**
+### `88605aa` — ドキュメント語の統一(コードなし)
 
-`LocalPlannerTest.ConstructorLoadsYamlConfigurationAndInterfaces` が fail。
-`test_local_planner.cpp:175` の `EXPECT_EQ(planner.N_, 26)` と、
-`local_planner.yaml` の `horizon_length: 40`(コミット `9ccd639` 以来)の齟齬。
-**Phase 1 とは無関係の先行バグ。** 別コミットで直す(1 コミット 1 目的のため保留)。
+`found==false`(bool 1 個の言い方)を **`status != FootholdStatus::VALID`** に
+統一。理由:Phase 1 で「失敗」は `NOMINAL_OUTSIDE_MAP` / `NO_TRAVERSABLE_CANDIDATE` /
+`NONFINITE_HEIGHT` の 3 種になったので、下流へ伝えるべき条件は「`VALID` でない」。
+単体試験表には「広い穴 → `NO_TRAVERSABLE_CANDIDATE`」「地図外 → `NOMINAL_OUTSIDE_MAP`」
+と具体名を書いた。
 
-### `45720a5` — 本フェーズ実施ログ + README リンク
+### `6282643` — 先行バグの修正(テストのみ、制御コードなし)
+
+`test_local_planner.cpp:175` の `EXPECT_EQ(planner.N_, 26)` を **40** へ。
+`local_planner.yaml` の `horizon_length` は `9ccd639`(クロール歩容)以来 40 で、
+このアサートは古い値を追っていただけ。Phase 1 とは無関係。
+
+結果:`colcon test --packages-select local_planner` →
+`Summary: 29 tests, 0 errors, 0 failures`。
+`LocalFootstepPlannerTest` 17 + `LocalPlannerTest` 12 = **29/29 green**
+(以前 red だった `ConstructorLoadsYamlConfigurationAndInterfaces` も green)。
+
+### `45720a5` `ea14d7b` — 本フェーズ実施ログの作成・書き直し + README リンク
 
 ---
 
-## 次にやること(Phase 2、未着手)
+## 次にやること:Phase 2A の実装(確認後)
 
-「有効な足場が無い / 地図の外」を下流へ伝える:
+**目的:穴上・地図外・高さ非有限の足場を NMPC へ絶対に渡さない。**
+STAND 遷移・`cmd_vel`→0・Map 期限切れ・edge clearance・IK は **入れない**
+(それぞれ Phase 2B / 3 / 4)。停止自体は既存の
+「local plan 0.1 s タイムアウト → `robot_driver` が起立姿勢へ PD ホールド」に委ねる。
 
-- 新しい一歩を確定しない / `cmd_vel` を 0 へ / 全脚接地できるなら起立へ /
-  `planner_failed` に理由(地図外 / 未観測 / 穴が広すぎ / 地図が古い)を通知。
-- **地図外は `getNearestValidFoothold` に届かない**ので、
-  `computeFootPlan` の `continue` 地点(`local_footstep_planner.cpp:255-261`)
-  にもフックが要る。
-- 急停止で転倒しうるので、いきなりトルク 0 にはしない。
+変更計画(提示済み・未実装):
 
-着手前に、変更ファイル・関数・内容・理由・既存挙動への影響・検証方法を
-表(指示書 14 節形式)で提示する。
+| # | 変更 | 内容 |
+|---|---|---|
+| 2A-1 | `computeFootPlan()` の戻り値 | `void` → `struct FootPlanResult{ok, worst_status, failed_leg, failed_touchdown_index, failed_count}`。touchdown ループで `status != VALID` を集計、最初の失敗を記録 |
+| 2A-2 | `computeFootPlan()` の地図外 `continue`(`:255-261`) | 裸の `continue` の前に `NOMINAL_OUTSIDE_MAP` + leg/index を記録 |
+| 2A-3 | `computeFootPlan()` の foothold 書き込み(`:276` ほか) | `status != VALID` のとき穴上の名目/NaN 高さを書かず、直前 touchdown 値を踏襲(非 touchdown 分岐と同じ) |
+| 2A-4 | `computeLocalPlan()`(`local_planner.cpp:527-560`) | `FootPlanResult.ok == false` なら **NMPC を呼ばず `return false`** → `spin()` が `publishLocalPlan()` を呼ばない |
+| 2A-5 | 検証 | 単体(穴地形で `ok==false`、失敗 touchdown の行が穴 nominal でない、`computeLocalPlan` が false)+ 無効 plan 非 publish のテスト + 回帰(0.15/0.3/0.5 m/s の既存成功走行が引き続き渡る) |
+
+**要確認**:戻り値を `bool` にするか構造体にするか / 常時 ON か
+`stop_on_invalid_foothold` パラメータで切れるようにするか / 失敗記録は
+「最初の 1 件」でよいか。
+
+### そのあと Phase 2B(未設計)
+
+WALKING / STOP_REQUESTED / WAITING_FOR_ALL_CONTACT / STAND / FAILURE_LATCHED
+の状態遷移表を作る。遊脚がある時点で失敗を検出した場合の扱い、新 liftoff の
+禁止タイミング、`cmd_vel`→0 のタイミング、全脚接地判定に計画値/実測値の
+どちらを使うか、最後の有効 plan を何秒使うか、`planner_failed` に購読者が
+いない現状への対応、Map 回復時の自動復帰、robot_driver の 0.1 s タイムアウト
+との整合、を明確にする。**コード変更前に設計表を提示する。**
 
 ## 関連
 
