@@ -44,6 +44,9 @@ artifacts/gifs/*.gif
 # README 埋め込み(15-30s / 15-25s 切り抜き):
 !artifacts/gifs/quadsdk_phase3_gap30_cross_15to30s.gif
 !artifacts/gifs/quadsdk_phase3_gap100_safestop_15to25s.gif
+# Step 05(15cm連続穴を渡る、full と 12-32s 切り抜き):
+!artifacts/gifs/quadsdk_step05_s15g15n5_cross.gif
+!artifacts/gifs/quadsdk_step05_s15g15n5_cross_12to32s.gif
 
 # backup/(2.0GB、未追跡)。archive/は履歴保持のため意図的にgit管理下にあり
 # (archive/README.md参照)、対象外とする
@@ -90,3 +93,4 @@ artifacts/logs/quadsdk_quadsdk_phase3_trench10m_ec0p15/
 artifacts/logs/quadsdk_quadsdk_step03_1m_p3regr/
 artifacts/logs/quadsdk_quadsdk_p3fix_gap30/
 artifacts/logs/quadsdk_quadsdk_p3fix_gap100/
+artifacts/logs/quadsdk_quadsdk_step05_*/

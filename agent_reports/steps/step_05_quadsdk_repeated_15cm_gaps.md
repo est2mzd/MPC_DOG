@@ -1,14 +1,107 @@
-# Step 05:15 cm 平地・15 cm 穴の連続区間(N=2〜5)— 事前調査結果
+# Step 05:15 cm 平地・15 cm 穴の連続区間(N=2〜5)
 
 対象: `external/quad-sdk`(go2、`reference:=twist` の Step 01 ハーネス系)。
 Step 03/04(Quadruped-PyMPC、浅い轍)とは**別実装・別ロボットスタック**。
 
-> **この文書の段階**: 指示書
-> `chatgpt_instruction/cursor_instruction_quadsdk_step05_repeated_15cm_gaps.md`
-> の「§17 最初の回答で行うこと」に対応する **事前調査のみ**。
-> **コードも地形も、まだ一切変更していない。** 末尾の変更計画表を提示した
-> 時点で停止し、ユーザーの承認を待つ(指示書 §15・§18)。
->
+> **この文書の構成**:
+> - **§実施結果(先頭)** … Phase 2A/3 を実装したうえで掃引した sim 結果。
+> - **§背景〜§変更計画** … 着手前の事前調査(指示書 §17)。当時の
+>   「幾何学的に成立困難寄り」という見立ては **実測で覆った**(下記)。
+
+---
+
+## 実施結果(2026-09-01、Phase 2A + Phase 3(A) 有効)
+
+### 結論(先に3行)
+
+1. **go2 は 15 cm 平地・15 cm 穴の連続区間を N=2〜5 で安定して渡り切った**
+   (`edge_clearance:=0.15`、クロール歩容、0.3 m/s。各条件 1〜4 回、全て通過)。
+   事前調査の「地図 1 セル・足先寸法ぎりぎりで成立困難寄り」という見立ては
+   **実測で覆った**。理由:Phase 3(A) の forward-probe が 15 cm 穴を
+   「渡れる穴」と判定して `VALID` を通し、Raibert 足場が 5 cm のメッシュ帯へ
+   スナップされて、クロール歩容が跨げた。
+2. **胴体は全区間で z≈0.31 を保持**(`min z` は全 run で ≥ 0.305)。
+   足が物理穴へ入った形跡は無し。転倒 1 件は **穴を渡り終えた後**の
+   着地面上での go2 twist 非決定転倒(3 回再走で 0/3 再現)。
+3. **Phase 2A/3 の安全停止も並行して機能**:遠方ホライズンの touchdown が
+   一時的に `EDGE_TOO_CLOSE` になると `[safe-stop]` が数回出て plan を
+   1〜数サイクル止めるが、ロボットは詰まらず渡り切る。無効足場は NMPC へ
+   渡っていない。
+
+### 掃引結果(`gen_quadsdk_repeated_gap_world.py`、`x0=2.0`、深さ 1 m、
+mesh_margin 0.05、0.3 m/s、`edge_clearance:=0.15` / `max_crossable_gap:=0.6`)
+
+| strip / gap | N | 試行 | 通過 | 転倒 | 最終 x(到達)| min z | 主な所見 |
+|---|---:|---:|---:|---:|---:|---:|---|
+| 15 / 15 cm | 2 | 4 | 4 | 0 | 7.9〜8.0 | 0.306 | `safe-stop` 6〜9 回出るが渡り切る |
+| 15 / 15 cm | 3 | 1 | 1 | 0 | 7.6 | ~0.306 | 同上 |
+| 15 / 15 cm | 4 | 1 | 1 | 0 | 7.5 | ~0.306 | 同上 |
+| 15 / 15 cm | 5 | 4 | 4 | 0 | 7.9〜8.7 | 0.305 | **5 本連続で渡る**。証拠 GIF |
+| 25 / 15 cm | 2 | 1 | 1 | 0 | 8.2 | ~0.306 | |
+| 35 / 15 cm | 2 | 1 | 1 | 0 | 8.2 | ~0.306 | |
+| 50 / 15 cm | 2 | 4 | 3 | 1 | 8.3(3 回)/ 3.4(転倒)| 0.306 | 転倒 1 回は**両穴通過後**、着地面 x≈3.4 での非決定転倒。再走 3/3 通過 |
+
+- 「通過」= 胴体 x がテスト区間終端(`2.0 + 0.3N`)+ 0.2 m を越え、
+  最終 roll < 0.8 rad、`min z` ≥ 0.15(穴落ち・転倒なし)。
+- テスト区間は短い(N=5 で 1.5 m)。到達 x≈8 は、区間通過後も着地平面を
+  歩き続けた結果(cmd_vel を出し続けるハーネスのため)。
+- **step03/04 は不変**:`edge_clearance` 既定 0.0。この Step のみ run 時に
+  `0.15` へ一時パッチ(実行後 0.0 へ復元)。
+
+### 指示書 §19 の問いへの回答(現時点)
+
+1. **15 cm 物理穴は Terrain Map 上で接地禁止になっているか** → はい。
+   メッシュに面が無く生 `z`=NaN → `traversability`=NaN。DIAG の
+   `addLayerFromPolygonMesh` で穴帯のセルが非有限になるのを確認
+   (例:N=2 で `finite=22000/23200`)。
+2. **片側 5 cm の危険帯を考慮した残存幅** → メッシュ solid 帯は
+   `15 − 2×5 = 5 cm` = 地図 1 セル(0.05 m/セル)。事前調査の計算どおり。
+3. **その領域へ Go2 の足先を物理的に置けるか** → **置けた**(`min z` 0.305、
+   穴落ちなし)。足先幅 ~4.4 cm < 5 cm、クロール歩容の遅い遊脚で収まった。
+4. **IK 上到達できるか** → 明示判定は無いが(Phase 4 未実装)、実走では
+   到達不能による破綻は観測されず。
+5. **N=2,3,4,5 のどこまで通過できるか** → **N=5 まで再現性を持って通過**。
+6. **通過回数が増えると誤差が蓄積するか** → N=2〜5 で明確な悪化は見えず
+   (到達 x・min z・safe-stop 回数に単調な劣化なし)。
+7. **通過不能時に安全停止できるか** → 幅 10 m / 100 cm の断崖では
+   Phase 3(A) が手前で安全停止(`step_05b`)。15 cm 連続穴では停止不要で通過。
+8. **限界を決めているのは Map / Foot Placement / IK / NMPC / 下位制御のどこか**
+   → 15 cm 連続穴では**限界に達していない**。50 cm strip の 1 回転倒は
+   下位制御 + go2 twist 非決定性(Map/Foot Placement 起因でない)。
+
+### 再現
+
+```bash
+YAML=external/quad-sdk/local_planner/config/local_planner.yaml
+sed -i 's/^\(      edge_clearance: \)0.0\b/\10.15/' "$YAML"   # 実行後 0.0 へ戻す
+python3 src/trial/assets/gen_quadsdk_repeated_gap_world.py 0.15 0.15 5 2.0 1.0 s15g15n5 0.05
+SRC=external/quad-sdk/quad_simulator/quad_sim_scripts
+INST=ros2_ws/install/quad_sim_scripts/share/quad_sim_scripts
+ln -sfn "$PWD/$SRC/worlds/flat_repgap_s15g15n5.xml.xacro" "$INST/worlds/flat_repgap_s15g15n5.xml.xacro"
+ln -sfn "$PWD/$SRC/models/flat_repgap_s15g15n5" "$INST/models/flat_repgap_s15g15n5"
+( cd ros2_ws && source /opt/ros/jazzy/setup.bash && colcon build --packages-select local_planner --symlink-install --allow-overriding local_planner )
+GAP_WORLD=flat_repgap_s15g15n5.xml GAP_TAG=quadsdk_step05_s15g15n5 FORWARD_VEL_MPS=0.3 DURATION_S=35 \
+  bash scripts/trial/run_quadsdk_gap_1m.sh
+sed -i 's/^\(      edge_clearance: \)0.15\b/\10.0/' "$YAML"
+```
+
+証拠 GIF:`artifacts/gifs/quadsdk_step05_s15g15n5_cross_12to32s.gif`
+(15 cm 平地 / 15 cm 穴 ×5 をクロールで渡る、12–32 s 切り抜き)。
+
+### この Step の追加・変更ファイル
+
+- 新規 `src/trial/assets/gen_quadsdk_repeated_gap_world.py`(既コミット)
+- 新規 `external/quad-sdk/.../worlds/flat_repgap_s*.xml.xacro` +
+  `models/flat_repgap_s*/`(掃引で生成)
+- 新規 `artifacts/gifs/quadsdk_step05_s15g15n5_cross{,_12to32s}.gif`
+- 制御コード変更は Phase 2A / Phase 3(A)(`quadsdk_gap_foothold_phase_progress.md`)。
+  この Step 単独での C++ 変更は無し。
+
+---
+
+> **以下は着手前の事前調査(指示書 §17)。当時「幾何学的に成立困難寄り」と
+> 見立てたが、上記のとおり実測で N=5 まで通過した。**
+
 > **読み方の約束**:
 > - **事実** … コード・設定ファイル・`git` で確認済み。各項に「(確認済み)」。
 > - **未確認** … まだ実行/計測していない。
