@@ -47,6 +47,9 @@ artifacts/gifs/*.gif
 # Step 05(15cm連続穴を渡る、full と 12-32s 切り抜き):
 !artifacts/gifs/quadsdk_step05_s15g15n5_cross.gif
 !artifacts/gifs/quadsdk_step05_s15g15n5_cross_10to30s.gif
+# Step 06(15cm穴x2 -> 1m穴:断続停止して転倒、full と 10-30s):
+!artifacts/gifs/quadsdk_step06_last1m_fall.gif
+!artifacts/gifs/quadsdk_step06_last1m_fall_10to30s.gif
 
 # backup/(2.0GB、未追跡)。archive/は履歴保持のため意図的にgit管理下にあり
 # (archive/README.md参照)、対象外とする
@@ -94,3 +97,4 @@ artifacts/logs/quadsdk_quadsdk_step03_1m_p3regr/
 artifacts/logs/quadsdk_quadsdk_p3fix_gap30/
 artifacts/logs/quadsdk_quadsdk_p3fix_gap100/
 artifacts/logs/quadsdk_quadsdk_step05_*/
+artifacts/logs/quadsdk_quadsdk_step06_*/
