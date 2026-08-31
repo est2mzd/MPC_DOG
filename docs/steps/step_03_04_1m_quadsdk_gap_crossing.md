@@ -22,6 +22,46 @@ Step 03/04(Quadruped-PyMPC、浅い轍)とは**別実装・別ロボットスタ
 
 ---
 
+## 結論(先に3行)
+
+1. **GAIT / 足の周波数は Quad-SDK が自動調整しない**(確認済み、コード)。
+   `period` / `duty_cycles` / `phase_offsets` は起動時に `go2.yaml` から
+   1 回読んで固定テーブル(`nominal_contact_schedule_`)を作るだけ。twist
+   モードに歩容のオンライン適応は無く、地形適応は **足場**(`getNearestValidFoothold`)
+   と **胴体の高さ/傾き参照**(`getTerrainSlope`/`getTerrainHeight`)の 2 箇所
+   だけ。歩容を動的に変える経路(LEAP/FLIGHT プリミティブ)は global body
+   planner(`reference:=gbpl` + ゴール)の担当で、twist モードでは発火しない。
+   → **穴に合わせて歩容を落としたいなら手で `go2.yaml` を変える**(今回は
+   トロット → 静的安定なクロールへ。3 節)。terrain 連動にしたければコード追加。
+
+2. **足場を正しく認識させる要点は「`traversability` レイヤを穴の上で実際に
+   下げる」こと。** `getNearestValidFoothold` は
+   `traversability ≤ foothold_obj_threshold(0.6)` or NaN のセルを却下し、
+   `foothold_search_radius` 内の閾値超え最近セルへスナップするだけ。
+   そのために必要な 3 条件:
+   - **(a) 地形メッシュに“本物の穴”を空ける**(その帯に三角形を置かない)。
+     生 `z` が NaN になり、`filter_chain.yaml` の穴検出フィルタ
+     `traversability_hole_mask = 1 − |z_raw − z_inpainted|` が発火する。
+     段差・ランプ・ジグザグ・「下げただけの面」では**発火しない**(面が
+     在る=傾いてるだけになり、ノイジーな slope/roughness 頼みになる)。
+   - **(b) 探索半径が立入禁止帯を跨げる + 足場を崩れかけの縁に載せない。**
+     `foothold_search_radius` >(帯の半分)。メッシュ穴を物理穴より少し
+     広く(今回 +0.05 m/側)して、スナップ先を縁から手前の solid にする。
+   - **(c) solid 部分は完全に平ら・水平に保つ。** 同じマップの `z_smooth` /
+     `smooth_normal_vectors` が `getTerrainSlope`/`getTerrainHeight` 経由で
+     **胴体の偽の高さ/ピッチ指令**を作る。足場だけ直して胴体参照を壊すと、
+     足は穴の外なのに縁で胴体が突っ込む。
+   - 配線用の設定(`obj_fun_layer: traversability`, `foothold_obj_threshold: 0.6`)
+     は既定のままで正しい。実機ではマップが知覚由来になるが、本物の穴は
+     自然に NaN/低値セルになるので同じ機構がそのまま効く。
+
+3. この 2 つ(静的安定なクロール歩容 + 本物の穴のメッシュ)が揃えば、
+   **セントロイダル NMPC + Raibert 足場の twist モードのまま**、go2 は
+   1 m 深・0.3 m 幅の穴を連続で渡れる(LEAP プリミティブは不要)。
+   詳細な根拠は以下 3〜6 節。
+
+---
+
 ## 0. 用語(この文書で使う言葉)
 
 - **四足の脚と歩容**
