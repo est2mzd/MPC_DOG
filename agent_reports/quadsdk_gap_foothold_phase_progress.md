@@ -48,8 +48,16 @@
   無関係なテスト(`horizon_length` 期待値の古い 26)を実値 40 へ揃えた結果、
   **`local_planner` の全 29 テストが green**。
 - **Phase 2 は「2A(NMPC へ無効足場を渡さない)」と「2B(遊脚を考慮した停止
-  シーケンス設計)」に分割。** Phase 2A の変更計画(表)は提示済み・**未実装**。
-- **Phase 2〜6 は未着手。** 次は Phase 2A の実装(確認後)。
+  シーケンス設計)」に分割。**
+- **Phase 2A 完了(コード変更あり)。** `computeFootPlan()` が
+  `FootPlanResult{ok,...}` を返し、無効足場が 1 つでもあれば
+  `computeLocalPlan()` が `stop_on_invalid_foothold`(既定 ON)のとき
+  local plan を publish しない → 既存の 0.1 s タイムアウト経由で
+  `robot_driver` が起立姿勢へ PD ホールド。**`status==VALID` の経路では
+  挙動は不変**。`local_planner` テスト **31/31 green**(既存 + 新規 3 本)。
+  詳細は下記「Phase 2A — 実装完了」。
+- **Phase 2B〜6 は未着手。** 次は Phase 2A のシミュレーション検証
+  (幅 10 m の穴の手前で 3 秒停止できるか)。
 
 ---
 
@@ -242,28 +250,64 @@ struct FootholdResult {
 
 ### `45720a5` `ea14d7b` — 本フェーズ実施ログの作成・書き直し + README リンク
 
----
-
-## 次にやること:Phase 2A の実装(確認後)
+### Phase 2A — 実装完了(コミット 2 本:制御コード + テスト)
 
 **目的:穴上・地図外・高さ非有限の足場を NMPC へ絶対に渡さない。**
-STAND 遷移・`cmd_vel`→0・Map 期限切れ・edge clearance・IK は **入れない**
+STAND 遷移・`cmd_vel`→0・Map 期限切れ・edge clearance・IK は **入れていない**
 (それぞれ Phase 2B / 3 / 4)。停止自体は既存の
 「local plan 0.1 s タイムアウト → `robot_driver` が起立姿勢へ PD ホールド」に委ねる。
 
-変更計画(提示済み・未実装):
+**ユーザーからの回答で確定した設計判断(2026-08-31)**:
 
-| # | 変更 | 内容 |
+- 戻り値は **`struct FootPlanResult{ok, worst_status, failed_leg,
+  failed_touchdown_index, failed_count}`**(bare `bool` ではなく診断つき)。
+- **`stop_on_invalid_foothold` パラメータ(既定 `true`)** で切れる。
+  `false` で Phase 2A 前の挙動(最後の有効足場を保持して計画続行)へ戻る。
+- 失敗記録は **全件カウント(`failed_count`)+ 最初の失敗の詳細**。
+
+**実装内容**:
+
+| # | 変更ファイル | 実装 |
 |---|---|---|
-| 2A-1 | `computeFootPlan()` の戻り値 | `void` → `struct FootPlanResult{ok, worst_status, failed_leg, failed_touchdown_index, failed_count}`。touchdown ループで `status != VALID` を集計、最初の失敗を記録 |
-| 2A-2 | `computeFootPlan()` の地図外 `continue`(`:255-261`) | 裸の `continue` の前に `NOMINAL_OUTSIDE_MAP` + leg/index を記録 |
-| 2A-3 | `computeFootPlan()` の foothold 書き込み(`:276` ほか) | `status != VALID` のとき穴上の名目/NaN 高さを書かず、直前 touchdown 値を踏襲(非 touchdown 分岐と同じ) |
-| 2A-4 | `computeLocalPlan()`(`local_planner.cpp:527-560`) | `FootPlanResult.ok == false` なら **NMPC を呼ばず `return false`** → `spin()` が `publishLocalPlan()` を呼ばない |
-| 2A-5 | 検証 | 単体(穴地形で `ok==false`、失敗 touchdown の行が穴 nominal でない、`computeLocalPlan` が false)+ 無効 plan 非 publish のテスト + 回帰(0.15/0.3/0.5 m/s の既存成功走行が引き続き渡る) |
+| 2A-1 | `local_footstep_planner.hpp` / `.cpp` | `computeFootPlan()` 戻り値 `void` → `FootPlanResult`。touchdown ループにラムダ `record_foothold_failure(status, leg, idx)` を追加(最初の失敗を保持 + `failed_count++`)。**関数末尾に `return plan_result;` を追加**(下記「ハマった点」) |
+| 2A-2 | `local_footstep_planner.cpp` 地図外 `continue`(現 `:271-281`) | 裸の `continue` の直前に `record_foothold_failure(NOMINAL_OUTSIDE_MAP, j, i)`。`continue` 自体は不変 |
+| 2A-3 | `local_footstep_planner.cpp` foothold 書き込み(現 `:291-306`) | `getNearestValidFoothold()` → `getNearestValidFootholdResult()` へ。`status == VALID` なら従来どおり `foothold.position` を書く。`status != VALID` は **穴上の名目/NaN を書かず `getFootData(foot_positions, i-1, j)`(直前値)を踏襲** + 失敗記録 |
+| 2A-4 | `local_planner.cpp` `computeLocalPlan()`(現 `:536-558`) | `computeFootPlan()` の戻り値を受け、`stop_on_invalid_foothold_ && !ok` なら **NMPC を呼ばず `return false`**。`spin()` は `publishLocalPlan()` を呼ばず、local plan が古くなり `robot_driver` が PD ホールド。`RCLCPP_WARN_THROTTLE` に `[safe-stop]` ログ |
+| 2A-5 | `local_planner.cpp` コンストラクタ + `local_planner.hpp` + `local_planner.yaml` | `stop_on_invalid_foothold_`(既定 `true`)を `loadROSParamDefault` で読む。yaml にキー追加(既定安全値、コメントつき) |
 
-**要確認**:戻り値を `bool` にするか構造体にするか / 常時 ON か
-`stop_on_invalid_foothold` パラメータで切れるようにするか / 失敗記録は
-「最初の 1 件」でよいか。
+**検証(テストコミット)**:
+
+- 新規 3 本、すべて green:
+  - `LocalFootstepPlannerTest.ComputeFootPlanReportsOkOnFlatTerrain`
+    (平地は `ok==true` / `failed_count==0`、= 回帰ガード)
+  - `LocalFootstepPlannerTest.ComputeFootPlanReportsInvalidOverHole`
+    (全面非通行地形で `ok==false` / `failed_leg==0` / `failed_touchdown_index==3`
+    / `worst_status==NO_TRAVERSABLE_CANDIDATE`、失敗 touchdown 行は穴 nominal
+    (x≈0.37)でなく直前値 `{0.20,0.12,0.02}`、`feet.allFinite()`)
+  - `LocalPlannerTest.StopOnInvalidFootholdParamDefaultsOnAndCanBeDisabled`
+    (既定 `true`、param で `false` にできる)
+- **回帰:既存の `local_planner` テストは全 green のまま**
+  (`colcon test --packages-select local_planner` → **31 tests / 0 failures**。
+  Phase 1 時点の 29 + 今回の 2… ローカル実測 `gtest.xml` は
+  `tests="31" failures="0"`)。
+- 0.15/0.3/0.5 m/s の既存溝渡り走行での回帰(sim)は **未実施**(次イテレーション。
+  ただし平地・VALID 経路では挙動は 1 バイトも変わらない設計:`status==VALID`
+  のとき書き込む値は従来と同一)。
+
+**ハマった点(記録)**:`computeFootPlan()` を `void` → `FootPlanResult` に
+変えたのに **末尾の `return` を書き忘れた**。`-Wall -Wextra` でも
+「control reaches end of non-void function」は **warning 止まり**でビルドは通り、
+実行時に**未定義動作**として `ComputeFootPlanHandlesSwingAndTouchdown` が
+無限ループ的にハング(ctest 60 s タイムアウト、DIAG ログが数百万行)。
+`git stash` で stock に戻して原因を切り分け、`return plan_result;` 追加で解消。
+
+### 次にやること:Phase 2A のシミュレーション検証
+
+ユーザー指定の安全停止シナリオ:**進行方向に幅 10 m の穴**を用意し、
+**穴の手前で 3 秒静止できれば OK**(落ちない・転ばない・無効足場を NMPC へ
+渡さない)。これは Step 05(15 cm 連続穴)より先に実施する。地形生成器と
+ランナーの追加が必要(変更計画は
+`agent_reports/steps/step_05_quadsdk_repeated_15cm_gaps.md` の表を流用)。
 
 ### そのあと Phase 2B(未設計)
 
