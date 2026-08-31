@@ -34,6 +34,8 @@ artifacts/gifs/*.gif
 !artifacts/gifs/quadsdk_step04_1m_v0p3.gif
 !artifacts/gifs/quadsdk_step03_1m_v0p5.gif
 !artifacts/gifs/quadsdk_step03_1m_gbpl_goal2_success.gif
+# Step 05b(Phase 2A 安全停止検証):縁で一瞬止まってから穴へ前傾転落:
+!artifacts/gifs/quadsdk_phase2a_trench10m_fall.gif
 
 # backup/(2.0GB、未追跡)。archive/は履歴保持のため意図的にgit管理下にあり
 # (archive/README.md参照)、対象外とする
