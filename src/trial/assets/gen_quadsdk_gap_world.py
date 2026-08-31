@@ -88,24 +88,23 @@ xacro = f"""<?xml version="1.0" encoding="utf-8"?>
 (worlds_dir / f"{NAME}.xml.xacro").write_text(xacro)
 
 # ---------------------------------------------------------------- terrain PLY
-# ONE CONTINUOUS surface (no no-data cells): mostly at z = 0, but each hole
-# x-band is dropped to z = -MAP_DIP with vertical connector walls. The steep
-# walls make `slope`/`roughness` spike in a band around every hole, so the
-# grid_map `traversability` layer tanks there and
-# LocalFootstepPlanner::getNearestValidFoothold steers footholds onto the
-# solid strips. Written in flat_wide.ply's exact binary format (binary LE,
-# per-face RGBA + uchar-count int32 vertex_indices, CRLF header).
+# ONE CONTINUOUS single-valued surface. Strips are flat at z = 0. Each hole
+# x-band is a fine ZIGZAG of amplitude MAP_DIP (NOT a net dip): the local
+# tilt/roughness of the zigzag makes the grid_map `slope`/`roughness`
+# (small-radius) spike there, so `traversability` tanks and
+# getNearestValidFoothold steers footholds off the hole.
+#   Crucially the *mean* height and the *smoothed* normal over the hole band
+#   stay ~0, so local_planner's `getTerrainHeight` (z_smooth -> ref body
+#   height) and `getTerrainSlope` (smooth normals -> ref body pitch/roll) do
+#   NOT get a fake step-down / fake pitch command over the hole -- that fake
+#   pitch reference was what nose-dived the robot at the hole edge.
+# Written in flat_wide.ply's exact binary format.
 import struct
 
-MAP_DIP = float(sys.argv[4]) if len(sys.argv) > 4 else 0.30  # map-only hole depth [m]
+MAP_DIP = float(sys.argv[4]) if len(sys.argv) > 4 else 0.03  # zigzag amplitude [m]
+ZIG_W = 0.037  # zigzag half-pitch [m] (a few grid cells; res is 0.05)
 RGBA = (202, 209, 238, 0)
 
-# Single-valued height profile z(x), left to right: strip top (z=0), a short
-# steep RAMP (RAMP_W wide, not vertical -> ray-cast-down always hits exactly
-# one triangle), hole bottom (z=-MAP_DIP), ramp back up, next strip. The ramp
-# is steep enough (~84 deg) that `slope` still spikes and traversability
-# tanks across the whole hole band.
-RAMP_W = 0.03
 sx_min = strip_centres[0] - HALF
 sx_max = strip_centres[-1] + HALF
 pts: list[tuple[float, float]] = [(sx_min, 0.0)]
@@ -114,8 +113,13 @@ for xc in strip_centres:
     pts.append((xa, 0.0))
     pts.append((xb, 0.0))
     if xb < sx_max - 1e-6:
-        pts.append((xb + RAMP_W, -MAP_DIP))
-        pts.append((xb + HOLE_LEN - RAMP_W, -MAP_DIP))
+        # zigzag across [xb, xb+HOLE_LEN], starting and ending at z=0
+        x = xb + ZIG_W
+        sign = -1.0
+        while x < xb + HOLE_LEN - 1e-6:
+            pts.append((x, sign * MAP_DIP))
+            sign = -sign
+            x += ZIG_W
         pts.append((xb + HOLE_LEN, 0.0))
 
 surf = [pts[0]]
