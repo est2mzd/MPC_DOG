@@ -548,15 +548,18 @@ Eigen::Vector3d LocalFootstepPlanner::getNearestValidFoothold(
     double traversability = terrain_grid_.atPosition(obj_fun_layer_, pos_valid);
     double kin_cost =
         (pos_valid - foot_position.head<2>()).norm() +
-        1.0 * (pos_valid - foot_position_prev_solve.head<2>()).norm();
-    // [MPC_DOG] When the nominal is over a hole, essentially FORBID snapping
-    // backward (toward the near edge). Backward snaps make the robot
-    // short-step at the near edge, stall, and pitch forward into the hole.
-    // A huge penalty means any forward valid cell always beats any backward
-    // one -> the robot is forced to commit to a step across the hole.
-    if (pos_valid.x() < foot_position.x() - 0.01) {
-      kin_cost += 100.0 * (foot_position.x() - pos_valid.x());
-    }
+        0.5 * (pos_valid - foot_position_prev_solve.head<2>()).norm();
+    // [MPC_DOG] Stock kin_cost (dist-to-nominal + 0.5*dist-to-prev-solve).
+    // Earlier rounds added a huge penalty here to FORBID snapping toward the
+    // near edge of a hole, forcing a single commit-step across. That made the
+    // footstep planner plant a front foot on the FAR edge while the body was
+    // still ~0.5 m short of it -> the stance foot fell outside the leg's
+    // kinematic reach -> the centroidal NMPC cost exploded and the body
+    // lunged/pitched into the hole. Letting the natural cost pick the nearest
+    // valid cell instead makes the robot STAGE the crossing: it steps to the
+    // near edge first (prev-solve foot is behind, so the near edge wins),
+    // shifts its body up, then the next step lands on the far strip as an
+    // ordinary un-snapped foothold once it is within reach.
 
     if (traversability > foothold_obj_threshold_ &&
         (kin_cost < best_kin_cost)) {

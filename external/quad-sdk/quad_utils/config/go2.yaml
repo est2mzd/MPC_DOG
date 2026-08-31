@@ -20,11 +20,11 @@
         toe_radius: 0.022 # m
     local_footstep_planner:
         hip_clearance: 0.1
-        foothold_search_radius: 0.55
-        period: 0.6 # s   # [MPC_DOG] gap crossing: slower crawl-ish gait (was trot 0.36)
-        ground_clearance: 0.07 # tune
-        duty_cycles: [0.75, 0.75, 0.75, 0.75]  # [MPC_DOG] >=3 feet down most of cycle (was trot 0.5)
-        phase_offsets: [0.0, 0.25, 0.5, 0.75]  # [MPC_DOG] crawl sequence (was trot 0,0.5,0.5,0)
+        foothold_search_radius: 0.7   # [MPC_DOG] gap crossing: must exceed half the (now wider) non-traversable hole band (was 0.25)
+        period: 0.9 # s   # [MPC_DOG] slow crawl for gap crossing (was trot 0.36)
+        ground_clearance: 0.1 # [MPC_DOG] was 0.07; help feet clear the hole lip on the crossing swing
+        duty_cycles: [0.75, 0.75, 0.75, 0.75]   # [MPC_DOG] >=3 feet down (was 0.5)
+        phase_offsets: [0.0, 0.75, 0.5, 0.25]   # [MPC_DOG] textbook lateral-sequence crawl FL->BR->FR->BL (was trot 0,0.5,0.5,0)
     nmpc_controller:
       body:
         x_dim: 12.0

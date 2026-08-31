@@ -42,7 +42,7 @@ mapping:
           params:
             input_layer: z_inpainted
             output_layer: z_smooth
-            radius: 0.05
+            radius: 0.2
 
         filter4:
           # Compute surface normals.
@@ -51,7 +51,7 @@ mapping:
           params:
             input_layer: z_inpainted
             output_layers_prefix: normal_vectors_
-            radius: 0.08
+            radius: 0.15
             normal_vector_positive_axis: z
 
         filter5:
@@ -61,7 +61,7 @@ mapping:
           params:
             input_layer: z_smooth
             output_layers_prefix: smooth_normal_vectors_
-            radius: 0.12
+            radius: 0.4
             normal_vector_positive_axis: z
 
         filter6:

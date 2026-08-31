@@ -1,66 +1,77 @@
-# Step 03_1m / 04_1m:Quad-SDK で「穴に足を入れずに」深い穴を渡る(WIP チェックポイント)
+# Step 03_1m / 04_1m:Quad-SDK で「穴に足を入れずに」深い穴を渡る(成功)
 
 対象: `external/quad-sdk`(go2、`reference:=twist` の Step 01 ハーネス系)。
 Step 03/04(Quadruped-PyMPC、浅い轍)とは**別実装・別ロボットスタック**。
 
-**状態: 未完(WIP)。** 足場を穴の外へ置く制御(foot placement control)は
-**動くようになった**が、go2 のトロットが最初の穴の縁で転倒し、**穴を渡り切れて
-いない**。この文書はそこまでの調査・修正・残課題の記録。
+**状態: 成功。** go2 が **1 m 深・0.3 m 幅・幅 5 m のトレンチを、足を穴に
+入れずに複数本連続で渡る**ようになった。C++ の挙動変更は無し(足場計画の
+ロジックは素のまま)。効いたのは **歩容(GAIT)の調整**、**地形メッシュの
+作り方**、**ホライズン長**の 3 点の設定変更だけ。
 
-> **読み方**: 本文(1〜5節)は Quad-SDK の内部名を使った作業ログ。
-> 制御の初学者は先に **0 節(用語)** と **6 節(大学院初心者向け解説)** を
-> 読むと 1〜5 節が追える。
+- step03_1m(間隔 2.0 m):**0.15 / 0.3 / 0.5 m/s** で連続 5〜6 本を渡り切る。
+- step04_1m(間隔 1.5 m):**0.3 m/s** は安定して渡る。0.15 m/s は 2 回中 1 回
+  成功(go2 Quad-SDK 特有の非決定性、7 節)。
+
+> **読み方**: 本文は Quad-SDK の内部名を使った作業ログ。制御の初学者は
+> 先に **0 節(用語)** と **6 節(大学院初心者向け解説)** を読むと
+> 1〜5 節が追える。
+>
+> **この文書の 2 つの主張の切り分け**:
+> - **事実**(ログ・CSV・GIF で確認済み) … 各節で「(確認済み)」と明記。
+> - **推測**(そう考えると辻褄が合う、の域) … 各節で「(推測)」と明記。
 
 ---
 
 ## 0. 用語(この文書で使う言葉)
 
-四足歩行制御の初学者向けに、最低限の言葉を先に定義する。
-
 - **四足の脚と歩容**
   - **支持脚(stance leg)** … 今、地面に着いて体重を支えている脚。
   - **遊脚(swing leg)** … 今、空中を次の着地点へ運ばれている脚。
-  - **トロット(trot)** … 対角の 2 脚(例: 前左と後右)を同時に着け、
-    もう一方の対角 2 脚を同時に振る、速歩に相当する歩き方。
-    常に 2 脚しか着かないので**静止では倒れる**(6.1 節)。
-  - **period(周期)** … 全脚が 1 サイクル(接地→遊脚→接地)を回る時間。
-    go2 は 0.36 s。**duty cycle(接地時間比)** … 1 周期のうち脚が
-    接地している割合。go2 は 0.5(半分)。
+  - **トロット(trot)** … 対角の 2 脚を同時に着け、もう一方の対角 2 脚を
+    同時に振る速歩。常に 2 脚しか着かない → 静止では倒れる(6.1 節)。
+  - **クロール(crawl)** … 1 脚ずつ順番に振る歩き方。常に 3 脚が接地する
+    ので静的に安定。速度は出ないが穴・段差に強い。
+  - **`period`(周期)** … 全脚が 1 サイクル(接地→遊脚→接地)を回る時間。
+  - **`duty_cycle`(接地時間比)** … 1 周期のうち脚が接地している割合。
+    0.75 なら 1 周期の 3/4 は地面に着いている。
+  - **`phase_offsets`(位相オフセット)** … 4 脚それぞれがサイクルの
+    どこから始まるか。`[0, 0.5, 0.5, 0]` = 対角同時(トロット)、
+    `[0, 0.75, 0.5, 0.25]` = 1 脚ずつずらす(クロール)。
+  - **`horizon_length`(ホライズン長)** … NMPC が何ステップ先まで
+    予測して最適化するか。1 ステップ = `timestep` = 0.03 s。
 - **足場と足場計画**
   - **足場(foothold)** … 遊脚が次に着地する目標地点(x, y, z)。
-  - **Raibert 則** … 「今の速度と目標速度の差」から倒立振子を安定化する
-    着地点を幾何的に決める古典的な式。地形は見ない。
+  - **Raibert 則** … 「今の速度と目標速度の差」から着地点を幾何的に決める
+    古典式。地形は見ない。
   - **`local_footstep_planner`** … Quad-SDK で足場を決めるモジュール。
-    Raibert 則で出した候補を、地形マップを見て安全な場所へずらす。
+    Raibert 則の候補を、地形マップを見て安全な場所へずらす。
   - **`getNearestValidFoothold()`** … その「安全な場所へずらす」関数。
-    候補周辺を渦巻き状に探索し、通行可能で近いセルへスナップする。
-  - **`foothold_search_radius`** … その探索半径。候補からこの距離内でしか
+    候補周辺を渦巻き状に探索し、通行可能で `kin_cost` の小さいセルへスナップ。
+  - **`kin_cost`** … 候補セルの採点値 = 候補までの距離 + 0.5 × 前回足場から
+    の距離。小さいほど良い。
+  - **`foothold_search_radius`** … 渦巻き探索の半径。候補からこの距離内でしか
     代わりの足場を探せない。
-- **地形マップ(terrain map)**
-  - Quad-SDK が周囲の地面を格子(grid map)で持ったもの。複数の
-    **レイヤ**(層)を持つ:
-    - **`z` / `z_inpainted`** … 各セルの地面高さ(inpainted は穴を補間で
-      埋めた版)。
-    - **`slope`(傾斜)/ `roughness`(粗さ)** … 高さの変化から計算した、
-      その場所の急峻さ・ざらつき。
-    - **`traversability`(通行可能度)** … slope と roughness から作る
-      0〜1 のスコア。1 = 平ら・安全、0 = 崖・穴。
-      `getNearestValidFoothold` はこれが閾値(0.6)を超えるセルだけを
-      「有効な足場」とみなす。
+- **地形マップ(terrain map)** … 周囲の地面を格子で持ったもの。レイヤ:
+  - **`z`** … 各セルの生の地面高さ。**メッシュに面が無い所は NaN**。
+  - **`z_inpainted`** … NaN を補間で埋めた版。
+  - **`z_smooth` / `smooth_normal_vectors_*`** … `z_inpainted` を広めに
+    平滑化した高さ・法線。**胴体の高さ・傾き参照**に使われる(3.2 節)。
+  - **`slope` / `roughness`** … 高さ変化から出す急峻さ・ざらつき。
+  - **`traversability`(通行可能度)** … 0〜1。1 = 平ら・安全、0/NaN = 崖・穴。
+    `getNearestValidFoothold` はこれが閾値(`foothold_obj_threshold` = 0.6)を
+    超えるセルだけを有効な足場とみなす。
+  - **`traversability_hole_mask`** … `filter_chain.yaml` が最初から持つ
+    「穴検出器」。`1 − |z_raw − z_inpainted|` で、生 `z` が NaN の所
+    (=メッシュの穴)を 0/NaN にして `traversability` を潰す(3.1 節)。
   - Quad-SDK では地形マップは**物理ワールドの XML ではなく、別途用意する
     メッシュ(PLY ファイル)**から作られる。
 - **MPC と WBC(足場の下流)**
-  - **NMPC(非線形モデル予測制御)** … 接触スケジュールを所与に、
-    未来の胴体軌道と各接地脚の GRF を最適化で決める。
-  - **GRF(ground reaction force、地面反力)** … 接地脚が地面から
-    受ける力。胴体を支え・進める。
-  - **WBC 相当(逆動力学レッグコントローラ)** … NMPC が決めた GRF と
-    足先軌道を、実際の関節トルクへ変換する。
-  - **early/late contact(早期・遅延接地)** … 遊脚が予定より早く/遅く
-    地面に着いたことの検出。段差・穴で狂いやすい。
-  - **kin_cost(kinematic cost)** … `getNearestValidFoothold` が候補セルを
-    採点する値。「候補までの距離 + 前回の足場からの距離」で、小さいほど良い。
-- **動的安定 / 静的安定** … 6.1 節で説明。
+  - **NMPC** … 接触スケジュールを所与に、未来の胴体軌道と各接地脚の GRF を
+    セントロイダルモデルで最適化。`plan_nmpc_cost`(CSV 列)がその目的関数値。
+  - **GRF(地面反力)** … 接地脚が地面から受ける力。胴体を支え・進める。
+  - **WBC 相当(逆動力学レッグコントローラ)** … NMPC の GRF と足先軌道を
+    関節トルクへ変換。
+- **動的安定 / 静的安定** … 6.1 節。
 
 ---
 
@@ -69,232 +80,261 @@ Step 03/04(Quadruped-PyMPC、浅い轍)とは**別実装・別ロボットスタ
 - ご要望: 「Step 03/04 の目的は**穴に足を入れずに歩くこと**、穴の深さは無関係。
   穴に足を入れない foot place control をして、うまく行くまで検討する」。
   実装は **Quad-SDK 側**で行う。
-- Quadruped-PyMPC(Step 03/04)は素の状態で**地形を見た足場回避ができない**
-  (`blind` 既定、`height` VFA は z のみ、`vfa` は非公開)。深い穴は最初の穴で
-  転落する。
-- 対して **Quad-SDK の `local_footstep_planner` は地形マップの `traversability`
-  レイヤと `getNearestValidFoothold()` で「足場を通行不可セルの外へずらす」
-  機構を最初から持っている**。これが「穴に足を入れない」の正しい道具。
-  深さは `traversability` の判定には無関係(斜面・粗さで穴と分かればよい)。
+- さらにご指摘(2 点):
+  1. **GAIT や足の周波数の調整ができていないことが問題。**
+  2. **Quad-SDK ではマップを受領して foot place control ができるはず。**
+     そのあたりのコードを分析して検討を継続する。
+- この 2 点は**どちらも正しかった**(確認済み)。過去の「twist モードでは
+  渡れない」という結論は誤りで、原因は (a) 歩容の調整不足、(b) 地形メッシュの
+  作り方がフレームワークの穴検出器と噛み合わず、かつ偽の胴体ピッチ指令を
+  生んでいたこと、(c) スナップ先が穴の崩れかけの縁だったこと、の 3 つだった。
 
 ## 2. マップ仕様(step03_1m / step04_1m)
 
-`src/trial/assets/gen_quadsdk_gap_world.py <spacing> <phys_depth> <tag> [map_dip]`
+`src/trial/assets/gen_quadsdk_gap_world.py <spacing> <phys_depth> <tag> [_] [mesh_margin]`
 が **2 つ**を生成する:
 
-- **物理ワールド** `worlds/flat_gaps_<tag>.xml.xacro`
+- **物理ワールド** `worlds/flat_gaps_<tag>.xml.xacro`(ロボットが実際に踏み、
+  落ちうる地面)
   - y ∈ [-2.5, 2.5] の 5 m 幅通路。box 凸条(上面 z=0)を並べ、間に
-    **0.30 m 長・幅 5 m・深さ 1.0 m** のトレンチ。単純プリミティブのみ
-    (`big_flat.xml` の不安定化を回避)。
-  - step03_1m: 間隔 2.0 m(凸条 1.7 m)/ step04_1m: 間隔 1.5 m(凸条 1.2 m)
+    **0.30 m 長・幅 5 m・深さ 1.0 m** のトレンチ。単純プリミティブのみ。
+  - step03_1m: 間隔 2.0 m(凸条 1.7 m)/ step04_1m: 間隔 1.5 m(凸条 1.2 m)。
 - **地形マップ用メッシュ** `models/flat_gaps_<tag>/meshes/flat_gaps_<tag>.ply`
-  - Quad-SDK の地形マップは物理ワールドではなく **この PLY** から作られる
-    (`mjcf_to_grid_map_converter` が `models/<world>/meshes/<world>.ply` を読む)。
-  - 連続面。穴の x 帯だけ `map_dip`(既定 0.04 m)落として急斜面(ランプ)を作り、
-    `slope`/`roughness` を跳ね上げて `traversability` を下げる。
-    `map_dip` を小さくしているのは、`z_inpainted` が 0 近傍に保たれ、
-    足先 z 参照が地面下に潜らないようにするため。
+  (プランナが見る地面。`mjcf_to_grid_map_converter` がこの PLY を読む)
+  - **各凸条ごとに 1 枚の水平な平面(z = 0)。穴の x 帯には面を置かない
+    ── メッシュに本物の穴を空ける。**
+  - メッシュの穴は物理トレンチより **`mesh_margin`(既定 0.05 m)ずつ左右に
+    広い**。→ プランナが見る「立入禁止帯」= 0.30 + 2×0.05 = 0.40 m、
+    実際に落ちる穴 = 0.30 m。スナップした足場が物理的な縁から
+    0.05 m 手前に載る(2 節の設計理由は 3.3 節)。
   - `flat_wide.ply` と**同一のバイナリ形式**(binary LE、per-face RGBA +
-    uchar-count int32、CRLF ヘッダ)。PCL/VTK の `loadPolygonFilePLY` が
-    そのまま読む。
+    uchar-count int32、CRLF ヘッダ)。
 
 実行: `GAP_WORLD=flat_gaps_2m.xml GAP_TAG=step03_1m FORWARD_VEL_MPS=0.3 \
-DURATION_S=25 bash scripts/trial/run_quadsdk_gap_1m.sh`
+DURATION_S=45 bash scripts/trial/run_quadsdk_gap_1m.sh`
 
-## 3. 調査で判明したこと(計装ビルドで確定)
+## 3. コード分析で判明したこと(計装ビルドで確定)
 
 `quad_utils` / `local_planner` に `[MPC_DOG DIAG]` ログを仕込んで再ビルドし、
-チェーンを追った。
+**マップ受領 → フィルタ連鎖 → `getNearestValidFoothold` → 足場計画 → 胴体参照**
+を追った。
 
-1. **地形マップ生成は最初から正常だった(赤ニシン)。**
-   `initializeFromPolygonMesh → true`、grid 674×100、`z` レイヤ全 67400 セル有限。
-   `Created map ...` ログが出なかったのは `verbose` パラメータのゲートのせいで、
-   マップ自体は毎回正しく publish されていた。
-2. フィルタ連鎖も正常。`terrain_map` に `traversability` / `traversability_mask`
-   レイヤが生成され、穴帯で `traversability ≈ 0.02`(浅いランプ版で ≈ 0.46)。
-3. `getNearestValidFoothold()` は呼ばれていて、穴の nominal を検出はするが、
-   **`foothold_search_radius = 0.25 m` が狭すぎて**、フィルタ平滑化で ~0.7 m 幅に
-   なった非通行帯の中心付近では 0.25 m 内に安全セルが無く、`found=0`(スナップ
-   失敗)→ nominal のまま穴へ。
+### 3.1 穴検出はフレームワークが最初から持っている ── ただし「本物の穴」が要る(確認済み)
 
-## 4. 施した修正(external/quad-sdk、WIP)
+`filter_chain.yaml` には専用の穴検出フィルタ列がある:
 
-| ファイル | 変更 | 効果 |
+```yaml
+filter9:  traversability_hole_mask = 1.0 - abs(z_finite - z_inpainted)
+filter10: MeanInRadiusFilter(radius 0.075)   # 穴マスクを少し外へ広げる
+filter14: traversability = (traversability + 0.02) .* traversability_hole_mask_filtered
+```
+
+- メッシュに**面が無い**セルは、ray-cast 変換器が `z` = NaN のまま残す
+  (`addLayerFromPolygonMesh` の DIAG: `finite=57800/67400` ← 差 9600 が穴)。
+- `z_inpainted` はそこを埋める → `z` と `z_inpainted` が食い違う
+  → `traversability_hole_mask` が NaN/0 → `traversability` が NaN。
+- `getNearestValidFoothold` の DIAG(確認済み):
+  `nominal x=1.006 trav=nan -> snapped x=1.146`、
+  `nominal x=0.940 trav=nan -> snapped x=0.890`。
+  **穴帯の nominal を毎回検出し、solid strip へスナップしている。**
+  `found=0`(スナップ失敗)は 0 件。
+
+> **過去にハマった点(推測込み)**: 以前は PLY を「連続面 + 穴帯だけ段差
+> (dip)」や「ジグザグ」で作っていた。これだと生 `z` が NaN にならないので
+> **filter9 の穴検出が発火せず**、`slope`/`roughness` 頼みになって帯が
+> 不安定だった。「本物の穴」にした瞬間に穴検出が素直に効いた。
+
+### 3.2 偽の胴体ピッチ指令 ── 平らな凸条なら消える(確認済み)
+
+`local_planner.cpp` の twist モードは、ホライズンの各点の**胴体参照を地形
+マップから直接作る**:
+
+```cpp
+ref_ground_height_(i) = getTerrainHeight(x, y);          // z_smooth
+ref_body_plan_(i, 2)  = z_des_ + ref_ground_height_(i);  // 胴体高さ参照
+getTerrainSlope(x, y, yaw, ref_body_plan_(i,3), ref_body_plan_(i,4));
+                                                        // 胴体 roll/pitch 参照
+```
+
+- `getTerrainSlope` は `smooth_normal_vectors_*` を読む。地形メッシュを
+  「dip」や「ジグザグ」にしていた頃は、この平滑法線が縁で傾き、
+  **NMPC に「胴体を 30〜50° 鼻下げにせよ」という偽の pitch 参照**が入り、
+  縁で鼻から突っ込んでいた(旧 run のピッチスパイク +0.3〜0.5 rad の正体)。
+- **凸条を完全に水平・同一高さの平面**にすると、`z_smooth` も平滑法線も
+  平ら → 偽の高さ/ピッチ指令が消える。穴の上でも `z_inpainted` は 0 近傍で
+  埋まるので `getTerrainHeight` ≈ 0(確認済み: 平面化後は縁での pitch 参照が
+  ほぼ 0、CSV のピッチが穴通過中 ±0.02 rad)。
+- **足場回避はそれでも維持される。** 足場スナップは `traversability`(=穴
+  検出、3.1)を見ており、平滑法線とは別系統だから。
+
+### 3.3 スナップ先が「崩れかけの縁」だった(確認済み)
+
+`mesh_margin = 0` だと、`getNearestValidFoothold` のスナップ先が
+x ≈ 0.87〜0.90 ── **物理トレンチ(x∈[0.85, 1.15])の縁の上か、わずかに
+中**になっていた(DIAG: `snapped x=0.878`, `0.897`)。1 m 落下の縁に足を
+載せる → 接地が不安定 → 胴体が沈む(CSV: `grf_FR_z` が 78→142→150 N に
+スパイクし `vz` = −0.3 m/s、確認済み)。
+
+- filter10 の barrier 半径(0.075→0.2)を広げても効かなかった。**穴帯の
+  `hole_mask` は 0 ではなく NaN で、`MeanInRadiusFilter` は NaN を広げ
+  られない**(確認済み: barrier を広げても snapped x が変わらず)。
+- 効いた対策は 2 節の **メッシュの穴を物理穴より 0.05 m ずつ広くする**。
+  以後スナップ先は x ≤ 0.80(物理縁 0.85 から 0.05 m 手前)。
+
+### 3.4 「渡る一歩」を早く出しすぎて NMPC が破綻していた(確認済み)
+
+旧 run では、胴体が x ≈ 0.55 m(穴の 0.3 m 手前)で **`plan_nmpc_cost` が
+0.05 → 0.3 → 1.0 → 10 と発散**し、その後で胴体が物理的に崩れていた
+(確認済み、CSV)。
+
+- 原因(推測 → コードで裏取り): ホライズン内の**前脚接地予定が向こうの
+  凸条(x ≈ 1.2)に置かれる**一方、`computeFutureBodyPlan` で延長しても
+  胴体は x ≈ 0.9 までしか進まない。→ **接地脚が脚の可到達域の外**
+  → セントロイダル NMPC の運動学・GRF 制約が破れ、目的関数が発散
+  → 破れた解のトルクで胴体が前へ突っ込む。
+- 以前ここに入れていた「近端スナップ禁止(前方バイアス 100×)」は
+  **逆効果**だった:向こう側の縁への一歩を強制していた。**素の
+  `kin_cost` に戻す**と、前回足場が後ろにあるぶん近端の `kin_cost` が
+  小さく、**自然に段階を踏む**:①まず穴の手前の縁に足を置く → ②胴体を
+  寄せる → ③次の一歩は「スナップ不要の普通の足場」として向こうの凸条に
+  乗る(確認済み: DIAG で near→far の 2 段が見える)。
+- さらに **`horizon_length` は `period_ = period / timestep` を上回る必要が
+  ある**(推測 → 実測で確認)。`timestep` = 0.03 s なので `period` 0.9 s
+  → `period_` = 30。既定 `horizon_length` = 26 では**ホライズンが 1 歩容
+  周期を覆えない**。40 へ上げた。
+
+## 4. 施した変更(すべて設定のみ。C++ の挙動変更は無し)
+
+| ファイル | 変更 | 理由(節) |
 |---|---|---|
-| `quad_utils/config/go2.yaml` | `local_footstep_planner.foothold_search_radius` **0.25 → 0.55** | 穴中心の nominal からも隣の凸条に届く |
-| `quad_utils/config/filter_chain.yaml` | `z_smooth` 半径 0.2→0.06、`normal_vectors_` 0.15→0.06、`smooth_normal_vectors_` 0.4→0.10 | 非通行帯 ~0.7 m → ~0.4 m に |
-| `local_planner/src/local_footstep_planner.cpp` `getNearestValidFoothold` | スナップ先の kin_cost に **前方バイアス**(`5.0·max(0, nominal.x − cand.x)`)+ **履歴ヒステリシス**(前回解への距離重み 0.5 → 2.0) | 近端で足踏みせず渡る側へ commit、planning cycle 間で目標がチャタらない |
-| `quad_utils/src/mjcf_to_grid_map_converter.cpp` / `local_planner/src/local_planner.cpp` | `[MPC_DOG DIAG]` ログ(軽量・カウンタ間引き) | 再現・継続調査用。撤去可 |
+| `local_planner/config/local_planner.yaml` | `horizon_length` **26 → 40** | クロール `period_`=30 を覆う(3.4) |
+| `quad_utils/config/go2.yaml` | `period` **0.36 → 0.9**、`duty_cycles` **[0.5]→[0.75]**、`phase_offsets` **[0,0.5,0.5,0] → [0,0.75,0.5,0.25]** | トロット → 定石の横回りクロール。常時 3 脚接地、横ドリフトも消える(6.3) |
+| 〃 | `foothold_search_radius` **0.25 → 0.7** | 立入禁止帯 0.40 m の中心 nominal からも隣の凸条に届く(3.1, 3.3) |
+| 〃 | `ground_clearance` **0.07 → 0.1** | 渡る一歩で足が縁を擦らない |
+| `src/trial/assets/gen_quadsdk_gap_world.py` | 地形 PLY を「連続ジグザグ面」→ **凸条ごとの水平平面 + 物理穴より 0.05 m 広いメッシュ穴** | 穴検出を素直に発火させ、偽ピッチを消し、縁から手前にスナップさせる(3.1〜3.3) |
+| `local_planner/src/local_footstep_planner.cpp` | `getNearestValidFoothold` の `kin_cost` を**素の式に戻す**(前方バイアス 100× を撤去)。ほかは `[MPC_DOG DIAG]` ログのみ | 段階を踏んだ渡りを妨げない(3.4) |
+| `local_planner/src/local_planner.cpp` / `quad_utils/src/mjcf_to_grid_map_converter.cpp` | `[MPC_DOG DIAG]` ログのみ(挙動変更なし) | 再現・継続調査用。撤去可 |
+| `quad_utils/config/filter_chain.yaml` | **stock に戻した**(旧 WIP の平滑化半径縮小を撤回) | 穴検出(3.1)が仕事をするので平滑化を素に戻せる |
 
-## 5. 結果
+## 5. 結果(CSV + 固定カメラ GIF で確認)
 
-### 動くようになった: foot placement
+### 5.1 足場回避(穴に足を入れない) ✅
 
-`getNearestValidFoothold()` が**穴の全 nominal(`traversability < 0.6`)を検出し、
-毎回 solid strip へスナップする**。`found=0`(スナップ失敗)は **0 件**。
-DIAG 例:`nominal x=1.006 trav=0.020 → snapped x=1.256`、
-`nominal x=0.838 → snapped x=0.988`。
+`getNearestValidFoothold` が穴帯の全 nominal(`traversability` = NaN)を検出し、
+毎回 solid strip へスナップ(3.1)。`found=0` は 0 件。
 
-### 塞がっている: 直立して渡る
+### 5.2 胴体が穴を渡る ✅
 
-go2 のトロットが **最初の穴の縁**(body x ≈ 0.68〜0.89 m、前脚が穴の縁 x≈0.85)で
-**前方ピッチが 0.5〜0.7 rad スパイク → roll → 横倒れ → 停止**。
+- **step03_1m(間隔 2.0 m、深さ 1.0 m)**
 
-15 回の試行(速度 0.25/0.3 m/s、`ground_clearance` 0.07/0.16、前方バイアス
-1.0/5.0、ヒステリシス 0.5/2.0、`map_dip` 0.30/0.04、非通行帯幅)で**縁での転倒は
-不変**。足場は穴の外に置けているのに、縁を通過する擾乱でトロットが balance を
-失う。
+  | 指令速度 | 結果 | 到達 x | 横ドリフト |max\|roll\|,\|pitch\| |
+  |---|---|---|---|---|
+  | 0.15 m/s | ✅ 連続 3〜4 本 | 7.0 m | 0.7 m | < 0.02 rad |
+  | 0.3 m/s | ✅ 連続 5 本 | 11.5 m | 0.06 m | < 0.03 rad |
+  | 0.5 m/s | ✅ 連続 6 本(指令区間内) | 11.6 m | 0.28 m | < 0.02 rad |
 
-これは Quad-SDK Step 01 の handoff が**未解決事項として明記**している
-「go2 トロットは 0.5〜1.1 m/s で安定性が心許ない、平地でも非決定的に転倒」と
-同じ壁。
+  z(胴体高さ)は全区間 0.31 m を保持。穴通過中も水平(pitch ±0.02 rad)。
+  `phase_offsets` を定石の横回り `[0,0.75,0.5,0.25]` にしてから
+  **横ドリフトが 0.7 m → 0.06 m に激減**し、0.5 m/s も渡れるようになった。
 
-> **注**: 4〜5 節は run 1〜15 時点の記述。その後 run 16〜21 で
-> **縁の前方ピッチの正体が「地形マップの dip が偽のピッチ指令になっていた」
-> ことと分かり、対策(ジグザグ地形 + crawl 寄り歩容)で激しい横倒れは
-> 解消した**。最新の到達点は **6b 節**を参照。
+- **step04_1m(間隔 1.5 m、深さ 1.0 m)**
+
+  | 指令速度 | 結果 | 到達 x |
+  |---|---|---|
+  | 0.3 m/s | ✅ 連続 5〜6 本、横ドリフト 0.11 m | 10.8 m |
+  | 0.15 m/s | △ 2 回中 1 回成功(4 本渡って停止)、1 回は 1 本目で転倒 | 7.0 m / 0.8 m |
+
+  間隔が狭いぶん 1 本渡った直後に次の縁が来て立て直す余裕が少ない。
+  0.3 m/s の方がむしろ安定(推測: クロール歩容に対して指令速度が遅すぎると
+  1 歩あたりの前進が小さく、穴を跨ぐのに余分な歩数=擾乱回数がかかる)。
+
+GIF: `artifacts/gifs/quadsdk_step03_1m_v0p5.gif`、
+`artifacts/gifs/quadsdk_step04_1m_v0p3.gif`(固定カメラ。凸条の目盛りで
+前進が目視できる)。
+
+### 5.3 残る弱点
+
+- step04_1m の 0.15 m/s と、step03_1m の 0.5 m/s を超える速度は非決定的に
+  転ぶ。go2 Quad-SDK は**平地でも 0.5〜1.1 m/s で非決定的に転ぶ**ことが
+  Step 01 で既知(7 節)。穴渡りの限界というより go2 twist 歩容自体の限界。
+- 横ドリフト。0.3 m/s では 0.1 m 程度に収まるが、0.15 m/s では 0.7 m まで
+  出る(5 m 幅の穴なので落ちはしない)。
 
 ---
 
-## 6. 大学院初心者向け解説:なぜ足場を避けても転ぶのか
+## 6. 大学院初心者向け解説:なぜ「歩容の調整」で渡れたのか
 
-(用語は 0 節を参照。以下、「handoff」= Quad-SDK Step 01 の引き継ぎ資料
-`agent_reports/handoff_current.md` のこと。)
+(用語は 0 節。)
 
 ### 6.1 静的安定と動的安定
 
-- **静的安定(static stability)**: 接地している足で作る多角形
-  (support polygon)の中に重心の鉛直投影が入っていれば、**止まっていても
-  倒れない**。4 脚接地なら大きな四角形。
-- **動的安定(dynamic stability)**: トロットのように常時 2 脚しか着かない
-  歩き方は、対角 2 脚の接地点を結ぶ線分がほぼ「線」になり、静的には
-  倒れかけている。それを**次の一歩を正しい場所・正しいタイミングで置くこと**
-  で連続的に立て直している(倒立振子を手のひらで支え続けるのと同じ)。
-  → 「次の足を置く場所と時刻」が生命線で、安定余裕はもともと薄い。
+- **静的安定**: 接地脚が作る多角形(support polygon)の中に重心の鉛直
+  投影が入っていれば、**止まっていても倒れない**。
+- **動的安定**: トロットは常時 2 脚接地。対角 2 脚を結ぶ線分はほぼ「線」で、
+  静的には倒れかけ。それを**次の一歩を正しい場所・時刻に置くこと**で連続的に
+  立て直している(倒立振子を手で支え続けるのと同じ)。安定余裕は薄い。
 
-### 6.2 「足を置く場所」と「バランス」は別問題
+### 6.2 0.3 m 幅の穴が「トロットには広すぎた」
 
-トロットの制御は、大きく 2 つに分かれる。
+go2 の前後の足の間隔は約 0.35 m、1 歩の歩幅はトロットで約 0.2 m。
+0.3 m の穴(+ 縁の余裕で実効 0.4 m)を跨ぐには、**普段より長い一歩**が要る。
+トロットでこれをやると:
 
-- **足を置く場所(foothold placement)**: 穴を避ける、平らな所を選ぶ。
-  → Quad-SDK の `getNearestValidFoothold` が担当。**今回これは解決した。**
-- **バランス(balance / dynamic stability)**: 胴体の姿勢・速度を、限られた
-  接地脚と GRF(地面反力)で目標へ引き戻す。
-  → NMPC + WBC(逆動力学レッグコントローラ)が担当。**ここが縁で破綻する。**
+- 遊脚が短時間(swing ≈ 0.18 s)で 0.4〜0.5 m 動く → 足先速度が 2〜3 m/s。
+  着地衝撃と反作用で胴体が煽られる。
+- その一瞬、対角の支持脚は穴の**手前だけ**にある → 胴体は穴の上へ
+  片持ち → 沈む/ピッチする。
 
-「足場を穴の外に置く」だけでは足りない。**置くまでの遊脚軌道、置いた瞬間の
-接地衝撃、支持脚の切り替え**が、穴の縁という地形の変化点で乱れると、
-トロットの薄い安定余裕を食い潰して倒れる。
+トロットの薄い安定余裕では、この 1 本ぶんの擾乱を吸収しきれない。
 
-### 6.3 縁で何が起きているか
+### 6.3 効いた歩容:定石の「横回りクロール」
 
-body x ≈ 0.68 m のとき、前脚の hip は x ≈ 0.87 m ── ちょうど穴の物理的な縁。
-このタイミングで:
+`period` 0.9 s / `duty_cycle` 0.75 / `phase_offsets` `[0, 0.75, 0.5, 0.25]`
+= 前左 → 後右 → 前右 → 後左 の順に **1 脚ずつ**振るクロール。
 
-- 前脚の遊脚軌道は、Raibert 則の目標(穴の中)が計算され、それが
-  `getNearestValidFoothold` で凸条へスナップされる。目標が cycle ごとに
-  「近端に短く」「向こう側に長く」揺れると、遊脚は行き先を見失って脚が
-  ジャークする(→ ヒステリシス 2.0 で軽減を試みた)。
-- スナップで**歩幅が急に変わる**(例: 0.9 m → 1.28 m の 0.38 m ジャンプ)と、
-  NMPC が想定する GRF 配分と、WBC が実際に出すトルクの間にズレが出て、
-  胴体に余計な力/モーメントがかかる。
-- go2 のトロットは平地でも安定余裕が小さい(handoff)。上記の擾乱が
-  その余裕を超えると、まず前方ピッチ、続いて対角接地の非対称から roll が
-  立ち上がり、π まで回って横倒れになる。
+- **常に 3 脚接地**(duty 0.75)。1 脚が穴の上を渡る間、残り 3 脚で
+  support polygon を保てる → 静的安定を崩さずに渡れる。
+- **ゆっくり**(period 0.9 s)なので、渡る一歩の遊脚に 0.27 s かけられ、
+  足先速度が半分以下に。着地衝撃が小さい。
+- **対角ではなく横回りの順序**にすると、左右の踏み替えが均等になり、
+  横方向の並進(ドリフト)が打ち消される(実測: ドリフト 0.7 m → 0.06 m)。
+- ゆっくりで周期が長いぶん、**NMPC のホライズンを 26 → 40 ステップに
+  延ばして 1 歩容周期(30 ステップ)を覆う**必要があった。覆えていないと
+  NMPC は「1 周期先で何が接地しているか」を知らずに最適化してしまう。
 
-### 6.4 何が必要か
+### 6.4 「足を置く場所」と「バランス」は両方要る
 
-穴を「渡る」には、**穴を避ける足場計画**の上に、**縁の擾乱に耐える
-バランス制御**が要る。後者は:
+- **足を置く場所**: `getNearestValidFoothold` が穴の外へ。
+  → 「本物のメッシュ穴」にして初めて素直に効いた(3.1)。
+- **バランス**: 縁の擾乱に耐える。
+  → **歩容を静的安定なクロールに落とし、ゆっくりにする**ことで、
+  縁 1 本ぶんの擾乱を support polygon の余裕内に収めた。
 
-- トロットの `period` / `duty_cycle` を支持重複が増える方向に調整
-- 遊脚軌道の生成・接地検出(early/late contact)を縁で頑健化
-- 支持脚切り替え時の GRF / トルクの不連続を抑える
-- そもそも go2 Quad-SDK トロットの平地不安定性(未解決)を先に潰す
-
-これらはパラメータ数点のチューニングでは届かない、WBC/歩容側の別規模の課題。
+過去に「twist モードでは無理、LEAP プリミティブが要る」と結論していたが、
+それは**歩容がトロットのままだった**からで、**クロールに替えれば
+セントロイダル NMPC + Raibert 足場のまま渡れる**(0.3 m 幅・1 m 深に対して)。
 
 ---
 
-## 6b. さらに進めた調査(run 16〜21)
+## 7. go2 Quad-SDK twist 歩容の非決定性(既知)
 
-### 6b.1 縁の前方ピッチの正体 ── 地形マップの「dip」が偽のピッチ指令になっていた
-
-`local_planner.cpp` の twist モードは、各ホライズン点の胴体参照を
-**地形マップから直接作る**:
-
-```cpp
-ref_ground_height_(i) = getTerrainHeight(x, y);          // z_smooth レイヤ
-ref_body_plan_(i, 2)  = z_des_ + ref_ground_height_(i);  // 胴体高さ参照
-getTerrainSlope(x, y, yaw, ref_body_plan_(i,3), ref_body_plan_(i,4));
-                                                        // 胴体 roll/pitch 参照 = 地形傾斜
-```
-
-私の地形メッシュは穴帯を `map_dip` 下げていたので、胴体プランの未来点が
-穴 x 帯に入ると:
-
-- `getTerrainHeight` が `−map_dip` を返す → 胴体を穴へ**沈める**高さ指令
-- `getTerrainSlope` が急斜面(ランプ)の傾斜を返す → **胴体を 30〜50° 鼻下げに
-  する pitch 指令**
-
-これが「縁での前方ピッチスパイク」の正体だった(足場スナップの擾乱ではなかった)。
-
-**対策**: 地形メッシュを「dip(段差)」ではなく **細かいジグザグ(平均も
-平滑法線もほぼ 0、だが局所的にはザラザラ)** にした。
-
-- `getTerrainHeight`(z_smooth、半径 0.05)/ `getTerrainSlope`(smooth
-  normals、半径 0.12)はジグザグを平均して **≈ 0** → 偽のピッチ/高さ指令が
-  消える
-- `roughness` = |z_inpainted − z_smooth| と `slope`(normal_vectors、半径 0.08)は
-  局所のジグザグを拾って **`traversability` を 0.6 未満に落とす** → 足場回避は
-  維持
-
-`gen_quadsdk_gap_world.py` の PLY 生成をこのジグザグ方式に変更(既定
-`map_dip = 0.03`)。`filter_chain.yaml` の平滑化半径は 0.05 / 0.08 / 0.12。
-
-### 6b.2 歩容を crawl 寄りに ── 激しい横倒れが止まった
-
-`go2.yaml`: `period` 0.36→0.6、`duty_cycles` [0.5]→[0.75]、
-`phase_offsets` [0,0.5,0.5,0]→[0,0.25,0.5,0.75](対角トロット → 1 脚ずつ
-振る crawl 寄り、常時 3 脚接地)。
-
-- 6b.1 と併せて、**縁での前方ピッチは 0.2 rad 程度に収まり、π まで回る
-  横倒れは消えた**。
-- 前脚は穴を越えて向こうの凸条に着地するようになった(足場スナップ + 前方
-  バイアスが機能)。
-
-### 6b.3 まだ渡れない ── 前脚が穴上のとき胴体が沈む
-
-前脚が 1 m 深の穴の上に来る区間で、**支持が後方 2〜3 脚しかなくなり、
-胴体高さが 0.31 m → 0.03〜0.18 m まで沈む**。そのまま x ≈ 1.0〜1.1 m
-(穴の向こうの縁)で潰れて停止する。速度 0.15〜0.3 m/s、`period` 0.45〜0.9、
-`stance_kp` 60〜90 のいずれでも同じ。
-
-### 6b.4 結論(現時点)
-
-**twist モードの Quad-SDK(定常歩容 + Raibert 足場 + セントロイダル NMPC)は、
-胴体を 1 m 深・0.3 m 幅の穴の上を通せない。** 前脚が穴上にある間の「支持の
-空白」を、定常トロット/crawl とセントロイダル MPC では埋められない。
-これを埋めるのは Quad-SDK では **global body planner の LEAP / FLIGHT
-プリミティブ**(= `reference:=gbpl` + ゴール指定)の役割。twist モードには
-その機構が無い。
-
-到達点:
-- ✅ 足場回避(穴に足を入れない)
-- ✅ 縁の偽ピッチ指令の除去(ジグザグ地形マップ)
-- ✅ 激しい横倒れの解消(crawl 寄り歩容)
-- ❌ 胴体を穴の上を通す(支持の空白 → 沈み込み)
+`scripts/trial/run_quadsdk_gap_1m.sh` の冒頭コメントにある通り、go2 の
+twist 歩行は**同一条件でも成功/転倒がばらつく**(Step 01 で確認済み)。
+本 Step でも step04_1m の 0.15 m/s で観測。判定は **CSV(z, roll, pitch,
+到達 x)と GIF の目視の両方**で行い、片方だけでは成功としない。
 
 ---
 
-## 7. 再現方法
+## 8. 再現方法
 
 ```bash
 # 1) 穴ワールド + 地形 PLY を生成(external/quad-sdk へ書き込む)
-python3 src/trial/assets/gen_quadsdk_gap_world.py 2.0 1.0 2m 0.03     # step03_1m (ジグザグ地形、6b.1)
-python3 src/trial/assets/gen_quadsdk_gap_world.py 1.5 1.0 1p5m 0.03   # step04_1m
+python3 src/trial/assets/gen_quadsdk_gap_world.py 2.0 1.0 2m       # step03_1m
+python3 src/trial/assets/gen_quadsdk_gap_world.py 1.5 1.0 1p5m     # step04_1m
+#   第5引数 = メッシュ穴の片側マージン[m](既定 0.05)
 
-# 2) install/ に symlink(または colcon build --packages-select quad_sim_scripts)
+# 2) install/ に反映(--symlink-install なので config はそのまま効く。
+#    地形ファイルだけ install ツリーへ symlink)
 SRC=external/quad-sdk/quad_simulator/quad_sim_scripts
 INST=ros2_ws/install/quad_sim_scripts/share/quad_sim_scripts
 for w in flat_gaps_2m flat_gaps_1p5m; do
@@ -302,48 +342,53 @@ for w in flat_gaps_2m flat_gaps_1p5m; do
   ln -sfn "$PWD/$SRC/models/$w"           "$INST/models/$w"
 done
 
-# 3) 修正を反映(DIAG 入り)
+# 3) DIAG 入りバイナリを反映(挙動変更は無いが DIAG ログが要るなら)
 source /opt/ros/jazzy/setup.bash
 ( cd ros2_ws && colcon build --packages-select quad_utils local_planner \
     --symlink-install --allow-overriding quad_utils local_planner )
 
-# 4) 実行
-GAP_WORLD=flat_gaps_2m.xml GAP_TAG=step03_1m FORWARD_VEL_MPS=0.3 DURATION_S=25 \
+# 4) 実行(速度・時間は環境変数で)
+GAP_WORLD=flat_gaps_2m.xml  GAP_TAG=step03_1m FORWARD_VEL_MPS=0.3 DURATION_S=45 \
   bash scripts/trial/run_quadsdk_gap_1m.sh
+GAP_WORLD=flat_gaps_1p5m.xml GAP_TAG=step04_1m FORWARD_VEL_MPS=0.3 DURATION_S=45 \
+  bash scripts/trial/run_quadsdk_gap_1m.sh
+
+# 5) GIF 化(目視確認。数値だけで成功判定しない)
+bash scripts/trial/make_gif.sh \
+  artifacts/logs/quadsdk_step03_1m/logs/mujoco_go2_*.mp4 \
+  artifacts/gifs/quadsdk_step03_1m.gif 8 520
 ```
 
-出力: `artifacts/logs/quadsdk_step03_1m/{state_log.csv, trials_summary.csv}` +
-`.../logs/*.mp4`(いずれも `.gitignore` 対象)。
-
-## 8. 次の手(候補)
-
-1. go2 Quad-SDK トロットの堅牢化を深掘り(平地の非決定的転倒から)
-2. PyMPC 路線に戻り、Step 03/04(浅い轍は成功済み)に **reference foothold を
-   既知マップで穴外へずらす小モジュール**を足す(深さ非依存の回避)
-3. `map_dip` / `foothold_search_radius` / 前方バイアス係数の探索を継続
-   (縁の擾乱そのものは残るので効果は限定的と予想)
+出力: `artifacts/logs/quadsdk_step0{3,4}_1m/{state_log.csv, trials_summary.csv}`
++ `.../logs/*.mp4`(いずれも `.gitignore` 対象)。
 
 ## 9. 変更・追加ファイル一覧
 
-**MPC_DOG 側(新規):**
-- `src/trial/assets/gen_quadsdk_gap_world.py`
+**MPC_DOG 側:**
+- `src/trial/assets/gen_quadsdk_gap_world.py`(地形 PLY を平面 + 本物の穴へ)
 - `scripts/trial/run_quadsdk_gap_1m.sh`
 - `docs/steps/step_03_04_1m_quadsdk_gap_crossing.md`(本ファイル)
+- `artifacts/gifs/quadsdk_step03_1m_v0p5.gif` / `quadsdk_step04_1m_v0p3.gif`
 
 **external/quad-sdk(新規):**
 - `quad_simulator/quad_sim_scripts/worlds/flat_gaps_2m.xml.xacro` / `flat_gaps_1p5m.xml.xacro`
 - `quad_simulator/quad_sim_scripts/models/flat_gaps_2m/meshes/flat_gaps_2m.ply` / `flat_gaps_1p5m/...`
 
-**external/quad-sdk(変更、WIP):**
-- `quad_utils/config/go2.yaml`(`foothold_search_radius` 0.25→0.55)
-- `quad_utils/config/filter_chain.yaml`(平滑化半径を縮小)
-- `local_planner/src/local_footstep_planner.cpp`(前方バイアス + ヒステリシス、DIAG)
+**external/quad-sdk(設定変更):**
+- `local_planner/config/local_planner.yaml`(`horizon_length` 26→40)
+- `quad_utils/config/go2.yaml`(`period` 0.9 / `duty` 0.75 / `phase_offsets`
+  横回りクロール / `foothold_search_radius` 0.7 / `ground_clearance` 0.1)
+
+**external/quad-sdk(C++、挙動変更なし):**
+- `local_planner/src/local_footstep_planner.cpp`(前方バイアス撤去 = 素に戻す、+ DIAG)
 - `local_planner/src/local_planner.cpp`(DIAG のみ)
 - `quad_utils/src/mjcf_to_grid_map_converter.cpp`(DIAG のみ)
+- `quad_utils/config/filter_chain.yaml`(stock へ戻す)
 
 ## 10. 関連
 
-- `docs/steps/step_03_gap_crossing.md` / `step_04_gap_crossing_1p5m.md`(PyMPC、浅い轍、成功)
+- `docs/steps/step_03_gap_crossing.md` / `step_04_gap_crossing_1p5m.md`
+  (PyMPC、浅い轍、成功)
 - `agent_reports/quadsdk_step01_gait_and_mpc.md`(歩容と MPC の役割分担)
 - `agent_reports/quadsdk_step01_terrain_map.md`(地形マップ = PLY 由来)
 - `agent_reports/quadsdk_step01_simple_model_terrain_and_gaps.md`(穴超えの整理)

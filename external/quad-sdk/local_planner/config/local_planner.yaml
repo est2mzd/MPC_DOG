@@ -3,7 +3,7 @@
     local_planner: 
       update_rate: 333.0                  # Local planning loop rate, Hz
       timestep: 0.03                      # Horizon discretization timestep, s
-      horizon_length: 26                  # Number of states in local horizon
+      horizon_length: 40                  # [MPC_DOG] was 26; must exceed period_=period/dt (0.9/0.03=30) so the horizon covers a full slow-crawl gait cycle
       cmd_vel_filter_const: 0.10          # Low-pass filter constant for twist commands
       cmd_vel_scale: 1.0                  # Scale factor applied to twist commands
       last_cmd_vel_msg_time_max: 2.0      # Max age before cmd_vel is ignored, s

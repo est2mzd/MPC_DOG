@@ -88,58 +88,49 @@ xacro = f"""<?xml version="1.0" encoding="utf-8"?>
 (worlds_dir / f"{NAME}.xml.xacro").write_text(xacro)
 
 # ---------------------------------------------------------------- terrain PLY
-# ONE CONTINUOUS single-valued surface. Strips are flat at z = 0. Each hole
-# x-band is a fine ZIGZAG of amplitude MAP_DIP (NOT a net dip): the local
-# tilt/roughness of the zigzag makes the grid_map `slope`/`roughness`
-# (small-radius) spike there, so `traversability` tanks and
-# getNearestValidFoothold steers footholds off the hole.
-#   Crucially the *mean* height and the *smoothed* normal over the hole band
-#   stay ~0, so local_planner's `getTerrainHeight` (z_smooth -> ref body
-#   height) and `getTerrainSlope` (smooth normals -> ref body pitch/roll) do
-#   NOT get a fake step-down / fake pitch command over the hole -- that fake
-#   pitch reference was what nose-dived the robot at the hole edge.
+# DISJOINT flat strips: one flat quad per solid strip at z = 0, and NOTHING
+# over the hole x-bands -- a genuine gap in the mesh.
+#
+# Why a real gap (not a zigzag / not a dip):
+#   grid_map's filter_chain.yaml already has a dedicated hole detector --
+#     traversability_hole_mask = 1 - |z_raw - z_inpainted|
+#   Where the mesh has no surface, the ray-cast converter leaves `z` = NaN;
+#   `z_inpainted` fills it, so |z_raw - z_inpainted| is large and the mask
+#   (spread by a 0.075 m barrier radius) drives `traversability` -> 0 across
+#   the whole hole band. `getNearestValidFoothold` then rejects those cells
+#   (traversability < foothold_obj_threshold) and snaps the foot to solid
+#   ground -- this is exactly the mechanism the framework is built around.
+#   Because the strips are perfectly flat and level, `z_smooth` and the
+#   smoothed surface normal stay flat too, so local_planner's twist-mode
+#   `getTerrainHeight` / `getTerrainSlope` produce NO fake step-down and NO
+#   fake body pitch/roll reference over the hole (that fake pitch command was
+#   what nose-dived the robot at the near edge in earlier rounds).
 # Written in flat_wide.ply's exact binary format.
+#
+# MESH_MARGIN: the mesh strips are trimmed this much shorter than the physical
+# box strips on EACH side, so the mesh gap (hence the `traversability`=NaN
+# keep-out band the footstep planner sees) is HOLE_LEN + 2*MESH_MARGIN wide
+# while the real hole a foot can fall into is only HOLE_LEN. That gives every
+# snapped foothold a MESH_MARGIN safety margin back from the crumbling physical
+# lip -- without it the foot lands right on the edge of a 1 m drop and the body
+# pitches in.
 import struct
 
-MAP_DIP = float(sys.argv[4]) if len(sys.argv) > 4 else 0.03  # zigzag amplitude [m]
-ZIG_W = 0.037  # zigzag half-pitch [m] (a few grid cells; res is 0.05)
+MESH_MARGIN = float(sys.argv[5]) if len(sys.argv) > 5 else 0.10  # m, per side
 RGBA = (202, 209, 238, 0)
+mhalf = HALF - MESH_MARGIN
 
-sx_min = strip_centres[0] - HALF
-sx_max = strip_centres[-1] + HALF
-pts: list[tuple[float, float]] = [(sx_min, 0.0)]
-for xc in strip_centres:
-    xa, xb = xc - HALF, xc + HALF
-    pts.append((xa, 0.0))
-    pts.append((xb, 0.0))
-    if xb < sx_max - 1e-6:
-        # zigzag across [xb, xb+HOLE_LEN], starting and ending at z=0
-        x = xb + ZIG_W
-        sign = -1.0
-        while x < xb + HOLE_LEN - 1e-6:
-            pts.append((x, sign * MAP_DIP))
-            sign = -sign
-            x += ZIG_W
-        pts.append((xb + HOLE_LEN, 0.0))
-
-surf = [pts[0]]
-for p in pts[1:]:
-    if abs(p[0] - surf[-1][0]) > 1e-6 or abs(p[1] - surf[-1][1]) > 1e-9:
-        surf.append(p)
-
-# Extrude across y in [-Y_HALF, Y_HALF]: each consecutive (x,z) pair -> a quad
-# -> 2 triangles. Surface only (open, single-valued) -- simplest thing the
-# grid_map ray-cast-down converter can rasterise.
 pv, pf = [], []
-for (x0, z0), (x1, z1) in zip(surf[:-1], surf[1:]):
+for xc in strip_centres:
+    xa, xb = xc - mhalf, xc + mhalf
     b = len(pv)
-    pv += [(x0, -Y_HALF, z0), (x1, -Y_HALF, z1), (x1, Y_HALF, z1), (x0, Y_HALF, z0)]
+    pv += [(xa, -Y_HALF, 0.0), (xb, -Y_HALF, 0.0), (xb, Y_HALF, 0.0), (xa, Y_HALF, 0.0)]
     pf += [(b, b + 1, b + 2), (b, b + 2, b + 3)]
 
 hdr = (
     "ply\r\n"
     "format binary_little_endian 1.0\r\n"
-    f"comment {NAME} terrain: continuous surface, {MAP_DIP:g} m dips at hole bands\r\n"
+    f"comment {NAME} terrain: disjoint flat strips (z=0), real gaps at holes\r\n"
     f"element vertex {len(pv)}\r\n"
     "property float x\r\nproperty float y\r\nproperty float z\r\n"
     f"element face {len(pf)}\r\n"
