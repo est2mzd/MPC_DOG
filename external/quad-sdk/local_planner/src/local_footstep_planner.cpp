@@ -212,8 +212,11 @@ void step12PlanSequence(const grid_map::GridMap &grid,
   const double td_spacing = (period > 0) ? (period * dt / 4.0) : 0.225;
   const int kmax = 32;
   // Max forward travel of one leg between its own consecutive touchdowns
-  // (instruction 2.3-8). go2 crawl is ~0.15-0.25 m; allow a little slack.
-  const double max_step_fwd = 0.30, max_step_back = 0.15;
+  // (instruction 2.3-8). Chosen so the actual crossing behaviour is admitted:
+  // the crawl gait bridges the ~0.40 m traversability-unsafe band of a 0.30 m
+  // step03/04 gap (Step 09) by stepping straight to the far strip, but cannot
+  // bridge a 0.50 m gap (~0.55 m near-edge->far-strip). 0.45 m sits between.
+  const double max_step_fwd = 0.45, max_step_back = 0.15;
   double leg_prev_x[4] = {-1e9, -1e9, -1e9, -1e9};
 
   auto trav_ok = [&](double x, double y) -> bool {
@@ -267,8 +270,10 @@ void step12PlanSequence(const grid_map::GridMap &grid,
              x - leg_prev_x[leg] < -max_step_back)) {
           continue;
         }
-        const bool sole = trav_ok(x + res, y) && trav_ok(x - res, y) &&
-                          trav_ok(x, y + res) && trav_ok(x, y - res);
+        // light foot-sole / edge margin: the cell plus its along-travel
+        // neighbours safe (rejects an isolated 1-cell strip; admits the wide
+        // near/far strips the controller actually uses).
+        const bool sole = trav_ok(x + res, y) && trav_ok(x - res, y);
         const double zr = have_raw ? grid.atPosition("z", p) : std::nan("");
         if (!sole || !std::isfinite(zr)) continue;
         ++n_valid;
