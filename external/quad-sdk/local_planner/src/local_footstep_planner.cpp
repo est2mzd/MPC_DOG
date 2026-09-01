@@ -188,6 +188,140 @@ void step11EnumerateCandidates(const grid_map::GridMap &grid,
   f << b << "\n";
 }
 
+// [MPC_DOG Step 12] Measurement-only, shadow. A width-1 greedy multi-step
+// foothold search along the reconstructed crawl touchdown order (FL,BR,FR,BL).
+// At each future touchdown it projects the body forward at v_fwd, gets that
+// leg's hip, enumerates reachable+safe+observed cells (same tests as Step 11),
+// and takes the min-cost one. Verdict:
+//   FEASIBLE_TO_RANGE     - placed footholds out to plan_distance (or the step cap)
+//   BLOCKED_AT_STEP_K     - no valid candidate at touchdown k
+//   UNKNOWN_BEFORE_RANGE  - ran off the mapped area first
+// Nothing here feeds control. Throttled to every 5th plan cycle.
+void step12PlanSequence(const grid_map::GridMap &grid,
+                        const std::shared_ptr<quad_utils::QuadKD2> &kd, double dt,
+                        int period, double bx, double by, double byaw, double bz,
+                        double v_fwd, double ik_max_reach, double toe_radius,
+                        double obj_threshold, double plan_distance, double time_s,
+                        int plan_idx, const std::string &dir) {
+  const auto t_start = std::chrono::steady_clock::now();
+  const char *legname[4] = {"FL", "BL", "FR", "BR"};
+  const int order[4] = {0, 3, 2, 1};  // observed crawl touchdown order
+  const double R = (ik_max_reach > 0.0) ? ik_max_reach : 0.45;
+  const double res = std::max(grid.getResolution(), 1e-3);
+  const double fwd = 0.32, back = 0.28, lat = 0.26;
+  const double td_spacing = (period > 0) ? (period * dt / 4.0) : 0.225;
+  const int kmax = 24;
+
+  auto trav_ok = [&](double x, double y) -> bool {
+    const grid_map::Position p(x, y);
+    if (!grid.exists("traversability") || !grid.isInside(p)) return false;
+    const double t = grid.atPosition("traversability", p);
+    return std::isfinite(t) && t > obj_threshold;
+  };
+  const bool have_z = grid.exists("z_inpainted");
+  const bool have_raw = grid.exists("z");
+
+  std::string verdict = "FEASIBLE_TO_RANGE";
+  int blocked_k = -1;
+  const char *blocked_leg = "-";
+  double max_progress = 0.0;
+  int placed = 0;
+  std::vector<std::string> foot_rows;
+
+  double prev_x = bx, prev_y = by;
+  for (int k = 0; k < kmax; ++k) {
+    const int leg = order[k % 4];
+    const double t = (k + 1) * td_spacing;
+    const double bxk = bx + v_fwd * t;
+    Eigen::Vector3d hip;
+    kd->worldToNominalHipFKWorldFrame(leg, Eigen::Vector3d(bxk, by, bz),
+                                     Eigen::Vector3d(0.0, 0.0, byaw), hip);
+    if (!grid.isInside(grid_map::Position(hip.x(), hip.y()))) {
+      verdict = "UNKNOWN_BEFORE_RANGE";
+      blocked_k = k;
+      blocked_leg = legname[leg];
+      break;
+    }
+    // enumerate candidates, keep min-cost valid one
+    double best_cost = std::numeric_limits<double>::max();
+    double best_x = 0.0, best_y = 0.0;
+    int n_valid = 0;
+    const double nom_x = hip.x() + 0.08;  // slight forward of the hip
+    for (double x = hip.x() - back; x <= hip.x() + fwd + 1e-9; x += res) {
+      for (double y = hip.y() - lat; y <= hip.y() + lat + 1e-9; y += res) {
+        const grid_map::Position p(x, y);
+        if (!grid.isInside(p)) continue;
+        const double zc =
+            have_z ? grid.atPosition("z_inpainted", p) + toe_radius : 0.0;
+        const double d = std::sqrt((x - hip.x()) * (x - hip.x()) +
+                                   (y - hip.y()) * (y - hip.y()) +
+                                   (zc - hip.z()) * (zc - hip.z()));
+        if (d > R || !trav_ok(x, y)) continue;
+        const bool sole = trav_ok(x + res, y) && trav_ok(x - res, y) &&
+                          trav_ok(x, y + res) && trav_ok(x, y - res);
+        const double zr = have_raw ? grid.atPosition("z", p) : std::nan("");
+        if (!sole || !std::isfinite(zr)) continue;
+        ++n_valid;
+        const double cost = std::fabs(x - nom_x) + std::fabs(y - hip.y()) +
+                            0.5 * std::fabs(y - prev_y) + 0.3 * (d / R);
+        if (cost < best_cost) {
+          best_cost = cost;
+          best_x = x;
+          best_y = y;
+        }
+      }
+    }
+    if (n_valid == 0) {
+      verdict = "BLOCKED_AT_STEP_K";
+      blocked_k = k;
+      blocked_leg = legname[leg];
+      break;
+    }
+    ++placed;
+    max_progress = best_x - bx;
+    prev_x = best_x;
+    prev_y = best_y;
+    char fb[192];
+    std::snprintf(fb, sizeof(fb), "%.4f,%d,%d,%s,%.5f,%.5f,%.5f,%d", time_s,
+                  plan_idx, k, legname[leg], best_x, best_y, hip.x(), n_valid);
+    foot_rows.emplace_back(fb);
+    if (max_progress >= plan_distance) {
+      verdict = "FEASIBLE_TO_RANGE";
+      break;
+    }
+  }
+
+  const auto us = std::chrono::duration_cast<std::chrono::microseconds>(
+                      std::chrono::steady_clock::now() - t_start)
+                      .count();
+
+  const std::string sp = dir + "/step12_sequence.csv";
+  const bool sh = !std::ifstream(sp).good();
+  std::ofstream sf(sp, std::ios::app);
+  if (sf) {
+    if (sh) {
+      sf << "time,current_plan_index,verdict,blocked_step_k,blocked_leg,"
+            "n_placed,max_feasible_progress_m,plan_distance_m,compute_time_us\n";
+    }
+    char b[256];
+    std::snprintf(b, sizeof(b), "%.4f,%d,%s,%d,%s,%d,%.4f,%.2f,%ld", time_s,
+                  plan_idx, verdict.c_str(), blocked_k, blocked_leg, placed,
+                  max_progress, plan_distance, static_cast<long>(us));
+    sf << b << "\n";
+  }
+  // planned foothold sequence: only every 20th call, to bound size
+  static long s12_foot_calls = 0;
+  if ((s12_foot_calls++ % 20) == 0 && !foot_rows.empty()) {
+    const std::string fp = dir + "/step12_footholds.csv";
+    const bool fh = !std::ifstream(fp).good();
+    std::ofstream ff(fp, std::ios::app);
+    if (ff) {
+      if (fh) ff << "time,current_plan_index,step_k,leg,x,y,hip_x,n_valid\n";
+      for (const auto &r : foot_rows) ff << r << "\n";
+    }
+  }
+}
+
 }  // namespace
 
 LocalFootstepPlanner::LocalFootstepPlanner(rclcpp::Node::SharedPtr node)
@@ -411,6 +545,22 @@ FootPlanResult LocalFootstepPlanner::computeFootPlan(
           ++found;
         }
       }
+    }
+  }
+
+  // [MPC_DOG Step 12] shadow multi-step foothold search (every 5th cycle).
+  if (s09_dir != nullptr && body_plan.rows() > 1) {
+    static long s12_calls = 0;
+    if ((s12_calls++ % 5) == 0) {
+      const double v_fwd = std::min(
+          1.0, std::max(0.0, (body_plan(body_plan.rows() - 1, 0) -
+                              body_plan(0, 0)) /
+                                 std::max(1e-6, (body_plan.rows() - 1) * dt_)));
+      step12PlanSequence(terrain_grid_, quadKD_, dt_, period_, body_plan(0, 0),
+                         body_plan(0, 1), body_plan(0, 5), body_plan(0, 2),
+                         v_fwd, ik_max_reach_, toe_radius_,
+                         foothold_obj_threshold_, 2.5, node_->now().seconds(),
+                         current_plan_index, std::string(s09_dir));
     }
   }
 
