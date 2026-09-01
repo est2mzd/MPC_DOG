@@ -42,6 +42,12 @@ CAMERA_DISTANCE_M="${CAMERA_DISTANCE_M:-9.5}"     # 固定カメラのlookat点�
                                                     # 相似的に拡大縮小するため)ため、比例定数
                                                     # k=16.0/10.75≈1.490[m/距離1単位]から
                                                     # 13m ÷ 1.490 ≈ 8.72と算出した。
+SPAWN_X_M="${SPAWN_X_M:-0.0}"                      # ロボットのスポーンx位置[m]。既定0.0で従来どおり。
+                                                    # 安全停止シナリオ(穴の約1.9m手前でラッチ)は
+                                                    # 助走距離が短く「歩いてから止まる」様子が見えない
+                                                    # ため、その地形だけ負値(例 -2.0)を与えて助走を
+                                                    # 延ばす。init_poseの-x文字列に流し込むだけで、
+                                                    # 地形マップ(world固定)には影響しない。
 CAMERA_LOOKAT_X_M="${CAMERA_LOOKAT_X_M:-2.0}"      # 固定カメラのlookat点のx方向オフセット[m]。
                                                     # 「カメラをもう少し右に」との要望を受け追加
                                                     # (mujoco_recorder_node.cppへ新規パラメータとして
@@ -81,7 +87,7 @@ ros2 launch quad_utils quad_mujoco.py \
   camera_track_robot:=false \
   camera_distance:="${CAMERA_DISTANCE_M}" \
   camera_lookat_x:="${CAMERA_LOOKAT_X_M}" \
-  robot_configs:='[{"name": "robot_1", "type": "go2", "controller": "inverse_dynamics", "init_pose": "-x 0.0 -y 0.0 -z 0.5"}]' \
+  robot_configs:="[{\"name\": \"robot_1\", \"type\": \"go2\", \"controller\": \"inverse_dynamics\", \"init_pose\": \"-x ${SPAWN_X_M} -y 0.0 -z 0.5\"}]" \
   &
 MUJOCO_PID=$!
 
