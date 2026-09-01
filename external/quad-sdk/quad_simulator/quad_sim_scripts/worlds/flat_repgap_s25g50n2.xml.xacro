@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mujoco model="flat_repgap_s25g50n2" xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <!-- Repeated gap world: 0.25 m strip / 0.50 m gap, x2,
+       depth 1.00 m, full-width (5 m). Test region
+       x in [2.00, 3.50] (len 1.50 m). Robot spawns near
+       x = 0 on the approach plane and walks +x.
+       Terrain MAP comes from models/flat_repgap_s25g50n2/meshes/flat_repgap_s25g50n2.ply. -->
+  <xacro:arg name="meshdir" default=""/>
+  <xacro:arg name="mjcf_path" default=""/>
+  <compiler angle="radian" meshdir="$(arg meshdir)" texturedir="$(arg meshdir)" autolimits="true"/>
+  <include file="$(arg mjcf_path)"/>
+  <worldbody>
+    <light directional="true" diffuse=".8 .8 .8" specular=".2 .2 .2" pos="0 0 5" dir="0 0 -1"/>
+    <geom name="trench_floor" type="box" size="8.2500 2.5 0.05" pos="3.2500 0 -1.0500" rgba="0.55 0.45 0.4 1"/>
+    <geom name="approach" type="box" size="2.5000 2.5 0.5000" pos="-0.5000 0 -0.5000" rgba="0.8 0.9 0.8 1"/>
+    <geom name="strip_0" type="box" size="0.1250 2.5 0.5000" pos="2.1250 0 -0.5000" rgba="0.8 0.9 0.8 1"/>
+    <geom name="strip_1" type="box" size="0.1250 2.5 0.5000" pos="2.8750 0 -0.5000" rgba="0.8 0.9 0.8 1"/>
+    <geom name="landing" type="box" size="3.0000 2.5 0.5000" pos="6.5000 0 -0.5000" rgba="0.8 0.9 0.8 1"/>
+    <geom name="grid_x0" type="box" size="0.005 2.5 0.001" pos="0 0 0.002" rgba="0.3 0.3 0.3 1" contype="0" conaffinity="0"/>
+    <geom name="grid_x1" type="box" size="0.005 2.5 0.001" pos="1 0 0.002" rgba="0.3 0.3 0.3 1" contype="0" conaffinity="0"/>
+    <geom name="grid_x2" type="box" size="0.005 2.5 0.001" pos="2 0 0.002" rgba="0.3 0.3 0.3 1" contype="0" conaffinity="0"/>
+    <geom name="grid_x3" type="box" size="0.005 2.5 0.001" pos="3 0 0.002" rgba="0.3 0.3 0.3 1" contype="0" conaffinity="0"/>
+    <geom name="grid_x4" type="box" size="0.005 2.5 0.001" pos="4 0 0.002" rgba="0.3 0.3 0.3 1" contype="0" conaffinity="0"/>
+    <geom name="grid_x5" type="box" size="0.005 2.5 0.001" pos="5 0 0.002" rgba="0.3 0.3 0.3 1" contype="0" conaffinity="0"/>
+    <geom name="grid_x6" type="box" size="0.005 2.5 0.001" pos="6 0 0.002" rgba="0.3 0.3 0.3 1" contype="0" conaffinity="0"/>
+    <geom name="grid_x7" type="box" size="0.005 2.5 0.001" pos="7 0 0.002" rgba="0.3 0.3 0.3 1" contype="0" conaffinity="0"/>
+    <geom name="grid_x8" type="box" size="0.005 2.5 0.001" pos="8 0 0.002" rgba="0.3 0.3 0.3 1" contype="0" conaffinity="0"/>
+    <geom name="grid_x9" type="box" size="0.005 2.5 0.001" pos="9 0 0.002" rgba="0.3 0.3 0.3 1" contype="0" conaffinity="0"/>
+  </worldbody>
+</mujoco>
