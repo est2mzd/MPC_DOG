@@ -530,6 +530,30 @@ TEST(LocalFootstepPlannerTest, EdgeProbeIgnoresHoleBehindFarAndWhenDisabled) {
             FootholdStatus::VALID);
 }
 
+// Phase 2B-3: body-forward lookahead for an uncrossable gap on the route.
+TEST(LocalFootstepPlannerTest, HasUncrossableGapAheadDistinguishesGapWidth) {
+  // Narrow gap [0.3, 0.6] -> crossable (strip resumes within max_crossable_gap).
+  LocalFootstepPlanner narrow = makePlanner(0.15, 0.6);
+  const auto narrow_grid = makeTerrainWithGapBand(0.3, 0.6);
+  narrow.updateMap(narrow_grid);
+  narrow.updateMap(loadTerrain(narrow_grid));
+  EXPECT_FALSE(narrow.hasUncrossableGapAhead(Eigen::Vector2d(-1.0, 0.0), 2.5));
+
+  // Wide gap [0.3, 1.6] -> uncrossable, and only flagged once it is in range.
+  LocalFootstepPlanner wide = makePlanner(0.15, 0.6);
+  const auto wide_grid = makeTerrainWithGapBand(0.3, 1.6);
+  wide.updateMap(wide_grid);
+  wide.updateMap(loadTerrain(wide_grid));
+  EXPECT_TRUE(wide.hasUncrossableGapAhead(Eigen::Vector2d(-1.0, 0.0), 2.5));
+  EXPECT_FALSE(wide.hasUncrossableGapAhead(Eigen::Vector2d(-1.0, 0.0), 1.0));
+
+  // Disabled when Phase 3 is off (edge_clearance == 0).
+  LocalFootstepPlanner off = makePlanner(0.0, 0.6);
+  off.updateMap(wide_grid);
+  off.updateMap(loadTerrain(wide_grid));
+  EXPECT_FALSE(off.hasUncrossableGapAhead(Eigen::Vector2d(-1.0, 0.0), 2.5));
+}
+
 TEST(LocalFootstepPlannerTest, WelzlMinimumCircleHandlesBoundaryCases) {
   LocalFootstepPlanner planner = makePlanner();
 
