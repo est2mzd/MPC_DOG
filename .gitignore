@@ -128,9 +128,12 @@ artifacts/logs/quadsdk_quadsdk_rt_*/
 artifacts/logs/quadsdk_quadsdk_rr_*/
 artifacts/logs/quadsdk_quadsdk_step09_*/
 artifacts/logs/quadsdk_quadsdk_step09regr_*/
+artifacts/logs/quadsdk_quadsdk_step10_*/
 # Step 09 raw dumps: keep the two CSVs, the cross-section PNG, and the per-trench
 # GIF; drop the bulky per-tick sim log / console log / intermediate mp4.
 artifacts/step09/*/state_log.csv
 artifacts/step09/*/run.log
 artifacts/step09/*/trim.mp4
+artifacts/step10/*/state_log.csv
+artifacts/step10/*/run.log
 artifacts/logs/quadsdk_quadsdk_p4x_*/

@@ -200,7 +200,29 @@ env ガード計装で 15/25/30/35/50/100 cm の地図断面 CSV + 足場 CSV �
 
 ---
 
-### 現在の到達点(Step 09 時点):できること / できないこと
+#### Step 10:現在歩容から未来の脚順序を再構成(shadow・制御変更なし)
+
+指示書の 8 段(Step 09〜16)の 2 段目。いまの gait 位相から「この先どの脚がどの順で
+着地するか」を `computeContactSchedule` の出力そのものから取り出して記録し、実接触
+(`state_log.csv` の `contact_*` 立ち上がり)と照合。詳細は
+[Step 10 の検証記録](./agent_reports/steps/step_10_future_gait_event_prediction.md)。
+
+**タスク結果:予測 touchdown ↔ 実接触**(色 = 脚。`scripts/trial/step10_analyze.py`)
+
+![Step10 予測 vs 実接触](./artifacts/step10/g30/step10_g30_pred_vs_actual.png)
+
+| 地形 | 予測 脚順 | 実 脚順 | 一致 | touchdown 間隔 誤差 |
+|---|---|---|---|---|
+| 平地 | `FL→BR→FR→BL` | `FL→BR→FR→BL` | ✅ | 3 ms |
+| 30 cm 穴 | `FL→BR→FR→BL` | `FL→BR→FR→BL` | ✅ | 0 ms |
+| 連続 15 cm | `FL→BR→FR→BL` | `FL→BR→FR→BL` | ✅ | 0 ms |
+
+3 地形とも脚順一致・間隔誤差 ≤3 ms(sim 1 tick 未満)。→ Step 11(1 歩の可到達領域と
+安全足場候補生成)へ。
+
+---
+
+### 現在の到達点(Step 10 時点):できること / できないこと
 
 **できること**
 
