@@ -85,10 +85,13 @@
   Phase 2B latch が拾う。IK は選択セル 1 個だけ(探索セル全部ではない)。
   **回帰(step03/04・Step 05・Step 05b・Step 06)は既定 OFF で不変。IK ON でも
   Step 05/06 は誤発火せず(`IK_UNREACHABLE` 0 回)通過/安全停止**。
-  掃引地形では `IK_UNREACHABLE` を踏まないので、**専用の確認地形を作って
-  実地検証した**(Step 07):地形マップの助走側だけを 1.0 m 削って前方スナップを
-  強制 → `ik_reach_check:=true` で `status=5` 発火 → **3/3 で手前に直立静止
-  (転倒なし)**、`false` だと同地形で転倒。詳細は下記「Phase 4」と
+  **判定は midstance hip からの幾何距離 > `ik_max_reach`(0.45 m)**。
+  初版は IK の `is_exact` フラグで判定したが、平地歩行中の足場まで拾って
+  **30 cm 溝渡りを止めてしまった(機能後退、ユーザー指摘)**ため、幾何距離へ
+  変更。**Step 07 で 30 cm / 100 cm × ON/OFF の 4 通りを確認**:
+  30 cm は ON でも渡り切る(`IK_UNR`=0、機能後退なし)、100 cm は ON/OFF とも
+  手前で停止。Phase 4 が実際に効く専用地形(助走側マップを削った ikdemo)では
+  ON で `status=5` → 手前で直立停止、OFF で転倒。詳細は下記「Phase 4」と
   `steps/step_07_quadsdk_phase4_ik_reach.md`。
 - **Phase 5 / 6 は未着手。**
 

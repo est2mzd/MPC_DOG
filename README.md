@@ -33,7 +33,7 @@
  - [Step 05:15 cm 平地・15 cm 穴の連続区間 — **go2 は N=2〜5 で安定して渡り切った**(Phase 3(A) が 15 cm 穴を「渡れる穴」と判定・クロール歩容で 5 cm メッシュ帯を跨ぐ)。事前調査の「成立困難寄り」は実測で覆った](./agent_reports/steps/step_05_quadsdk_repeated_15cm_gaps.md)
  - [Step 05b:安全停止の検証 — Phase 2A 単独では受動 PD ホールドが勢いを止めきれず転落。**Phase 3(`EDGE_TOO_CLOSE`、進行方向 forward-probe)を足すと、30 cm の穴は跨いで渡り・100 cm の穴の手前で直立停止**(渡れる穴は渡る/渡れない穴の手前で安全に止まる)](./agent_reports/steps/step_05b_quadsdk_phase2a_safe_stop.md)
  - [Step 06:15 cm 穴 ×2 → 1 m 穴 の複合地形で「落ちずに止まれるか」 — **Phase 2B で達成(3/3 で 15 cm 穴群の手前で直立静止・転倒なし)**。plan を凍結せず `cmd_vel:=0` で減速停止 + NMPC ホライズンより長い前方 lookahead(2.5 m)で 1 m 穴を早期検知。既存シナリオ(step03/04・Step 05・Step 05b)も回帰 OK](./agent_reports/steps/step_06_quadsdk_last_gap_1m.md)
- - [Step 07:Phase 4(`IK_UNREACHABLE`)の動作確認 — 地形マップの助走側だけを削って前方スナップを強制した専用地形で、`ik_reach_check:=true` は届かない足場を検知して手前で直立停止(3/3)、`false` は同地形で転倒](./agent_reports/steps/step_07_quadsdk_phase4_ik_reach.md)
+ - [Step 07:Phase 4(`IK_UNREACHABLE`)の動作確認 — **30 cm / 100 cm × `ik_reach_check` OFF/ON の 4 通り**。Phase 4 ON でも 30 cm は渡り切る(機能後退なし)、100 cm は手前で停止。初版は IK の `is_exact` フラグで平地足場まで拾い 30 cm 渡りを止めた → midstance hip からの幾何距離判定に修正](./agent_reports/steps/step_07_quadsdk_phase4_ik_reach.md)
 
 ### 溝渡りの実行例(1 m 深・0.3 m 幅の溝を、足を溝に入れずに連続で渡る／`reference:=twist` + クロール歩容)
 
@@ -71,15 +71,20 @@ NMPC ホライズン(≈0.36 m 先)では 1 m 穴を認識するのが遅すぎ�
 |---|---|
 | ![Step06 転倒](./artifacts/gifs/quadsdk_step06_last1m_fall_10to30s.gif) | ![Step06 安全停止](./artifacts/gifs/quadsdk_step06_last1m_safestop_10to30s.gif) |
 
-### Step 07:Phase 4(`IK_UNREACHABLE`)— 脚が届かない足場を検知して安全停止
+### Step 07:Phase 4(`IK_UNREACHABLE`)— 30 cm / 100 cm × ON/OFF
 
-地形マップの助走側だけを削って**前方スナップを強制**した専用地形(物理地面は普通)。
-`ik_reach_check:=true` だと前方足場が `IK_UNREACHABLE`(`status=5`)になり、
-gate + graceful-stop latch で手前に直立停止。`false` だと同地形で届かない足場を
-実行して転倒。詳細は
+Phase 4(選択足場が midstance hip から `ik_max_reach`=0.45 m を超えたら
+`IK_UNREACHABLE`)は **既定 OFF**。**ON にしても 30 cm の溝は渡り切り(機能後退
+なし)、100 cm の穴は手前で停止**。Phase 4 が実際に効く専用地形(地形マップの
+助走側を削って前方スナップを強制)では、ON=`IK_UNREACHABLE` 検知 → 手前で直立
+停止、OFF=同地形で届かない足場を実行して転倒。詳細は
 [Step 07 の検証記録](./agent_reports/steps/step_07_quadsdk_phase4_ik_reach.md)。
 
-| Phase 4 ON:届かない足場を検知 → 手前で直立停止(10–30 s) | Phase 4 OFF:同地形で転倒(10–30 s) |
+| 30 cm + Phase 4 ON:渡り切る(12–40 s) | 100 cm + Phase 4 ON:手前で停止(10–30 s) |
+|---|---|
+| ![g30 cross](./artifacts/gifs/quadsdk_phase4_g30_ik_cross_12to40s.gif) | ![g100 stop](./artifacts/gifs/quadsdk_phase4_g100_ik_stop_10to30s.gif) |
+
+| 専用地形 + Phase 4 ON:届かない足場を検知 → 停止(10–30 s) | 同 OFF:届かない足場を実行して転倒(10–30 s) |
 |---|---|
 | ![Phase4 安全停止](./artifacts/gifs/quadsdk_phase4_ik_safestop_10to30s.gif) | ![Phase4 転倒](./artifacts/gifs/quadsdk_phase4_ik_fall_10to30s.gif) |
 

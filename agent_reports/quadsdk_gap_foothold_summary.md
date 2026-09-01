@@ -97,11 +97,16 @@ Go2(Quad-SDK、`reference:=twist`)で、以前 **深さ 1 m・幅 0.3 m の溝�
 
 ### 5. Step 07:Phase 4(IK 可到達性)の動作確認 — 届かない足場を検知して停止
 
-地形マップの助走側だけを削って**前方スナップを強制**(物理地面は普通)。
-`ik_reach_check:=true` で前方足場が `IK_UNREACHABLE` になり、gate + latch で
-手前に直立停止(左)。`false` だと同地形で届かない足場を実行して転倒(右)。
+**30 cm / 100 cm × `ik_reach_check` OFF/ON の 4 通り**で確認:
+Phase 4 ON でも **30 cm は渡り切る(機能後退なし)**、100 cm は手前で停止。
+Phase 4 が実際に効く専用地形(助走側マップを削って前方スナップを強制)では、
+ON=`IK_UNREACHABLE` 検知 → 手前で直立停止、OFF=同地形で転倒。
 
-| Phase 4 ON:届かない足場を検知 → 手前で停止(10–30 s) | Phase 4 OFF:同地形で転倒(10–30 s) |
+| 30 cm + Phase 4 ON:渡り切る(12–40 s) | 100 cm + Phase 4 ON:手前で停止(10–30 s) |
+|---|---|
+| ![g30 cross](../artifacts/gifs/quadsdk_phase4_g30_ik_cross_12to40s.gif) | ![g100 stop](../artifacts/gifs/quadsdk_phase4_g100_ik_stop_10to30s.gif) |
+
+| 専用地形 + Phase 4 ON:届かない足場を検知 → 停止(10–30 s) | 同 OFF:届かない足場を実行して転倒(10–30 s) |
 |---|---|
 | ![phase4 stop](../artifacts/gifs/quadsdk_phase4_ik_safestop_10to30s.gif) | ![phase4 fall](../artifacts/gifs/quadsdk_phase4_ik_fall_10to30s.gif) |
 
@@ -118,7 +123,7 @@ Go2(Quad-SDK、`reference:=twist`)で、以前 **深さ 1 m・幅 0.3 m の溝�
 | Step 05b | 単独トレンチ 30 cm | `edge_clearance:0.15` | 渡り切る | 2A + 3(A) |
 | Step 05b | 単独トレンチ 10 m / 100 cm | `edge_clearance:0.15` | 手前で直立停止 | 2A + 3(A)(+ 2B で滑らかに) |
 | Step 06 | 15 cm 穴 ×2 → 1 m 穴 | `edge_clearance:0.15` | 15 cm 穴群の手前で直立静止(3/3) | 2A + 3(A) + **2B** |
-| Step 07 | 助走側マップを削った地形 | `ik_reach_check:1` | 届かない足場を検知して手前で直立静止(3/3)。OFF は転倒 | 2A + 2B + **4** |
+| Step 07 | 30 cm / 100 cm × ik OFF/ON + 専用地形 | `ik_reach_check:0/1` | 30 cm は ON でも渡り切る(機能後退なし)、100 cm は停止、専用地形は ON で `IK_UNREACHABLE`→停止/OFF は転倒 | 2A + 2B + **4** |
 
 ---
 
