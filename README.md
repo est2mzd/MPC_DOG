@@ -37,6 +37,7 @@
  - [Step 07:Phase 4(`IK_UNREACHABLE`)の動作確認 — **30 cm / 100 cm × `ik_reach_check` OFF/ON の 4 通り**。Phase 4 ON でも 30 cm は渡り切る(機能後退なし)、100 cm は手前で停止。初版は IK の `is_exact` フラグで平地足場まで拾い 30 cm 渡りを止めた → midstance hip からの幾何距離判定に修正](./agent_reports/steps/step_07_quadsdk_phase4_ik_reach.md)
  - [Step 08:穴の数・間隔・幅を振った **全 18 シナリオの回帰スイープ** — 16/18 は期待どおり(≤30 cm は回帰なしで渡り・≥100 cm は手前で直立停止)。**~0.4〜0.9 m の穴で「渡れず・止まらず・転倒」**。※当初「真因は `InpaintFilter` が穴を埋めるから」としたが、Step 09 の計測で **誤りと判明**(下記/Step 09 参照)](./agent_reports/steps/step_08_quadsdk_full_gap_sweep.md)
  - [Step 09:Terrain Map と足場判断の **セル単位の定量計測**(制御変更なし、env ガード計装)— 15/25/30/35/50/100 cm の断面 CSV + 足場 CSV。**50 cm 転倒の因果を数値で確定**:向こう岸へのスナップ(B)は無し、`traversability` は穴の内側を正しく unsafe にしている。落ちるのは(1)既定 `edge_clearance:0` で幅チェックが走らず(2)スナップが **物理 void の縁 1 セル**(ぼかしで `traversability`=1.0 だが生 `z`=NaN)に足を置くため。`max_crossable_gap` を ≤0.44 に下げれば 50 cm は捕まる(Step 08 の「閾値では直らない」を訂正)](./agent_reports/steps/step_09_terrain_grid_and_foothold_measurement.md)
+ - [なぜ 50 cm の穴で「数歩手前で止まる」がまだできないのか — **指示書 ↔ 実施の突き合わせ** — 指示書は Step 09〜16 の 8 段階で、「M 歩手前で停止」は Step 14 のゴール。いまは指示書 §9 が限定した **Step 09(計測のみ・制御不変)しか終えていない**ので止める処理が 1 行も入っていない。Step 10(未来脚順序)→11(到達可能な足場候補)→12(複数歩足場列)→13(停止余裕 M 歩)→14(graceful stop 接続)が必要](./agent_reports/quadsdk_multistep_planner_why_50cm_not_stopping.md)
 
 ### 実行例(時系列)
 
