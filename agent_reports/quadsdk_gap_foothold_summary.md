@@ -101,13 +101,15 @@ Go2(Quad-SDK、`reference:=twist`)で、以前 **深さ 1 m・幅 0.3 m の溝�
 全部無効化 = 素の Quad-SDK 足場挙動):
 
 - **30 cm の溝**:ON でも OFF でも渡り切る(機能を足しても渡れる挙動は不変)。
-- **100 cm の穴**:OFF は**穴に落下**(x≈2.6, z≈−0.94, 上下反転)、
-  ON は**穴の手前で直立停止**(x≈0.19, z≈0.31)。
+- **100 cm の穴**(助走を見せるため spawn を x=−2.0 に後退、`SPAWN_X_M=-2.0`。穴の近縁 x=2.0):
+  OFF は **4.6 m 歩いて穴に落下**(x≈2.6, z≈−0.94, 上下反転)、
+  ON は **2.2 m 歩いて穴の約 1.8 m 手前で直立停止**(x≈0.20, z≈0.31, latch 1 回)。
+  停止位置は `safe_stop_lookahead(2.5) − max_crossable_gap(0.6) ≈ 1.9 m` の standoff。
 
 | | 機能 OFF | 機能 ON |
 |---|---|---|
 | **30 cm 溝** | ![30 off](../artifacts/gifs/quadsdk_onoff_g30_off.gif) 渡り切る | ![30 on](../artifacts/gifs/quadsdk_onoff_g30_on.gif) 渡り切る |
-| **100 cm 穴** | ![100 off](../artifacts/gifs/quadsdk_onoff_g100_off.gif) **穴に落下** | ![100 on](../artifacts/gifs/quadsdk_onoff_g100_on.gif) **手前で直立停止** |
+| **100 cm 穴**(spawn x=−2.0) | ![100 off](../artifacts/gifs/quadsdk_onoff_g100_off.gif) 4.6 m 歩いて**穴に落下** | ![100 on](../artifacts/gifs/quadsdk_onoff_g100_on.gif) 2.2 m 歩いて**手前で直立停止** |
 
 Phase 4(`IK_UNREACHABLE`)の単体確認は `steps/step_07_quadsdk_phase4_ik_reach.md`。
 

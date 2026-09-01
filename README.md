@@ -76,14 +76,18 @@ NMPC ホライズン(≈0.36 m 先)では 1 m 穴を認識するのが遅すぎ�
 **ON** = `edge_clearance:=0.15`(Phase 3 の「渡れる穴/渡れない穴」判定 + Phase 2A/2B の安全停止)。
 **OFF** = `stop_on_invalid_foothold:=false` + `safe_stop_latch:=false` + `edge_clearance:=0`
 (この穴対応の作業を全部無効化 = 素の Quad-SDK の足場挙動)。0.3 m/s、他は同一条件。
+100 cm の穴だけ、停止までの助走が短く分かりにくいので **スポーンを x=−2.0 に後退**(`SPAWN_X_M=-2.0`。
+地形マップは world 固定なので不変。穴の近縁は x=2.0)。
 
 - **30 cm の溝**:ON でも OFF でも **渡り切る**(機能を足しても渡れる挙動は不変 = 機能後退なし)。
-- **100 cm の穴**:**OFF は穴に落下**(`x=2.6`, `z=−0.94`, 上下反転)、**ON は穴の手前で直立停止**(`x=0.19`, `z=0.31`)。
+- **100 cm の穴**:**OFF は 4.6 m 歩いて穴に落下**(`x=2.6`, `z=−0.94`, 上下反転)、
+  **ON は 2.2 m 歩いて穴の約 1.8 m 手前で直立停止**(`x=0.20`, `z=0.31`, latch 1 回)。
+  停止位置は `safe_stop_lookahead(2.5) − max_crossable_gap(0.6) ≈ 1.9 m` の standoff で決まる。
 
 | | 機能 OFF | 機能 ON |
 |---|---|---|
 | **30 cm の溝** | ![30cm off](./artifacts/gifs/quadsdk_onoff_g30_off.gif)<br>渡り切る(x≈11.7) | ![30cm on](./artifacts/gifs/quadsdk_onoff_g30_on.gif)<br>渡り切る(x≈11.1) |
-| **100 cm の穴** | ![100cm off](./artifacts/gifs/quadsdk_onoff_g100_off.gif)<br>**穴に落下**(x≈2.6, z≈−0.94) | ![100cm on](./artifacts/gifs/quadsdk_onoff_g100_on.gif)<br>**手前で直立停止**(x≈0.19) |
+| **100 cm の穴**<br>(spawn x=−2.0) | ![100cm off](./artifacts/gifs/quadsdk_onoff_g100_off.gif)<br>4.6 m 歩いて**穴に落下**(x≈2.6, z≈−0.94) | ![100cm on](./artifacts/gifs/quadsdk_onoff_g100_on.gif)<br>2.2 m 歩いて**穴の手前で直立停止**(x≈0.20) |
 
 Phase 4(`IK_UNREACHABLE`、脚が届かない足場の検知、既定 OFF)の単体確認は
 [Step 07 の検証記録](./agent_reports/steps/step_07_quadsdk_phase4_ik_reach.md)。

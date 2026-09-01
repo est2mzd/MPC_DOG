@@ -52,8 +52,16 @@
 証拠 GIF(README「機能 ON/OFF の比較」に埋め込み):
 - `quadsdk_onoff_g30_off.gif` / `quadsdk_onoff_g30_on.gif`
   (30 cm の溝:機能 OFF/ON いずれも渡り切る = 機能後退なし)
-- `quadsdk_onoff_g100_off.gif`(100 cm の穴:機能 OFF → 穴に落下)
-- `quadsdk_onoff_g100_on.gif`(100 cm の穴:機能 ON → 手前で直立停止)
+- `quadsdk_onoff_g100_off.gif`(100 cm の穴:機能 OFF → 4.6 m 歩いて穴に落下)
+- `quadsdk_onoff_g100_on.gif`(100 cm の穴:機能 ON → 2.2 m 歩いて手前で直立停止)
+
+> **100 cm の GIF は spawn を x=−2.0 に後退**(`SPAWN_X_M=-2.0`、`run_quadsdk_gap_1m.sh`
+> に追加した env)して撮影。安全停止は穴の近縁(x=2.0)の約 1.9 m 手前
+> (`safe_stop_lookahead 2.5 − max_crossable_gap 0.6`)でラッチするため、
+> spawn x=0 だと助走がほぼ無く「歩いてから止まる」様子が見えないため。
+> 地形マップは world 固定なので spawn 位置に依存しない。
+> ON: x=−2.04→+0.20(2.24 m 歩行、latch 1 回、直立)。
+> OFF: x=−2.04→+2.55(4.59 m 歩行、穴に落下、roll→π)。
 
 ---
 
