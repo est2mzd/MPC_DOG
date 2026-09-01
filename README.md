@@ -38,35 +38,120 @@
  - [Step 08:穴の数・間隔・幅を振った **全 18 シナリオの回帰スイープ** — 16/18 は期待どおり(≤30 cm は回帰なしで渡り・≥100 cm は手前で直立停止)。**~0.4〜0.9 m の穴で「渡れず・止まらず・転倒」**。※当初「真因は `InpaintFilter` が穴を埋めるから」としたが、Step 09 の計測で **誤りと判明**(下記/Step 09 参照)](./agent_reports/steps/step_08_quadsdk_full_gap_sweep.md)
  - [Step 09:Terrain Map と足場判断の **セル単位の定量計測**(制御変更なし、env ガード計装)— 15/25/30/35/50/100 cm の断面 CSV + 足場 CSV。**50 cm 転倒の因果を数値で確定**:向こう岸へのスナップ(B)は無し、`traversability` は穴の内側を正しく unsafe にしている。落ちるのは(1)既定 `edge_clearance:0` で幅チェックが走らず(2)スナップが **物理 void の縁 1 セル**(ぼかしで `traversability`=1.0 だが生 `z`=NaN)に足を置くため。`max_crossable_gap` を ≤0.44 に下げれば 50 cm は捕まる(Step 08 の「閾値では直らない」を訂正)](./agent_reports/steps/step_09_terrain_grid_and_foothold_measurement.md)
 
-### 穴対応の現状:できること・できないこと(成功例・失敗例)
+### 実行例(時系列)
 
-現行コード(Phase 2A + 3(A) + 2B、`edge_clearance:=0.15` で有効化)を穴幅で振った結果。
-1 枚まとめは [まとめ(現状・成果・GIF・教訓)](./agent_reports/quadsdk_gap_foothold_summary.md)。
+各 Step の試行錯誤ごと残す。上ほど古い。GIF は固定カメラ、`reference:=twist` +
+クロール歩容。地形マップは静的メッシュ由来。
+
+---
+
+#### Step 03 / 04:深さ 1 m・幅 0.3 m の溝を、足を入れずに複数本連続で渡る(成功)
+
+歩容をトロット → クロールに落として達成。詳細・CSV 根拠は
+[Step 03_1m / 04_1m の検証記録](./agent_reports/steps/step_03_04_1m_quadsdk_gap_crossing.md)。
+別アプローチ(global_body_planner)は連続区間で未達 →
+[gbpl 版](./agent_reports/steps/step_03_04_1m_quadsdk_gbpl.md)。
+
+| step03(溝の間隔 2.0 m、0.15 m/s、12–35 s 切り抜き) | step04(溝の間隔 1.5 m、0.3 m/s、15–40 s 切り抜き) |
+|---|---|
+| ![step03 溝渡り](./artifacts/gifs/quadsdk_step03_1m_v0p15_12to35s.gif) | ![step04 溝渡り](./artifacts/gifs/quadsdk_step04_1m_v0p3_15to40s.gif) |
+
+---
+
+#### Step 05:15 cm 平地 / 15 cm 穴 ×5 をクロールで渡る(成功)
+
+`edge_clearance:=0.15`、0.3 m/s。Phase 3(A) が 15 cm 穴を「渡れる穴」と判定し、
+クロール歩容で 5 cm メッシュ帯を跨ぐ。N=2〜5 いずれも再現性を持って通過。
+事前調査の「地図 1 セル・幾何学的に成立困難寄り」は実測で覆した。詳細は
+[Step 05 の検証記録](./agent_reports/steps/step_05_quadsdk_repeated_15cm_gaps.md)。
+
+![Step05 15cm連続穴を渡る](./artifacts/gifs/quadsdk_step05_s15g15n5_cross_10to30s.gif)
+
+---
+
+#### Step 05b:Phase 2A 単独では止まれない → Phase 3(`EDGE_TOO_CLOSE`)を足して安全停止
+
+**試行錯誤**:無効足場を NMPC に渡さない gate(Phase 2A)だけでは、受動 PD
+ホールドが勢いを止めきれず、穴の縁で前傾して落ちる(左)。→ 進行方向 forward-probe
+で穴の縁を早期検知する Phase 3 を足すと、渡れる穴は跨ぎ、渡れない穴の手前で
+直立停止する(右)。詳細は
+[Step 05b の検証記録](./agent_reports/steps/step_05b_quadsdk_phase2a_safe_stop.md)。
+
+| Phase 2A 単独:縁で一瞬止まって前傾転落 | Phase 3 追加:穴の 0.7 m 手前で直立停止 |
+|---|---|
+| ![Phase2A 転落](./artifacts/gifs/quadsdk_phase2a_trench10m_fall.gif) | ![Phase3 安全停止](./artifacts/gifs/quadsdk_phase3_trench10m_safestop.gif) |
+
+Phase 3 有効時(`edge_clearance:=0.15`)の代表:
+
+| 30 cm 深穴：跨いで渡り切る(15–30 s 切り抜き) | 100 cm 幅の穴：手前で直立停止(15–25 s 切り抜き) |
+|---|---|
+| ![30cm 穴を渡る](./artifacts/gifs/quadsdk_phase3_gap30_cross_15to30s.gif) | ![100cm 穴の手前で安全停止](./artifacts/gifs/quadsdk_phase3_gap100_safestop_15to25s.gif) |
+
+---
+
+#### Step 06:15 cm 穴 ×2 → 1 m 穴 の複合地形 — Phase 2B で 15 cm 穴群の手前に直立停止
+
+**試行錯誤**:NMPC ホライズン(≈0.36 m 先)では 1 m 穴の認識が遅すぎ、plan を丸ごと
+凍結すると手前の 15 cm 穴を渡る遊脚中に凍結して転倒(左)。→ Phase 2B:plan を
+凍結せず `cmd_vel:=0` で減速 + 胴体前方 2.5 m の lookahead で 1 m 穴を早期検知
+(右、3/3 で転倒なし)。既存シナリオ(step03/04・Step 05・Step 05b)も回帰 OK。詳細は
+[Step 06 の検証記録](./agent_reports/steps/step_06_quadsdk_last_gap_1m.md)。
+
+| Phase 2B 前:手前の 15 cm 穴で断続停止 → 転倒(10–30 s) | Phase 2B 後:1 m 穴を早期検知 → 手前で直立停止(10–30 s) |
+|---|---|
+| ![Step06 転倒](./artifacts/gifs/quadsdk_step06_last1m_fall_10to30s.gif) | ![Step06 安全停止](./artifacts/gifs/quadsdk_step06_last1m_safestop_10to30s.gif) |
+
+---
+
+#### Step 07:Phase 4(`IK_UNREACHABLE`)— 脚が届かない足場を検知して手前で停止
+
+**試行錯誤**:初版は IK の `is_exact` フラグで判定 → 平地の足場まで拾って 30 cm
+渡りを止めた(機能後退)。→ midstance hip からの幾何距離判定に修正。`ik_reach_check`
+既定 OFF。専用地形(助走側の地図を削り、前脚の名目足場を midstance hip から
+~0.75 m > `ik_max_reach`(0.45 m)にスナップさせる)で確認。詳細は
+[Step 07 の検証記録](./agent_reports/steps/step_07_quadsdk_phase4_ik_reach.md)。
+
+| `ik_reach_check:=false`:届かない足場を実行 → 転倒 | `ik_reach_check:=true`:`IK_UNREACHABLE` 検知 → 直立停止 |
+|---|---|
+| ![Phase4 OFF 転倒](./artifacts/gifs/quadsdk_phase4_ik_fall_10to30s.gif) | ![Phase4 ON 停止](./artifacts/gifs/quadsdk_phase4_ik_safestop_10to30s.gif) |
+
+Phase 4 ON でも 30 cm の溝は渡り切る(機能後退なし):
+![Phase4 ON でも 30cm は渡る](./artifacts/gifs/quadsdk_phase4_g30_ik_cross_12to40s.gif)
+
+**機能 ON/OFF の比較(30 cm の溝 / 100 cm の穴)**:
+ON = `edge_clearance:=0.15`。OFF = `stop_on_invalid_foothold:=false` +
+`safe_stop_latch:=false` + `edge_clearance:=0`(この穴対応の作業を全部無効化 =
+素の Quad-SDK 挙動)。100 cm は助走を見せるため spawn を x=−2.0 に後退
+(`SPAWN_X_M=-2.0`、地形は不変、穴の近縁 x=2.0)。
+
+| | 機能 OFF | 機能 ON |
+|---|---|---|
+| **30 cm の溝** | ![30cm off](./artifacts/gifs/quadsdk_onoff_g30_off.gif)<br>渡り切る(x≈11.7) | ![30cm on](./artifacts/gifs/quadsdk_onoff_g30_on.gif)<br>渡り切る(x≈11.1) |
+| **100 cm の穴**<br>(spawn x=−2.0) | ![100cm off](./artifacts/gifs/quadsdk_onoff_g100_off.gif)<br>4.6 m 歩いて**穴に落下** | ![100cm on](./artifacts/gifs/quadsdk_onoff_g100_on.gif)<br>2.2 m 歩いて**穴の手前で直立停止**(standoff ≈ `safe_stop_lookahead 2.5 − max_crossable_gap 0.6`) |
+
+---
+
+#### Step 08:穴の数・平地幅・穴幅を振った全 18 シナリオの回帰スイープ
+
+`edge_clearance:=0.15`。**16/18 は期待どおり**(≤0.30 m は回帰なしで渡り・
+≥1.0 m は手前で直立停止)。**残り 2/18 = 幅 0.5 m の穴で「渡れず・止まらず・転倒」**
+を発見。詳細は
+[Step 08 の検証記録](./agent_reports/steps/step_08_quadsdk_full_gap_sweep.md)。
 
 | ✅ 幅 ≤0.30 m:渡り切る | ✅ 幅 ≥1.0 m:手前で直立停止 | ❌ 幅 0.4〜0.9 m:落下(未対応) |
 |---|---|---|
 | ![30cm 渡る](./artifacts/gifs/quadsdk_onoff_g30_on.gif) | ![100cm 止まる](./artifacts/gifs/quadsdk_onoff_g100_on.gif) | ![50cm 落下](./artifacts/gifs/quadsdk_gap50_fall.gif) |
-| step03/04・Step 05 と同じ(回帰なし) | プローブが横断前に検知 → `cmd_vel:=0` で減速停止 | 安全フラグ 0 件のまま踏み込み → 転倒(2〜3/3 で再現) |
 
-**なぜ中サイズの穴で落ちるか**(Step 09 の計測で確定):
+**試行錯誤(この時点の見立ては後に Step 09 で訂正)**:当初は「`max_crossable_gap`
+を 0.6→0.54 に下げても直らない → 真因は `InpaintFilter` が穴を `traversability`
+まで埋めているから」と結論した。→ **Step 09 で誤りと判明**(下記)。
 
-- `traversability` レイヤは **どの幅の穴でも内側を正しく unsafe(NaN)** にしている。
-  unsafe 帯の幅 ≈ 物理の穴幅(50 cm → 0.50 m、100 cm → 1.00 m)。
-- `max_crossable_gap = 0.6 m` は「0.6 m 以内で地面が戻れば渡れる穴」の意味。
-  50 cm の穴の unsafe 帯(0.50 m)はこれ未満なので **「渡れる穴」に分類され止めない**。
-  100 cm(1.00 m)だけがしきい値を超えて安全停止する。
-- さらに既定 `edge_clearance:0` では **幅チェックが一切走らない**。足場は
-  `traversability > 0.6` の最近傍セルへスナップするが、50 cm の穴ではそれが
-  **物理 void の縁 1 セル**(縁のぼかしフィルタで `traversability`=1.0 になるが
-  生 `z`=NaN = 未支持地面)。この縁に足を置いて転倒する。**向こう岸へのスナップ(B)は
-  起きていない**(Step 09 の足場 CSV で件数 0)。
-- → `max_crossable_gap` を **≤0.44 に下げれば** 50 cm(0.50 m)は `EDGE_TOO_CLOSE` に
-  なり、30 cm(0.30 m)は crossable のまま。Step 08 の 0.54 は 0.50 より大きく
-  外れていただけ。「閾値では直らない」は誤りだった。
+---
 
-詳細:[Step 09](./agent_reports/steps/step_09_terrain_grid_and_foothold_measurement.md)。
+#### Step 09:セル単位の計測で 50 cm 転倒の因果を数値で確定(制御変更なし)
 
-### Step 09:30 cm は渡る / 50 cm は縁に足を置いて落ちる(断面計測)
+env ガード計装で 15/25/30/35/50/100 cm の地図断面 CSV + 足場 CSV を採取。詳細は
+[Step 09 の検証記録](./agent_reports/steps/step_09_terrain_grid_and_foothold_measurement.md)。
 
 | ✅ 30 cm:渡り切る | ❌ 50 cm:縁で転倒 |
 |---|---|
@@ -78,16 +163,44 @@
 (0.50 m)。マゼンタ▲ = 足場が置かれたセルで生 `z`=NaN(= void の縁の上)。
 赤斜線の内側(穴の中心)には足場は 1 件も無く、B(向こう岸スナップ)も 0 件。
 
-#### Step 09 時点の現状(できること / できないこと)
+**確定した因果(Step 08 の見立てを訂正)**:
 
-go2、`reference:=twist`、クロール歩容、0.3 m/s、MuJoCo。地形マップは静的メッシュ由来。
+- `traversability` は **どの幅の穴でも内側を正しく unsafe(NaN)** にしている。
+  unsafe 帯の幅 ≈ 物理の穴幅(50 cm → 0.50 m、100 cm → 1.00 m)。
+  「`InpaintFilter` が穴を埋めるから」は誤りで、埋まるのは高さ(`z_inpainted`)だけ。
+- `max_crossable_gap = 0.6 m` は「0.6 m 以内で地面が戻れば渡れる穴」の意味。50 cm の
+  unsafe 帯(0.50 m)はこれ未満なので **「渡れる穴」に分類され止めない**。100 cm
+  (1.00 m)だけがしきい値を超えて安全停止する。
+- 既定 `edge_clearance:0` では幅チェック自体が走らず、足場は `traversability > 0.6`
+  の最近傍セル = **物理 void の縁 1 セル**(縁ぼかしで `traversability`=1.0 だが
+  生 `z`=NaN = 未支持地面)にスナップし、そこに足を置いて転倒する。
+- → `max_crossable_gap` を **≤0.44** に下げれば 50 cm(0.50 m)は `EDGE_TOO_CLOSE`
+  になり、30 cm(0.30 m)は crossable のまま。Step 08 の 0.54 は 0.50 より大きく
+  外れていただけ。
+
+**教訓**:
+
+1. **「データを疑う」も、実データを取ってから。** Step 08 と解説 doc では「`InpaintFilter`
+   が `traversability` まで埋める」と推測で書いたが、Step 09 でセル値を取ると
+   **穴の内側は正しく NaN**。誤りは「しきい値 vs データ」ではなく
+   「しきい値の値が穴幅に対して大きすぎる」+「既定でチェックが走らない」だった。
+2. **計装で 1 段ずつ値を出す。** `z_raw / z_inpainted / hole_mask / traversability` を
+   セル単位で並べて初めて「埋めているのは高さだけ」が見えた。
+3. **地図の帯幅 ≠ 物理の穴幅、だが規則的。** `生 NaN 帯 = 物理 + 2×MESH_MARGIN`、
+   `traversability unsafe 帯 = 生 NaN 帯 − 2×0.05(縁ぼかし)≈ 物理幅`。
+4. **1 本の試行を信じない。** go2 の twist 歩容は非決定的で起動失敗フレークが混ざる。
+5. **中断した回帰検証は最後まで回す。** 幅を振って回す回帰でしか出ない抜けがあった。
+
+---
+
+### 現在の到達点(Step 09 時点):できること / できないこと
 
 **できること**
 
 | 内容 | 根拠 |
 |---|---|
 | 平地の前進歩行(起立 → 歩行 → 停止)が安定 | Step 01 |
-| **幅 ≤0.30 m の穴/溝を、足を入れずに複数本連続で渡る**(回帰なし) | step03/04、Step 05(15 cm 平地/15 cm 穴 ×2〜5) |
+| **幅 ≤0.30 m の穴/溝を、足を入れずに複数本連続で渡る**(回帰なし) | Step 03/04、Step 05 |
 | **幅 ≥1.0 m の穴/断崖の手前で直立停止**(`edge_clearance:=0.15` 有効化時)。胴体前方 2.5 m をプローブ → `cmd_vel:=0` で減速 | Step 05b、Step 06 |
 | 脚が届かない足場の検知(`ik_reach_check:=true`、専用地形で確認。既定 OFF) | Step 07 |
 
@@ -110,99 +223,6 @@ OFF の 2 つは、その実行で明示的に有効化したときだけ動く(
 
 1 枚まとめ:[まとめ doc](./agent_reports/quadsdk_gap_foothold_summary.md)。
 
-**教訓**:
-
-1. **「データを疑う」も、実データを取ってから。** Step 08〜解説 doc では
-   「`InpaidFilter` が `traversability` まで埋める」と推測で書いたが、Step 09 で
-   セル値を取ると **穴の内側は正しく NaN** だった。誤りは「しきい値 vs データ」では
-   なく「しきい値の値が穴幅に対して大きすぎる」+「既定でチェックが走らない」だった。
-2. **計装で 1 段ずつ値を出す。** `z_raw / z_inpainted / hole_mask / traversability` を
-   セル単位で並べて初めて「埋めているのは高さだけ、穴マスクは NaN のまま」が見えた。
-3. **地図の帯幅 ≠ 物理の穴幅、だが規則的。** `生 NaN 帯 = 物理 + 2×MESH_MARGIN`、
-   `traversability unsafe 帯 = 生 NaN 帯 − 2×0.05(縁ぼかし)≈ 物理幅`。
-4. **1 本の試行を信じない。** go2 の twist 歩容は非決定的で起動失敗フレークが
-   混ざる。曖昧な結果は 2〜3 回回してから結論する。
-5. **中断した回帰検証は最後まで回す。** 個別シナリオの成功を積んでも、穴幅を
-   振って回す回帰でしか出ない抜け(幅 0.5 m)があった。
-
-### 溝渡りの実行例(1 m 深・0.3 m 幅の溝を、足を溝に入れずに連続で渡る／`reference:=twist` + クロール歩容)
-
-固定カメラ。凸条の目盛りは 5 m 間隔。詳細・CSV 根拠は
-[Step 03_1m / 04_1m の検証記録](./agent_reports/steps/step_03_04_1m_quadsdk_gap_crossing.md)。
-
-| step03(溝の間隔 2.0 m、0.15 m/s、12–35 s 切り抜き) | step04(溝の間隔 1.5 m、0.3 m/s、15–40 s 切り抜き) |
-|---|---|
-| ![step03 溝渡り](./artifacts/gifs/quadsdk_step03_1m_v0p15_12to35s.gif) | ![step04 溝渡り](./artifacts/gifs/quadsdk_step04_1m_v0p3_15to40s.gif) |
-
-### Phase 3(`EDGE_TOO_CLOSE`):渡れる穴は渡る / 渡れない穴の手前で安全に止まる
-
-固定カメラ、0.3 m/s、`edge_clearance:=0.15`。詳細・CSV 根拠は
-[Step 05b の検証記録](./agent_reports/steps/step_05b_quadsdk_phase2a_safe_stop.md)。
-
-| 30 cm 深穴：跨いで渡り切る(15–30 s 切り抜き) | 100 cm 幅の穴：手前で直立停止(15–25 s 切り抜き) |
-|---|---|
-| ![30cm 穴を渡る](./artifacts/gifs/quadsdk_phase3_gap30_cross_15to30s.gif) | ![100cm 穴の手前で安全停止](./artifacts/gifs/quadsdk_phase3_gap100_safestop_15to25s.gif) |
-
-### Step 05:15 cm 平地 / 15 cm 穴 ×5 をクロールで渡る(10–30 s 切り抜き)
-
-`edge_clearance:=0.15`、0.3 m/s。N=2〜5 いずれも再現性を持って通過。詳細は
-[Step 05 の検証記録](./agent_reports/steps/step_05_quadsdk_repeated_15cm_gaps.md)。
-
-![Step05 15cm連続穴を渡る](./artifacts/gifs/quadsdk_step05_s15g15n5_cross_10to30s.gif)
-
-### Step 06:15 cm 穴 ×2 → 1 m 穴 — Phase 2B で 15 cm 穴群の手前に直立停止
-
-NMPC ホライズン(≈0.36 m 先)では 1 m 穴を認識するのが遅すぎたので、Phase 2B で
-胴体から 2.5 m 前方をスキャンして早期に latch → `cmd_vel:=0` で減速停止。
-3/3 で転倒なし。詳細は
-[Step 06 の検証記録](./agent_reports/steps/step_06_quadsdk_last_gap_1m.md)。
-
-| Phase 2B 前:手前の 15 cm 穴で断続停止 → 転倒(10–30 s) | Phase 2B 後:1 m 穴を早期検知 → 手前で直立停止(10–30 s) |
-|---|---|
-| ![Step06 転倒](./artifacts/gifs/quadsdk_step06_last1m_fall_10to30s.gif) | ![Step06 安全停止](./artifacts/gifs/quadsdk_step06_last1m_safestop_10to30s.gif) |
-
-### 機能 ON/OFF の比較(30 cm の溝 / 100 cm の穴)
-
-**ON** = `edge_clearance:=0.15`(Phase 3 の「渡れる穴/渡れない穴」判定 + Phase 2A/2B の安全停止)。
-**OFF** = `stop_on_invalid_foothold:=false` + `safe_stop_latch:=false` + `edge_clearance:=0`
-(この穴対応の作業を全部無効化 = 素の Quad-SDK の足場挙動)。0.3 m/s、他は同一条件。
-100 cm の穴だけ、停止までの助走が短く分かりにくいので **スポーンを x=−2.0 に後退**(`SPAWN_X_M=-2.0`。
-地形マップは world 固定なので不変。穴の近縁は x=2.0)。
-
-- **30 cm の溝**:ON でも OFF でも **渡り切る**(機能を足しても渡れる挙動は不変 = 機能後退なし)。
-- **100 cm の穴**:**OFF は 4.6 m 歩いて穴に落下**(`x=2.6`, `z=−0.94`, 上下反転)、
-  **ON は 2.2 m 歩いて穴の約 1.8 m 手前で直立停止**(`x=0.20`, `z=0.31`, latch 1 回)。
-  停止位置は `safe_stop_lookahead(2.5) − max_crossable_gap(0.6) ≈ 1.9 m` の standoff で決まる。
-
-| | 機能 OFF | 機能 ON |
-|---|---|---|
-| **30 cm の溝** | ![30cm off](./artifacts/gifs/quadsdk_onoff_g30_off.gif)<br>渡り切る(x≈11.7) | ![30cm on](./artifacts/gifs/quadsdk_onoff_g30_on.gif)<br>渡り切る(x≈11.1) |
-| **100 cm の穴**<br>(spawn x=−2.0) | ![100cm off](./artifacts/gifs/quadsdk_onoff_g100_off.gif)<br>4.6 m 歩いて**穴に落下**(x≈2.6, z≈−0.94) | ![100cm on](./artifacts/gifs/quadsdk_onoff_g100_on.gif)<br>2.2 m 歩いて**穴の手前で直立停止**(x≈0.20) |
-
-### Phase 2A(gate)単独では足りない — 縁で一瞬止まってから穴へ前傾転落
-
-`edge_clearance:=0` で Phase 2A だけ有効。無効足場を NMPC に渡さなくても、
-受動 PD ホールドでは勢いを止めきれず、穴の縁で前傾して落ちる。→ Phase 3(縁の
-早期検知)+ Phase 2B(能動減速)が必要という動機。詳細は
-[Step 05b の検証記録](./agent_reports/steps/step_05b_quadsdk_phase2a_safe_stop.md)。
-
-| Phase 2A 単独:縁で一瞬止まって前傾転落 | Phase 3 を足す:穴の 0.7 m 手前で直立停止 |
-|---|---|
-| ![Phase2A 転落](./artifacts/gifs/quadsdk_phase2a_trench10m_fall.gif) | ![Phase3 安全停止](./artifacts/gifs/quadsdk_phase3_trench10m_safestop.gif) |
-
-### Phase 4(`IK_UNREACHABLE`):脚が届かない足場を検知して手前で停止
-
-専用地形(助走側の地図を削って前脚の名目足場を強制的に前方へスナップさせ、
-midstance hip から ~0.75 m = `ik_max_reach`(0.45 m)超にする)。`ik_reach_check`
-既定 OFF。詳細は
-[Step 07 の検証記録](./agent_reports/steps/step_07_quadsdk_phase4_ik_reach.md)。
-
-| `ik_reach_check:=false`:届かない足場を実行 → 転倒 | `ik_reach_check:=true`:`IK_UNREACHABLE` 検知 → 直立停止 |
-|---|---|
-| ![Phase4 OFF 転倒](./artifacts/gifs/quadsdk_phase4_ik_fall_10to30s.gif) | ![Phase4 ON 停止](./artifacts/gifs/quadsdk_phase4_ik_safestop_10to30s.gif) |
-
-Phase 4 ON でも 30 cm の溝は渡り切る(機能後退なし):
-![Phase4 ON でも 30cm は渡る](./artifacts/gifs/quadsdk_phase4_g30_ik_cross_12to40s.gif)
 
 ## Quadruped-PyMPC
 
