@@ -85,9 +85,11 @@
   Phase 2B latch が拾う。IK は選択セル 1 個だけ(探索セル全部ではない)。
   **回帰(step03/04・Step 05・Step 05b・Step 06)は既定 OFF で不変。IK ON でも
   Step 05/06 は誤発火せず(`IK_UNREACHABLE` 0 回)通過/安全停止**。
-  sim で `IK_UNREACHABLE` を強制する地形は現状の掃引に無く、機構は単体テストで
-  確認(遠い足場→`IK_UNREACHABLE` / OFF→`VALID` / leg 未指定→スキップ)。
-  詳細は下記「Phase 4」。
+  掃引地形では `IK_UNREACHABLE` を踏まないので、**専用の確認地形を作って
+  実地検証した**(Step 07):地形マップの助走側だけを 1.0 m 削って前方スナップを
+  強制 → `ik_reach_check:=true` で `status=5` 発火 → **3/3 で手前に直立静止
+  (転倒なし)**、`false` だと同地形で転倒。詳細は下記「Phase 4」と
+  `steps/step_07_quadsdk_phase4_ik_reach.md`。
 - **Phase 5 / 6 は未着手。**
 
 ---

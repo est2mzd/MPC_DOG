@@ -39,6 +39,12 @@ X0 = float(sys.argv[2]) if len(sys.argv) > 2 else 2.0       # trench near edge x
 DEPTH = float(sys.argv[3]) if len(sys.argv) > 3 else 1.0    # trench depth [m]
 TAG = sys.argv[4] if len(sys.argv) > 4 else f"{WIDTH:g}m".replace(".", "p")
 MESH_MARGIN = float(sys.argv[5]) if len(sys.argv) > 5 else 0.05  # per side [m]
+# Optional: trim the APPROACH (near) side of the terrain mesh back by this much
+# instead of MESH_MARGIN. Used by the Phase 4 IK-reach demo: pull the last
+# valid map cells so far back that the forward foothold has to snap to the far
+# strip, > 0.4 m past the leg's reach -> IK_UNREACHABLE. Physical ground is
+# unchanged (the robot still stands there); only the map keep-out widens.
+APPROACH_MARGIN = float(sys.argv[6]) if len(sys.argv) > 6 else MESH_MARGIN
 
 NAME = f"flat_trench_{TAG}"
 Y_HALF = 2.5
@@ -106,7 +112,7 @@ xacro = f"""<?xml version="1.0" encoding="utf-8"?>
 # Same binary format as flat_wide.ply / gen_quadsdk_gap_world.py.
 RGBA = (202, 209, 238, 0)
 quads_x = [
-    (X_MIN, X_GAP_A - MESH_MARGIN),
+    (X_MIN, X_GAP_A - APPROACH_MARGIN),
     (X_GAP_B + MESH_MARGIN, X_MAX),
 ]
 pv, pf = [], []
@@ -143,5 +149,6 @@ print(f"world : {worlds_dir / (NAME + '.xml.xacro')}")
 print(f"mesh  : {mesh_dir / (NAME + '.ply')}  ({len(pv)} verts, {len(pf)} tris)")
 print(
     f"trench x in [{X_GAP_A:.2f}, {X_GAP_B:.2f}]  width {WIDTH} m  depth {DEPTH} m  "
-    f"mesh_margin {MESH_MARGIN} m/side  world x in [{X_MIN}, {X_MAX}]"
+    f"mesh_margin {MESH_MARGIN} m/side  approach_margin {APPROACH_MARGIN} m  "
+    f"map keep-out x in [{X_GAP_A - APPROACH_MARGIN:.2f}, {X_GAP_B + MESH_MARGIN:.2f}]"
 )

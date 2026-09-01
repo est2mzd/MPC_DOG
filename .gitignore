@@ -53,6 +53,11 @@ artifacts/gifs/*.gif
 # Step 06(Phase 2B: 1m穴を長距離lookaheadで検知して手前で安全停止):
 !artifacts/gifs/quadsdk_step06_last1m_safestop.gif
 !artifacts/gifs/quadsdk_step06_last1m_safestop_10to30s.gif
+# Step 07(Phase 4 IK 可到達性:届かない足場を検知 -> 安全停止 / OFF は転倒):
+!artifacts/gifs/quadsdk_phase4_ik_safestop.gif
+!artifacts/gifs/quadsdk_phase4_ik_safestop_10to30s.gif
+!artifacts/gifs/quadsdk_phase4_ik_fall.gif
+!artifacts/gifs/quadsdk_phase4_ik_fall_10to30s.gif
 
 # backup/(2.0GB、未追跡)。archive/は履歴保持のため意図的にgit管理下にあり
 # (archive/README.md参照)、対象外とする
@@ -103,3 +108,4 @@ artifacts/logs/quadsdk_quadsdk_step05_*/
 artifacts/logs/quadsdk_quadsdk_step06_*/
 artifacts/logs/quadsdk_quadsdk_p2b_*/
 artifacts/logs/quadsdk_quadsdk_p4_*/
+artifacts/logs/quadsdk_quadsdk_p4demo_*/

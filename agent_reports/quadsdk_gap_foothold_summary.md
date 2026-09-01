@@ -22,7 +22,8 @@ Go2(Quad-SDK、`reference:=twist`)で、以前 **深さ 1 m・幅 0.3 m の溝�
 
 - **安全のための 4 段**(認識 → 足場選択 → gate → 停止シーケンス)のうち、
   **段 2〜4 を実装完了**。
-- 狙った **5 シナリオ**(渡る 3・安全停止 2)が **すべて成立**。
+- 狙った **主要シナリオ**(渡る 3・断崖前の安全停止 2)が **すべて成立**。
+  Phase 4(IK 可到達性)も専用地形で ON=停止/OFF=転倒 を実地確認(Step 07)。
 - 新機能はすべて **既定 OFF / 従来挙動**(有効化して検証するまで step03/04・
   Step 05 は不変)。`local_planner` テスト **40/40 green**。
 - 次は Phase 5(大きな足場補正時の減速)。
@@ -37,7 +38,7 @@ Go2(Quad-SDK、`reference:=twist`)で、以前 **深さ 1 m・幅 0.3 m の溝�
 | **2A** | 無効足場を NMPC へ渡さない gate。無効 touchdown は直前値を踏襲 | ON | `964bd53` `c8236a0` `007396a` |
 | **3(A)** | `EDGE_TOO_CLOSE`(穴縁の安全距離)+ 進行方向 forward-probe で「渡れる穴/渡れない穴」を区別 | OFF(`edge_clearance:0.0`) | `8466ad4` `6814895` |
 | **2B** | 無効足場検知で plan を凍結せず `cmd_vel:=0` → 既存 STEP→STAND で減速停止。+ 胴体前方 `safe_stop_lookahead`(2.5 m)で早期停止判断。+ probe の地図端打ち切り | ON(VALID 経路は no-op) | `0063270` `1899558` `b7f6b75` |
-| **4** | 選択足場を既存脚 IK で可到達性チェック → `IK_UNREACHABLE` | OFF(`ik_reach_check:false`) | `f93d1f2` `a7d222f` |
+| **4** | 選択足場を既存脚 IK で可到達性チェック → `IK_UNREACHABLE`。Step 07 で実地確認(専用地形で ON=停止/OFF=転倒) | OFF(`ik_reach_check:false`) | `f93d1f2` `a7d222f` |
 | 5 / 6 | 大補正時の減速 / 地図の鮮度 | ― | 未着手 |
 
 ### 「渡れる穴は渡る / 渡れない穴の手前で止まる」の判定
@@ -94,6 +95,18 @@ Go2(Quad-SDK、`reference:=twist`)で、以前 **深さ 1 m・幅 0.3 m の溝�
 
 詳細:`steps/step_06_quadsdk_last_gap_1m.md`
 
+### 5. Step 07:Phase 4(IK 可到達性)の動作確認 — 届かない足場を検知して停止
+
+地形マップの助走側だけを削って**前方スナップを強制**(物理地面は普通)。
+`ik_reach_check:=true` で前方足場が `IK_UNREACHABLE` になり、gate + latch で
+手前に直立停止(左)。`false` だと同地形で届かない足場を実行して転倒(右)。
+
+| Phase 4 ON:届かない足場を検知 → 手前で停止(10–30 s) | Phase 4 OFF:同地形で転倒(10–30 s) |
+|---|---|
+| ![phase4 stop](../artifacts/gifs/quadsdk_phase4_ik_safestop_10to30s.gif) | ![phase4 fall](../artifacts/gifs/quadsdk_phase4_ik_fall_10to30s.gif) |
+
+詳細:`steps/step_07_quadsdk_phase4_ik_reach.md`
+
 ---
 
 ## シナリオ ↔ 結果 ↔ 効いている Phase
@@ -105,6 +118,7 @@ Go2(Quad-SDK、`reference:=twist`)で、以前 **深さ 1 m・幅 0.3 m の溝�
 | Step 05b | 単独トレンチ 30 cm | `edge_clearance:0.15` | 渡り切る | 2A + 3(A) |
 | Step 05b | 単独トレンチ 10 m / 100 cm | `edge_clearance:0.15` | 手前で直立停止 | 2A + 3(A)(+ 2B で滑らかに) |
 | Step 06 | 15 cm 穴 ×2 → 1 m 穴 | `edge_clearance:0.15` | 15 cm 穴群の手前で直立静止(3/3) | 2A + 3(A) + **2B** |
+| Step 07 | 助走側マップを削った地形 | `ik_reach_check:1` | 届かない足場を検知して手前で直立静止(3/3)。OFF は転倒 | 2A + 2B + **4** |
 
 ---
 
@@ -120,8 +134,9 @@ Go2(Quad-SDK、`reference:=twist`)で、以前 **深さ 1 m・幅 0.3 m の溝�
 
 ## 未着手・保留
 
-- **Phase 4 を実際に踏む sim シナリオが無い**(探索半径を広げる/別歩容/実センサ
-  用の安全網。機構は単体テストで担保)。
+- **Phase 4 は掃引地形では踏まない**(足場スナップが手前へ寄るため)。専用地形
+  (Step 07)で ON=安全停止/OFF=転倒 を実地確認済み。実運用では探索半径拡大/
+  別歩容/実センサ用の安全網。
 - forward-probe / lookahead は **+x(進行方向)固定**(全幅横断穴では妥当。
   斜め穴・旋回は将来一般化)。
 - 実センサ(LiDAR/深度 → 地図)処理はこの repo に無い。「穴」と「未観測」の
@@ -134,4 +149,4 @@ Go2(Quad-SDK、`reference:=twist`)で、以前 **深さ 1 m・幅 0.3 m の溝�
 - `quadsdk_gap_foothold_trial_and_error.md` — 試行錯誤(外した見立て・踏んだバグ)
 - `quadsdk_gap_foothold_phase_progress.md` — コミット単位の実施ログ
 - `quadsdk_gap_foothold_mpc_code_analysis.md` — コード解析本体
-- `steps/step_05_*` / `step_05b_*` / `step_06_*` — 各シナリオの実測
+- `steps/step_05_*` / `step_05b_*` / `step_06_*` / `step_07_*` — 各シナリオの実測
