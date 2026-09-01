@@ -9,13 +9,17 @@
 
 namespace {
 
-// [MPC_DOG Step 09] Measurement-only. Enabled iff env MPCDOG_STEP09_DIR is set
-// and non-empty. Writes CSVs of the terrain-map layers and the per-touchdown
-// foothold selection so the "hole misread as safe" (A) vs "snapped to the far
-// side" (B) question can be answered from numbers, not guesses. Adds NOTHING to
-// the control path: no return value, cmd_vel, foothold or NMPC input changes.
-const char *step09Dir() {
-  static const char *d = std::getenv("MPCDOG_STEP09_DIR");
+// [MPC_DOG shadow instrumentation] Measurement-only. Enabled iff env
+// MPCDOG_STEPDUMP_DIR (or the legacy MPCDOG_STEP09_DIR) is set and non-empty.
+// Writes CSVs used by the Step 09+ analyses (terrain-map layers, per-touchdown
+// foothold selection, future gait events, ...). Adds NOTHING to the control
+// path: no return value, cmd_vel, foothold or NMPC input changes.
+const char *stepDumpDir() {
+  static const char *d = []() {
+    const char *v = std::getenv("MPCDOG_STEPDUMP_DIR");
+    if (v == nullptr || v[0] == '\0') v = std::getenv("MPCDOG_STEP09_DIR");
+    return v;
+  }();
   return (d != nullptr && d[0] != '\0') ? d : nullptr;
 }
 
@@ -283,9 +287,33 @@ FootPlanResult LocalFootstepPlanner::computeFootPlan(
   };
 
   // [MPC_DOG Step 09] measurement-only: collect per-touchdown foothold rows.
-  const char *s09_dir = step09Dir();
+  const char *s09_dir = stepDumpDir();
   std::vector<std::string> s09_foot_rows;
   const char *kS09Legs[4] = {"FL", "BL", "FR", "BR"};
+
+  // [MPC_DOG Step 10] measurement-only: reconstruct the future touchdown-event
+  // list for each leg from the CURRENT gait phase (computeContactSchedule's own
+  // output, which already tiles nominal_contact_schedule_ from
+  // phase = current_plan_index % period_ - not from phase 0). Shadow only:
+  // nothing here feeds control. Recorded once per plan cycle.
+  std::vector<std::string> s10_gait_rows;
+  if (s09_dir != nullptr) {
+    const int phase = (period_ > 0) ? (current_plan_index % period_) : 0;
+    for (int j = 0; j < num_feet_; ++j) {
+      int found = 0;
+      for (size_t i = 1; i < contact_schedule.size() && found < 4; ++i) {
+        if (isNewContact(contact_schedule, i, j)) {
+          char rb[256];
+          std::snprintf(rb, sizeof(rb), "%.4f,%d,%d,%d,%.5f,%s,%d,%zu,%.5f",
+                        node_->now().seconds(), current_plan_index, phase,
+                        period_, dt_, kS09Legs[j], found, i,
+                        (current_plan_index + static_cast<int>(i)) * dt_);
+          s10_gait_rows.emplace_back(rb);
+          ++found;
+        }
+      }
+    }
+  }
 
   // Place new footholds at touchdown events.
   for (int j = 0; j < num_feet_; j++) {
@@ -660,6 +688,19 @@ FootPlanResult LocalFootstepPlanner::computeFootPlan(
         terrain_grid_.exists("traversability")) {
       step09DumpMapCrossSection(terrain_grid_, foothold_obj_threshold_, s09_dir);
       s09_map_done = true;
+    }
+
+    // [MPC_DOG Step 10] flush the future gait-event rows (append).
+    const std::string gait_path =
+        std::string(s09_dir) + "/step10_gait_events.csv";
+    const bool gait_hdr = !std::ifstream(gait_path).good();
+    std::ofstream gf(gait_path, std::ios::app);
+    if (gf) {
+      if (gait_hdr) {
+        gf << "time,current_plan_index,phase,period,dt,leg,event_ordinal,"
+              "pred_touchdown_horizon_index,pred_touchdown_time\n";
+      }
+      for (const auto &r : s10_gait_rows) gf << r << "\n";
     }
   }
 
