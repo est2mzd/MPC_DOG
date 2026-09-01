@@ -556,26 +556,23 @@ TEST(LocalFootstepPlannerTest, HasUncrossableGapAheadDistinguishesGapWidth) {
   EXPECT_FALSE(off.hasUncrossableGapAhead(Eigen::Vector2d(-1.0, 0.0), 2.5));
 }
 
-// ---- Phase 4: IK_UNREACHABLE (foothold outside the leg's IK reach) ----
+// ---- Phase 4: IK_UNREACHABLE (foothold too far from the midstance hip) ----
 
 TEST(LocalFootstepPlannerTest, IkUnreachableFlagsFarFootholdWhenEnabled) {
   LocalFootstepPlanner planner = makeGo2Planner(0.25, /*ik_reach_check=*/true);
-  const Eigen::Vector3d body_pos(0.0, 0.0, 0.30);
-  const Eigen::Vector3d body_rpy(0.0, 0.0, 0.0);
+  const Eigen::Vector3d hip(0.19, 0.13, 0.28);  // front-left hip, world frame
 
-  // Under the front-left hip, on the ground -> within the leg's reach.
+  // Foothold under the hip on the ground -> ~0.26 m away -> within reach.
   const Eigen::Vector3d near_nom(0.15, 0.12, 0.02);
   EXPECT_EQ(planner
-                .getNearestValidFootholdResult(near_nom, near_nom, /*leg=*/0,
-                                               body_pos, body_rpy)
+                .getNearestValidFootholdResult(near_nom, near_nom, /*leg=*/0, hip)
                 .status,
             FootholdStatus::VALID);
 
-  // 1.5 m in front of the body -> far past the ~0.4 m leg reach.
+  // 1.5 m in front -> ~1.3 m from the hip -> far past the leg's reach.
   const Eigen::Vector3d far_nom(1.5, 0.12, 0.02);
   EXPECT_EQ(planner
-                .getNearestValidFootholdResult(far_nom, far_nom, /*leg=*/0,
-                                               body_pos, body_rpy)
+                .getNearestValidFootholdResult(far_nom, far_nom, /*leg=*/0, hip)
                 .status,
             FootholdStatus::IK_UNREACHABLE);
 }
@@ -585,13 +582,12 @@ TEST(LocalFootstepPlannerTest, IkReachCheckDisabledLeavesFarFootholdValid) {
   const Eigen::Vector3d far_nom(1.5, 0.12, 0.02);
   EXPECT_EQ(planner
                 .getNearestValidFootholdResult(far_nom, far_nom, /*leg=*/0,
-                                               Eigen::Vector3d(0.0, 0.0, 0.30),
-                                               Eigen::Vector3d::Zero())
+                                               Eigen::Vector3d(0.19, 0.13, 0.28))
                 .status,
             FootholdStatus::VALID);
 }
 
-// A negative leg index (the default) skips the IK check even when it is on.
+// A negative leg index (the default) skips the reach check even when it is on.
 TEST(LocalFootstepPlannerTest, IkReachCheckSkippedWithoutLegIndex) {
   LocalFootstepPlanner planner = makeGo2Planner(0.25, /*ik_reach_check=*/true);
   const Eigen::Vector3d far_nom(1.5, 0.12, 0.02);
