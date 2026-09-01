@@ -1,5 +1,12 @@
 # Step 06:Step 05 の最後の穴だけ 1 m にした場合、落ちずに止まれるか
 
+> **更新(Phase 2B 実施後、2026-09-01)**:**Phase 2B(能動的な停止シーケンス
+> + 長距離 lookahead)で解決。** 3/3 で **胴体 x≈0.93(助走面、15 cm 穴群の
+> 手前)で直立静止**、`min z` 0.307、roll/pitch≈0、以後 ~19 s 安定。
+> 転倒なし。既存シナリオ(step03/04・Step 05・Step 05b)も回帰 OK。
+> 詳細は末尾「Phase 2B で解決」。以下 §1〜 は Phase 2B 前の記録。
+
+
 対象: `external/quad-sdk`(go2、`reference:=twist`、クロール歩容、0.3 m/s)。
 Step 05(15 cm 平地 / 15 cm 穴の連続、go2 は N=2〜5 で渡れた)の派生。
 
@@ -118,9 +125,67 @@ sed -i 's/^\(      edge_clearance: \)0.15\b/\10.0/' "$YAML"
 - 新規 `artifacts/gifs/quadsdk_step06_last1m_fall{,_10to30s}.gif`
 - 制御コード変更なし(Phase 2A / Phase 3(A) のまま)。
 
+---
+
+## Phase 2B で解決(能動的な停止シーケンス + 長距離 lookahead)
+
+Phase 2B の変更(`quadsdk_gap_foothold_phase_progress.md` §Phase 2B):
+
+- **2B-1**:forward-probe が**地図の端**に達したらスキャン打ち切り(status 据え置き)。
+  地図の端 = 未認識であって断崖ではない。→ Step 05 の地図端での誤 `EDGE_TOO_CLOSE`
+  を除去。
+- **2B-2**:無効足場を検知したら **`return false`(plan 凍結)ではなく
+  `safe_stop_latched_` を立てる**。ラッチ中は `getReference` で `cmd_vel_:=0` →
+  既存の STEP→STAND 遷移で減速・全脚接地・NMPC 姿勢保持。**plan は publish し続ける。**
+- **2B-3**:胴体位置から進行方向へ **`safe_stop_lookahead`(既定 2.5 m、NMPC
+  ホライズンとは独立)** 前方スキャン(`hasUncrossableGapAhead`)。渡れない穴
+  (向こう岸が `max_crossable_gap` 以内に無い)があれば **その場で latch**。
+  渡れる穴(15 cm / 30 cm)は素通り。`edge_clearance:0` では無効。
+
+**なぜ 2B-2 だけでは Step 06 が直らなかったか**:1 m 穴は NMPC ホライズン
+(≈0.36 m 先)に入るのが胴体 x≈2.2 のとき = **すでに 15 cm 穴群の中**。
+そこから減速しても間に合わず転倒。**2B-3 で「認識範囲」を 2.5 m に広げると、
+胴体が助走面(x<1.0)にいるうちに 1 m 穴を検知して latch** できる。
+(ユーザーの言う「環境認識部で認識範囲を規定し、認識範囲内で渡れないと判断」)。
+
+### Phase 2B 後の結果(`edge_clearance:=0.15`、0.3 m/s)
+
+| 試行 | latch | 最終 x | 最終 z | 最終 roll | min z | 判定 |
+|---:|---:|---:|---:|---:|---:|---|
+| r1 | 1 | 0.94 | 0.31 | 0.00 | 0.307 | **直立静止**(以後 ~19 s 安定) |
+| r2 | 1 | 0.93 | 0.31 | 0.00 | 0.307 | 直立静止 |
+| r3 | 1 | 0.93 | 0.31 | −0.00 | 0.307 | 直立静止 |
+
+- **3/3 で「落ちずに止まる」**(直立・穴に落ちない・15 cm 穴群に踏み込まない)。
+- 停止位置 x≈0.93 は助走面。「途中まで渡って止まる」ではなく「入る前に止まる」。
+  `safe_stop_lookahead` を縮めれば穴群の直前まで寄ってから止められる(調整可)。
+
+### Phase 2B の回帰(同時に走らせた)
+
+| シナリオ | 設定 | 結果 |
+|---|---|---|
+| step03(30 cm 溝、複数)| `edge_clearance:0` | ✅ 渡り切る x≈11.2(latch なし = 完全に不変)|
+| Step 05(15 cm 穴 ×5)| `edge_clearance:0.15` | ✅ 渡り切る x≈8.3(渡れる穴は lookahead が素通り)|
+| Step 05b(30 cm 溝)| `edge_clearance:0.15` | ✅ 渡り切る x≈11.3 |
+| Step 05b(100 cm 穴)| `edge_clearance:0.15` | ✅ 手前で直立停止(lookahead で早めに latch、転倒なし)|
+
+証拠 GIF:`artifacts/gifs/quadsdk_step06_last1m_safestop_10to30s.gif`
+(1 m 穴を長距離 lookahead で検知 → 15 cm 穴群の手前で直立停止)。
+`local_planner` テスト **36/36 green**。
+
+### Phase 2B の追加・変更ファイル
+
+- `local_footstep_planner.{hpp,cpp}`:forward-probe の地図端打ち切り(2B-1)、
+  `hasUncrossableGapAhead()`(2B-3)、`FootPlanResult.nearest_failed_index`
+- `local_planner.{hpp,cpp}`:`safe_stop_latched_` latch + `cmd_vel:=0`、
+  body-forward lookahead 呼び出し、param 3 個
+- `local_planner.yaml`:`safe_stop_latch`(既定 true)/ `safe_stop_horizon`(40)
+  / `safe_stop_lookahead`(2.5)
+- `test/`:probe 地図端テスト、latch param テスト、`hasUncrossableGapAhead` テスト
+
 ## 関連
 
 - `agent_reports/steps/step_05_quadsdk_repeated_15cm_gaps.md`(15 cm 連続穴、通過)
 - `agent_reports/steps/step_05b_quadsdk_phase2a_safe_stop.md`(単独断崖の安全停止)
-- `agent_reports/quadsdk_gap_foothold_phase_progress.md` §Phase 2A / §Phase 3
-- `agent_reports/handoff/quadsdk_gap_foothold_handoff.md`(Phase 2B 設計項目)
+- `agent_reports/quadsdk_gap_foothold_phase_progress.md` §Phase 2A / §Phase 3 / §Phase 2B
+- `agent_reports/quadsdk_gap_foothold_overview.md`(全体の考え方)

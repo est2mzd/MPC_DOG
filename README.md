@@ -30,7 +30,7 @@
  - [Step 03_1m / 04_1m(gbpl 版):global_body_planner で穴を渡る試み + Quad-SDK 公式マニュアルに基づく正しい設定方法 + センシング→foot plan→MPC→WBC→トルクの工程別ボトルネック分析(穴 1 本は跳んで可・連続区間は未達)](./agent_reports/steps/step_03_04_1m_quadsdk_gbpl.md)
  - [Step 05:15 cm 平地・15 cm 穴の連続区間 — **go2 は N=2〜5 で安定して渡り切った**(Phase 3(A) が 15 cm 穴を「渡れる穴」と判定・クロール歩容で 5 cm メッシュ帯を跨ぐ)。事前調査の「成立困難寄り」は実測で覆った](./agent_reports/steps/step_05_quadsdk_repeated_15cm_gaps.md)
  - [Step 05b:安全停止の検証 — Phase 2A 単独では受動 PD ホールドが勢いを止めきれず転落。**Phase 3(`EDGE_TOO_CLOSE`、進行方向 forward-probe)を足すと、30 cm の穴は跨いで渡り・100 cm の穴の手前で直立停止**(渡れる穴は渡る/渡れない穴の手前で安全に止まる)](./agent_reports/steps/step_05b_quadsdk_phase2a_safe_stop.md)
- - [Step 06:15 cm 穴 ×2 → 1 m 穴 の複合地形で「落ちずに止まれるか」 — **現状は不可(7 回中 直立静止 0)**。Phase 3(A) の渡河不可判定は正しく働くが、Phase 2A が遠方ホライズンの無効足場で local plan を丸ごと止めるため、手前の 15 cm 穴を渡る遊脚中に凍結して転倒。**能動的な停止シーケンス(Phase 2B)が必要**と実測](./agent_reports/steps/step_06_quadsdk_last_gap_1m.md)
+ - [Step 06:15 cm 穴 ×2 → 1 m 穴 の複合地形で「落ちずに止まれるか」 — **Phase 2B で達成(3/3 で 15 cm 穴群の手前で直立静止・転倒なし)**。plan を凍結せず `cmd_vel:=0` で減速停止 + NMPC ホライズンより長い前方 lookahead(2.5 m)で 1 m 穴を早期検知。既存シナリオ(step03/04・Step 05・Step 05b)も回帰 OK](./agent_reports/steps/step_06_quadsdk_last_gap_1m.md)
 
 ### 溝渡りの実行例(1 m 深・0.3 m 幅の溝を、足を溝に入れずに連続で渡る／`reference:=twist` + クロール歩容)
 
@@ -57,14 +57,16 @@
 
 ![Step05 15cm連続穴を渡る](./artifacts/gifs/quadsdk_step05_s15g15n5_cross_10to30s.gif)
 
-### Step 06:15 cm 穴 ×2 → 1 m 穴 では「落ちずに止まる」ができない(Phase 2B 要)
+### Step 06:15 cm 穴 ×2 → 1 m 穴 — Phase 2B で 15 cm 穴群の手前に直立停止
 
-Phase 3(A) の渡河不可判定は正しく働くが、Phase 2A が遠方ホライズンの無効足場で
-local plan を丸ごと止めるため、手前の 15 cm 穴を渡る遊脚中に凍結して転倒
-(7 回中 直立静止 0、10–30 s 切り抜き)。詳細は
+NMPC ホライズン(≈0.36 m 先)では 1 m 穴を認識するのが遅すぎたので、Phase 2B で
+胴体から 2.5 m 前方をスキャンして早期に latch → `cmd_vel:=0` で減速停止。
+3/3 で転倒なし。詳細は
 [Step 06 の検証記録](./agent_reports/steps/step_06_quadsdk_last_gap_1m.md)。
 
-![Step06 15cm穴の位置で断続停止して転倒](./artifacts/gifs/quadsdk_step06_last1m_fall_10to30s.gif)
+| Phase 2B 前:手前の 15 cm 穴で断続停止 → 転倒(10–30 s) | Phase 2B 後:1 m 穴を早期検知 → 手前で直立停止(10–30 s) |
+|---|---|
+| ![Step06 転倒](./artifacts/gifs/quadsdk_step06_last1m_fall_10to30s.gif) | ![Step06 安全停止](./artifacts/gifs/quadsdk_step06_last1m_safestop_10to30s.gif) |
 
 ## Quadruped-PyMPC
 

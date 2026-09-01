@@ -69,14 +69,15 @@
   事前調査の「地図 1 セル・成立困難寄り」は実測で覆った。50 cm strip の 1 回
   転倒は両穴通過後の非決定転倒(3/3 再走で通過)。詳細:
   `agent_reports/steps/step_05_quadsdk_repeated_15cm_gaps.md` §実施結果。
-- **Step 06 実施済み(2026-09-01)。** Step 05 地形の最後の穴だけ 1 m にすると、
-  **7 回中 直立静止 0**(5 回 手前の 15 cm 穴で転倒、1 回 出発点で凍結、
-  1 回 傾き停止)。Phase 3(A) の渡河不可判定(1 m 穴 → `EDGE_TOO_CLOSE`)は
-  正しく働くが、Phase 2A が**遠方ホライズン(idx 39)の無効足場で local plan を
-  丸ごと止める**ため、手前の 15 cm 穴を渡る遊脚中に凍結 → 転倒。
-  → **能動的な停止シーケンス(Phase 2B)が必要**と実測。詳細:
-  `agent_reports/steps/step_06_quadsdk_last_gap_1m.md`。
-- **Phase 2B / 4 / 5 / 6 は未着手。次は Phase 2B。**
+- **Phase 2B 完了(コード変更あり、2026-09-01)。** (2B-1)forward-probe の
+  地図端打ち切り、(2B-2)無効足場検知で plan を凍結せず `safe_stop_latched_` を
+  立て `cmd_vel:=0` → 既存 STEP→STAND で減速・全脚接地・保持(plan は publish
+  継続)、(2B-3)胴体から `safe_stop_lookahead`(既定 2.5 m、ホライズン独立)
+  前方スキャン `hasUncrossableGapAhead` で渡れない穴を早期検知して latch。
+  **Step 06 は 3/3 で 15 cm 穴群の手前で直立静止(転倒なし)。** 回帰
+  (step03/04・Step 05・Step 05b)も全 OK。テスト **36/36**。詳細は
+  `steps/step_06_quadsdk_last_gap_1m.md` §Phase 2B で解決 / 下記「Phase 2B」。
+- **Phase 4 / 5 / 6 は未着手。**
 
 ---
 
@@ -134,7 +135,7 @@
 | 0 | 解析で判明した資料の 3 誤りを訂正。**コード変更なし** | ✅ | `6e089e1` |
 | 1 | 足場選択器を「位置だけ」→「成功/失敗 + 診断値」を返す型へ。**挙動不変** | ✅ | `484ea13` `88605aa` `6282643` |
 | 2A | NMPC へ無効足場(穴上・地図外・高さ非有限)を渡さない | ✅ | `964bd53` `c8236a0` `007396a` |
-| 2B | 遊脚を考慮した安全な減速・停止シーケンス(stop ラッチ→遊脚着地→新離脚禁止→全脚接地→STAND)。**Step 06 で必要性を実測** | ⬜ **次はこれ** | ― |
+| 2B | stop ラッチ → cmd_vel:=0 → STEP→STAND → 保持(plan 凍結せず)。+ 胴体前方 lookahead(`safe_stop_lookahead`)で早期 latch。+ probe の地図端打ち切り | ✅ | `0063270` `1899558` `<2B-3>` |
 | 3 | 穴縁からの安全距離を地図上で明示判定(`EDGE_TOO_CLOSE`)+ 渡河可能性(forward-probe、`max_crossable_gap`)。既定 OFF(`edge_clearance: 0.0`) | ✅ | `8466ad4` `b48643a` `6814895` |
 | 4 | 逆運動学の可到達性で候補を絞る | ⬜ | ― |
 | 5 | 大きな足場補正時の減速/刻み歩行 | ⬜ | ― |
