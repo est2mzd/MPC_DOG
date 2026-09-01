@@ -147,8 +147,30 @@ NMPC ホライズン(≈0.36 m 先)では 1 m 穴を認識するのが遅すぎ�
 | **30 cm の溝** | ![30cm off](./artifacts/gifs/quadsdk_onoff_g30_off.gif)<br>渡り切る(x≈11.7) | ![30cm on](./artifacts/gifs/quadsdk_onoff_g30_on.gif)<br>渡り切る(x≈11.1) |
 | **100 cm の穴**<br>(spawn x=−2.0) | ![100cm off](./artifacts/gifs/quadsdk_onoff_g100_off.gif)<br>4.6 m 歩いて**穴に落下**(x≈2.6, z≈−0.94) | ![100cm on](./artifacts/gifs/quadsdk_onoff_g100_on.gif)<br>2.2 m 歩いて**穴の手前で直立停止**(x≈0.20) |
 
-Phase 4(`IK_UNREACHABLE`、脚が届かない足場の検知、既定 OFF)の単体確認は
+### Phase 2A(gate)単独では足りない — 縁で一瞬止まってから穴へ前傾転落
+
+`edge_clearance:=0` で Phase 2A だけ有効。無効足場を NMPC に渡さなくても、
+受動 PD ホールドでは勢いを止めきれず、穴の縁で前傾して落ちる。→ Phase 3(縁の
+早期検知)+ Phase 2B(能動減速)が必要という動機。詳細は
+[Step 05b の検証記録](./agent_reports/steps/step_05b_quadsdk_phase2a_safe_stop.md)。
+
+| Phase 2A 単独:縁で一瞬止まって前傾転落 | Phase 3 を足す:穴の 0.7 m 手前で直立停止 |
+|---|---|
+| ![Phase2A 転落](./artifacts/gifs/quadsdk_phase2a_trench10m_fall.gif) | ![Phase3 安全停止](./artifacts/gifs/quadsdk_phase3_trench10m_safestop.gif) |
+
+### Phase 4(`IK_UNREACHABLE`):脚が届かない足場を検知して手前で停止
+
+専用地形(助走側の地図を削って前脚の名目足場を強制的に前方へスナップさせ、
+midstance hip から ~0.75 m = `ik_max_reach`(0.45 m)超にする)。`ik_reach_check`
+既定 OFF。詳細は
 [Step 07 の検証記録](./agent_reports/steps/step_07_quadsdk_phase4_ik_reach.md)。
+
+| `ik_reach_check:=false`:届かない足場を実行 → 転倒 | `ik_reach_check:=true`:`IK_UNREACHABLE` 検知 → 直立停止 |
+|---|---|
+| ![Phase4 OFF 転倒](./artifacts/gifs/quadsdk_phase4_ik_fall_10to30s.gif) | ![Phase4 ON 停止](./artifacts/gifs/quadsdk_phase4_ik_safestop_10to30s.gif) |
+
+Phase 4 ON でも 30 cm の溝は渡り切る(機能後退なし):
+![Phase4 ON でも 30cm は渡る](./artifacts/gifs/quadsdk_phase4_g30_ik_cross_12to40s.gif)
 
 ## Quadruped-PyMPC
 
