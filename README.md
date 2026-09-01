@@ -22,6 +22,7 @@
  - [simple モデルで地形対応(高さ考慮の足場選び・穴超え)はどこまでできるか(事実と推測を分離)](./agent_reports/quadsdk_step01_simple_model_terrain_and_gaps.md)
  - [go2 の寸法・質量・関節・パラメータ(Quad-SDK モデル + 公称スペック)](./agent_reports/quadsdk_go2_dimensions_and_params.md)
  - [Quad-SDK 元コードからの変更・チューニングまとめ(ビルド/実行修正・歩容/探索/ホライズン/地形表現の調整・診断機能追加。何をなぜ変えたか一覧)](./agent_reports/quadsdk_original_code_tuning_summary.md)
+ - [穴対応 Foot Placement 改善:**まとめ(現状・成果・GIF)** — 1 枚で現状がわかる。フェーズ一覧(2A/3(A)/2B/4 実装済み)、5 シナリオの結果と実行 GIF、既存挙動を壊していない根拠](./agent_reports/quadsdk_gap_foothold_summary.md)
  - [穴対応 Foot Placement 改善:**全体の考え方(概観)** — 安全のための 4 段(認識/足場選択/gate/停止シーケンス)、フェーズ ↔ 何を足したか ↔ どのシナリオで確かめたか、シナリオ一覧と現状、ユーザー判断の履歴](./agent_reports/quadsdk_gap_foothold_overview.md)
  - [穴対応 Foot Placement 改善:**試行錯誤の記録** — 外した見立て(15cm連続穴は成立困難 / gate だけで安全停止)、踏んだC++バグ(非voidの return 忘れ→UBで無限ループ / THROTTLE がms巨大値でログ0件)、Phase 3 を2回作り直した経緯、効いた作業のやり方](./agent_reports/quadsdk_gap_foothold_trial_and_error.md)
  - [穴対応:Foot Placement と NMPC 連携のコード解析(資料⇔コード照合表・terrain map の式・足場計画の入出力・NMPC への受け渡し・資料主張の再判定・改善フェーズ計画)](./agent_reports/quadsdk_gap_foothold_mpc_code_analysis.md)
