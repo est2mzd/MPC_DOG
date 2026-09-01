@@ -210,7 +210,11 @@ void step12PlanSequence(const grid_map::GridMap &grid,
   const double res = std::max(grid.getResolution(), 1e-3);
   const double fwd = 0.32, back = 0.28, lat = 0.26;
   const double td_spacing = (period > 0) ? (period * dt / 4.0) : 0.225;
-  const int kmax = 24;
+  const int kmax = 32;
+  // Max forward travel of one leg between its own consecutive touchdowns
+  // (instruction 2.3-8). go2 crawl is ~0.15-0.25 m; allow a little slack.
+  const double max_step_fwd = 0.30, max_step_back = 0.15;
+  double leg_prev_x[4] = {-1e9, -1e9, -1e9, -1e9};
 
   auto trav_ok = [&](double x, double y) -> bool {
     const grid_map::Position p(x, y);
@@ -257,6 +261,12 @@ void step12PlanSequence(const grid_map::GridMap &grid,
                                    (y - hip.y()) * (y - hip.y()) +
                                    (zc - hip.z()) * (zc - hip.z()));
         if (d > R || !trav_ok(x, y)) continue;
+        // step-length limit vs this leg's previous foothold in the sequence
+        if (leg_prev_x[leg] > -1e8 &&
+            (x - leg_prev_x[leg] > max_step_fwd ||
+             x - leg_prev_x[leg] < -max_step_back)) {
+          continue;
+        }
         const bool sole = trav_ok(x + res, y) && trav_ok(x - res, y) &&
                           trav_ok(x, y + res) && trav_ok(x, y - res);
         const double zr = have_raw ? grid.atPosition("z", p) : std::nan("");
@@ -281,6 +291,7 @@ void step12PlanSequence(const grid_map::GridMap &grid,
     max_progress = best_x - bx;
     prev_x = best_x;
     prev_y = best_y;
+    leg_prev_x[leg] = best_x;
     char fb[192];
     std::snprintf(fb, sizeof(fb), "%.4f,%d,%d,%s,%.5f,%.5f,%.5f,%d", time_s,
                   plan_idx, k, legname[leg], best_x, best_y, hip.x(), n_valid);
