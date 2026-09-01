@@ -77,7 +77,18 @@
   **Step 06 は 3/3 で 15 cm 穴群の手前で直立静止(転倒なし)。** 回帰
   (step03/04・Step 05・Step 05b)も全 OK。テスト **36/36**。詳細は
   `steps/step_06_quadsdk_last_gap_1m.md` §Phase 2B で解決 / 下記「Phase 2B」。
-- **Phase 4 / 5 / 6 は未着手。**
+- **Phase 4 完了(コード変更あり、既定 OFF、2026-09-01)。** 選択足場が
+  `VALID` 確定後、`ik_reach_check`(既定 false)なら **既存の脚 IK**
+  `worldToFootIKWorldFrame` を touchdown 時の予測胴体姿勢で呼び、
+  IK がクランプ(遠すぎ/関節限界/特異)= `false` を返したら
+  `FootholdStatus::IK_UNREACHABLE`。`!= VALID` なので Phase 2A gate +
+  Phase 2B latch が拾う。IK は選択セル 1 個だけ(探索セル全部ではない)。
+  **回帰(step03/04・Step 05・Step 05b・Step 06)は既定 OFF で不変。IK ON でも
+  Step 05/06 は誤発火せず(`IK_UNREACHABLE` 0 回)通過/安全停止**。
+  sim で `IK_UNREACHABLE` を強制する地形は現状の掃引に無く、機構は単体テストで
+  確認(遠い足場→`IK_UNREACHABLE` / OFF→`VALID` / leg 未指定→スキップ)。
+  詳細は下記「Phase 4」。
+- **Phase 5 / 6 は未着手。**
 
 ---
 
@@ -137,7 +148,7 @@
 | 2A | NMPC へ無効足場(穴上・地図外・高さ非有限)を渡さない | ✅ | `964bd53` `c8236a0` `007396a` |
 | 2B | stop ラッチ → cmd_vel:=0 → STEP→STAND → 保持(plan 凍結せず)。+ 胴体前方 lookahead(`safe_stop_lookahead`)で早期 latch。+ probe の地図端打ち切り | ✅ | `0063270` `1899558` `<2B-3>` |
 | 3 | 穴縁からの安全距離を地図上で明示判定(`EDGE_TOO_CLOSE`)+ 渡河可能性(forward-probe、`max_crossable_gap`)。既定 OFF(`edge_clearance: 0.0`) | ✅ | `8466ad4` `b48643a` `6814895` |
-| 4 | 逆運動学の可到達性で候補を絞る | ⬜ | ― |
+| 4 | 選択足場を既存 IK で可到達性チェック → `IK_UNREACHABLE`(既定 OFF)。候補の再探索は Phase 4b 別課題 | ✅ | `f93d1f2` `a7d222f` |
 | 5 | 大きな足場補正時の減速/刻み歩行 | ⬜ | ― |
 | 6 | 地図の鮮度・未観測セルの扱い | ⬜ | ― |
 
@@ -411,6 +422,33 @@ STAND 遷移・`cmd_vel`→0・Map 期限切れ・edge clearance・IK は **入�
 → 「渡れる穴は渡る / 渡れない穴の手前で安全に止まる」を両立。テスト **34/34**。
 証拠 GIF:`artifacts/gifs/quadsdk_phase3_gap30_cross.gif` /
 `quadsdk_phase3_gap100_safestop.gif`。詳細は step_05b。
+
+### Phase 4 — `IK_UNREACHABLE`(脚の逆運動学の可到達性)
+
+**目的**:足場スナップは `foothold_search_radius`(0.7 m)まで候補をずらせるが、
+脚の到達域は約 0.4 m。NMPC も可到達性を見ない。**届かない足場が NMPC の固定
+パラメータになる**と支持/遊脚が破綻する。
+
+| # | 変更 | 内容 |
+|---|---|---|
+| 4-1 | `FootholdStatus` / `getNearestValidFootholdResult` | `IK_UNREACHABLE` 追加。任意引数 `leg_index=-1, body_pos=0, body_rpy=0`。メンバ `ik_reach_check_`(既定 false)+ `setSpatialParams` に引数 |
+| 4-2 | `getNearestValidFootholdResult` | `VALID` 確定後、`ik_reach_check_ && leg>=0 && quadKD_` なら `worldToFootIKWorldFrame(leg, body_pos, body_rpy, foot_best, q)` を呼ぶ。**戻り値 false(クランプ)= `IK_UNREACHABLE`**。選択セル 1 個のみ(安い) |
+| 4-3 | `computeFootPlan` の呼び出し | `j` と `body_plan_stance.row(i)` の pos/rpy を渡す(touchdown 時の予測胴体姿勢) |
+| 4-4 | `local_planner.cpp` + yaml | `local_footstep_planner.ik_reach_check`(既定 false)を読み `setSpatialParams` へ |
+
+**設計判断(委譲)**:IK は**選択セル 1 個だけ**(探索セル全部で IK を回すのは
+重い)。「届くセルへ再探索して候補を絞る」= Phase 4b の別課題。
+`worldToFootIKWorldFrame` の戻り値(`is_exact`)をそのまま使う(遠すぎ/関節限界/
+特異のいずれでも false)。
+
+**検証**:
+- 単体 4 本 green(遠い足場 1.5 m → `IK_UNREACHABLE` / OFF → `VALID` /
+  leg 未指定 → スキップ / param 既定 false)。`colcon test` **40/40**。
+- sim 回帰:既定 OFF で step03/04・Step 05・Step 05b・Step 06 不変。
+  `ik_reach_check:=true` でも Step 05(15 cm 穴 ×5)は通過、Step 06 は
+  Phase 2B と同じく安全停止(いずれも `IK_UNREACHABLE` 0 回 = 誤発火なし)。
+- **現状の掃引地形では `IK_UNREACHABLE` を実際に踏むケースが無い。**
+  探索半径を広げる/別歩容/実センサでの安全網として入れた位置づけ。
 
 ### そのあと Phase 2B(未設計)
 
