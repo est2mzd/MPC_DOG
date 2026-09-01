@@ -140,3 +140,9 @@ artifacts/step10/*/run.log
 artifacts/step11/*/state_log.csv
 artifacts/step11/*/run.log
 artifacts/logs/quadsdk_quadsdk_p4x_*/
+# Step 10+ shared dump dir emits step09/step10/step11/... files regardless of
+# which step is running; keep only each dir's own step file.
+artifacts/step10/*/step09_*
+artifacts/step10/*/step11_*
+artifacts/step11/*/step09_*
+artifacts/step11/*/step10_*
