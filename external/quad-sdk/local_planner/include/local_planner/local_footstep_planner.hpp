@@ -217,6 +217,25 @@ class LocalFootstepPlanner {
       Eigen::MatrixXd& foot_accelerations);
 
   /**
+   * @brief Phase 2B: is there an uncrossable gap on the path ahead?
+   *
+   * Marches the terrain map forward (+x, the travel direction) from `from` up
+   * to `lookahead` metres. Returns true if any hole along the way has no
+   * traversable ground again within max_crossable_gap_ of where it started (no
+   * reachable far side). Crossable gaps (a strip resumes within reach) and the
+   * edge of the mapped area are passed over. Disabled (returns false) when
+   * edge_clearance_ == 0 or max_crossable_gap_ == 0. This looks farther than
+   * the NMPC horizon so LocalPlanner can start the graceful stop before the
+   * robot commits to a field of narrow crossable gaps that ends at a cliff.
+   *
+   * @param[in] from Body xy position to probe from, world frame
+   * @param[in] lookahead Distance to probe, metres
+   * @return true if an uncrossable gap lies within `lookahead` ahead
+   */
+  bool hasUncrossableGapAhead(const Eigen::Vector2d& from,
+                              double lookahead) const;
+
+  /**
    * @brief Convert the foot positions and contact schedule into ros messages
    * for the foot plan
    * @param[in] contact_schedule Current contact schedule

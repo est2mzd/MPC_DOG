@@ -721,6 +721,35 @@ FootholdResult LocalFootstepPlanner::getNearestValidFootholdResult(
   return result;
 }
 
+bool LocalFootstepPlanner::hasUncrossableGapAhead(const Eigen::Vector2d& from,
+                                                  double lookahead) const {
+  if (edge_clearance_ <= 0.0 || max_crossable_gap_ <= 0.0 || lookahead <= 0.0) {
+    return false;  // Phase 3 opt-in only
+  }
+  const Eigen::Vector2d fwd(1.0, 0.0);
+  const double step = std::max(terrain_grid_.getResolution(), 1e-3);
+  bool in_hole = false;
+  double hole_start = 0.0;
+  for (double d = step; d <= lookahead; d += step) {
+    const grid_map::Position p = from + d * fwd;
+    if (!terrain_grid_.isInside(p)) {
+      return false;  // beyond the mapped area -> unknown, not a cliff
+    }
+    const double t = terrain_grid_.atPosition(obj_fun_layer_, p);
+    const bool unsafe = !std::isfinite(t) || t <= foothold_obj_threshold_;
+    if (unsafe && !in_hole) {
+      in_hole = true;
+      hole_start = d;
+    } else if (!unsafe && in_hole) {
+      in_hole = false;  // a strip resumed -> that gap was crossable
+    }
+    if (in_hole && d - hole_start >= max_crossable_gap_) {
+      return true;  // hole with no far side within reach
+    }
+  }
+  return false;
+}
+
 Eigen::Vector3d LocalFootstepPlanner::welzlMinimumCircle(
     std::vector<Eigen::Vector2d> P, std::vector<Eigen::Vector2d> R) {
   if (R.size() == 3) {

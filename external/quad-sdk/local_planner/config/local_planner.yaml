@@ -18,6 +18,7 @@
       stop_on_invalid_foothold: true      # [MPC_DOG Phase 2A] gate invalid footholds before NMPC; false = pre-Phase-2A behaviour
       safe_stop_latch: true               # [MPC_DOG Phase 2B] on an invalid foothold within safe_stop_horizon, latch a graceful stop (cmd_vel:=0 -> STEP->STAND -> hold, plan keeps publishing) instead of freezing the plan; false = Phase 2A withhold-the-plan behaviour
       safe_stop_horizon: 40               # [MPC_DOG Phase 2B] horizon-step window; only invalid footholds this close latch the stop (default = whole horizon)
+      safe_stop_lookahead: 2.5            # [MPC_DOG Phase 2B-3] m to probe the terrain map forward from the body (independent of the NMPC horizon) for an uncrossable gap; latch the stop before entering a field of crossable gaps that ends at a cliff. 0 disables. No-op when edge_clearance == 0.
     local_footstep_planner:
       grf_weight: 0.45                   # Blend weight between GRF and terrain foothold costs
       standing_error_threshold: 0.03     # Foot position error tolerated while standing, m

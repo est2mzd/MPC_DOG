@@ -91,6 +91,8 @@ LocalPlanner::LocalPlanner(rclcpp::Node::SharedPtr node)
                                   safe_stop_latch_, true);
   quad_utils::loadROSParamDefault(node_, "local_planner.safe_stop_horizon",
                                   safe_stop_horizon_, 40);
+  quad_utils::loadROSParamDefault(node_, "local_planner.safe_stop_lookahead",
+                                  safe_stop_lookahead_, 2.5);
 
   // Convert kinematics
   quadKD_ = std::make_shared<quad_utils::QuadKD2>(node_, robot_ns_);
@@ -561,6 +563,20 @@ bool LocalPlanner::computeLocalPlan() {
       current_foot_velocities_world_, first_element_duration_,
       past_footholds_msg_, foot_positions_world_, foot_velocities_world_,
       foot_accelerations_world_);
+
+  // Phase 2B-3: look farther than the NMPC horizon. If an uncrossable gap lies
+  // within safe_stop_lookahead_ ahead of the body, latch the graceful stop now
+  // -- before the robot commits to a field of crossable narrow gaps that ends
+  // at a cliff (Step 06). No-op unless Phase 3 is enabled (edge_clearance > 0).
+  if (safe_stop_latch_ && !safe_stop_latched_ &&
+      local_footstep_planner_->hasUncrossableGapAhead(
+          current_state_.head<2>(), safe_stop_lookahead_)) {
+    RCLCPP_WARN(node_->get_logger(),
+                "[safe-stop] latching graceful stop: uncrossable gap within "
+                "%.2f m ahead of the body",
+                safe_stop_lookahead_);
+    safe_stop_latched_ = true;
+  }
 
   // Never hand an invalid foothold plan to NMPC.
   if (stop_on_invalid_foothold_ && !foot_plan_result.ok) {

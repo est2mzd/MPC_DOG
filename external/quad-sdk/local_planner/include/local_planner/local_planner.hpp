@@ -159,6 +159,11 @@ class LocalPlanner {
   /// (default = whole horizon). Farther-out invalid footholds are ignored
   /// (Phase 2A-3 already replaces them with the previous foothold).
   int safe_stop_horizon_ = 40;
+  /// Phase 2B-3: metres to probe the terrain map forward from the body for an
+  /// uncrossable gap (independent of the NMPC horizon). Lets the graceful stop
+  /// latch before the robot enters a field of crossable gaps that ends at a
+  /// cliff. 0 disables this body-forward check.
+  double safe_stop_lookahead_ = 2.5;
   /// Latched once an impassable gap is seen in the horizon; stays latched for
   /// the rest of the WALK session.
   bool safe_stop_latched_ = false;
