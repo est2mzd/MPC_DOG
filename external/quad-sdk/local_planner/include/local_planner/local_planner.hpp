@@ -148,6 +148,21 @@ class LocalPlanner {
   /// pre-Phase-2A behaviour (plan with the last-good foothold held).
   bool stop_on_invalid_foothold_ = true;
 
+  /// Phase 2B: when true, an invalid foothold at horizon index <=
+  /// safe_stop_horizon_ latches safe_stop_latched_ instead of freezing the
+  /// plan. While latched, getReference() forces cmd_vel_ to zero so the
+  /// existing STEP->STAND transition decelerates the body, lands the swing
+  /// legs and holds a stand pose -- and the plan keeps being published. Set
+  /// false for the Phase 2A behaviour (withhold the plan -> PD hold).
+  bool safe_stop_latch_ = true;
+  /// Only invalid footholds within this many horizon steps latch the stop
+  /// (default = whole horizon). Farther-out invalid footholds are ignored
+  /// (Phase 2A-3 already replaces them with the previous foothold).
+  int safe_stop_horizon_ = 40;
+  /// Latched once an impassable gap is seen in the horizon; stays latched for
+  /// the rest of the WALK session.
+  bool safe_stop_latched_ = false;
+
   /// Define map frame
   std::string map_frame_;
 

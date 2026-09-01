@@ -81,6 +81,9 @@ struct FootPlanResult {
   int failed_leg = -1;              //!< leg index of the first failure, -1 if none
   int failed_touchdown_index = -1;  //!< horizon index of the first failure
   int failed_count = 0;             //!< total failing touchdowns this call
+  int nearest_failed_index = -1;    //!< smallest horizon index among failures
+                                    //!< (-1 if none); Phase 2B uses this to
+                                    //!< decide how soon to start the stop
 };
 
 //! Local footstep planner for quadruped body plans

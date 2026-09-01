@@ -187,6 +187,10 @@ FootPlanResult LocalFootstepPlanner::computeFootPlan(
       plan_result.failed_leg = leg;
       plan_result.failed_touchdown_index = touchdown_index;
     }
+    if (plan_result.nearest_failed_index < 0 ||
+        touchdown_index < plan_result.nearest_failed_index) {
+      plan_result.nearest_failed_index = touchdown_index;
+    }
     ++plan_result.failed_count;
   };
   // Place new footholds at touchdown events.
@@ -662,8 +666,11 @@ FootholdResult LocalFootstepPlanner::getNearestValidFootholdResult(
   // reachable far side), the foothold is EDGE_TOO_CLOSE and Phase 2A withholds
   // the plan. A lip before a *crossable* gap (step03/04's 0.3 m trench) stays
   // VALID. A hole further ahead than edge_clearance_, or one behind the
-  // foothold, does not matter. edge_clearance_ == 0 disables the check
-  // (pre-Phase-3 behaviour); max_crossable_gap_ == 0 makes any lip
+  // foothold, does not matter. Reaching the edge of the mapped area stops the
+  // probe WITHOUT flagging: the map boundary is unmapped ground, not a cliff
+  // (this removed spurious EDGE_TOO_CLOSE on far-horizon footholds that landed
+  // near the last mapped strip in Step 05). edge_clearance_ == 0 disables the
+  // check (pre-Phase-3 behaviour); max_crossable_gap_ == 0 makes any lip
   // EDGE_TOO_CLOSE.
   if (result.status == FootholdStatus::VALID && edge_clearance_ > 0.0) {
     const Eigen::Vector2d fwd(1.0, 0.0);
@@ -673,11 +680,11 @@ FootholdResult LocalFootstepPlanner::getNearestValidFootholdResult(
     double hole_start = 0.0;
     for (double d = step; d <= max_d; d += step) {
       const grid_map::Position p = foot_position_best.head<2>() + d * fwd;
-      bool unsafe = !terrain_grid_.isInside(p);
-      if (!unsafe) {
-        const double t = terrain_grid_.atPosition(obj_fun_layer_, p);
-        unsafe = !std::isfinite(t) || t <= foothold_obj_threshold_;
+      if (!terrain_grid_.isInside(p)) {
+        break;  // edge of the mapped area -> unknown, not a cliff
       }
+      const double t = terrain_grid_.atPosition(obj_fun_layer_, p);
+      const bool unsafe = !std::isfinite(t) || t <= foothold_obj_threshold_;
       if (!on_lip) {
         if (unsafe) {
           if (d > edge_clearance_) break;  // hole too far ahead -> foothold ok

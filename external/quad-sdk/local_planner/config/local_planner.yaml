@@ -15,7 +15,9 @@
                                            # 確実にこの閾値を超えるよう0.05へ変更。ユーザー指示
                                            # により実施、2026-08-30)
       stand_pos_error_threshold: 0.05     # Position error tolerated while standing, m
-      stop_on_invalid_foothold: true      # [MPC_DOG Phase 2A] withhold the local plan (-> stale -> robot_driver PD-holds stand pose) when any touchdown has no traversable in-map foothold; false = pre-Phase-2A behaviour
+      stop_on_invalid_foothold: true      # [MPC_DOG Phase 2A] gate invalid footholds before NMPC; false = pre-Phase-2A behaviour
+      safe_stop_latch: true               # [MPC_DOG Phase 2B] on an invalid foothold within safe_stop_horizon, latch a graceful stop (cmd_vel:=0 -> STEP->STAND -> hold, plan keeps publishing) instead of freezing the plan; false = Phase 2A withhold-the-plan behaviour
+      safe_stop_horizon: 40               # [MPC_DOG Phase 2B] horizon-step window; only invalid footholds this close latch the stop (default = whole horizon)
     local_footstep_planner:
       grf_weight: 0.45                   # Blend weight between GRF and terrain foothold costs
       standing_error_threshold: 0.03     # Foot position error tolerated while standing, m

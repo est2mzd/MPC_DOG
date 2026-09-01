@@ -84,6 +84,13 @@ LocalPlanner::LocalPlanner(rclcpp::Node::SharedPtr node)
   quad_utils::loadROSParamDefault(node_,
                                   "local_planner.stop_on_invalid_foothold",
                                   stop_on_invalid_foothold_, true);
+  // Phase 2B: graceful stop (latch + cmd_vel:=0 + STEP->STAND) instead of
+  // freezing the plan; safe_stop_horizon = how soon an invalid foothold must
+  // be to latch (default = whole horizon).
+  quad_utils::loadROSParamDefault(node_, "local_planner.safe_stop_latch",
+                                  safe_stop_latch_, true);
+  quad_utils::loadROSParamDefault(node_, "local_planner.safe_stop_horizon",
+                                  safe_stop_horizon_, 40);
 
   // Convert kinematics
   quadKD_ = std::make_shared<quad_utils::QuadKD2>(node_, robot_ns_);
@@ -342,6 +349,12 @@ void LocalPlanner::getReference() {
                            static_cast<rcutils_duration_value_t>(1e9),
                            "No cmd_vel data, setting twist cmd_vel to zero");
     }
+    // Phase 2B: once a graceful stop is latched, hold the twist command at zero
+    // so the body decelerates and the STEP->STAND transition below plants all
+    // feet and holds a stand pose.
+    if (safe_stop_latched_) {
+      cmd_vel_.setZero();
+    }
     // Set initial ground height
     ref_ground_height_(0) = local_footstep_planner_->getTerrainHeight(
         current_state_(0), current_state_(1));
@@ -549,19 +562,39 @@ bool LocalPlanner::computeLocalPlan() {
       past_footholds_msg_, foot_positions_world_, foot_velocities_world_,
       foot_accelerations_world_);
 
-  // Phase 2A: never hand an invalid foothold plan to NMPC. Returning false here
-  // skips publishLocalPlan(); the local plan then goes stale and robot_driver
-  // PD-holds the stand pose (existing 0.1 s timeout path).
+  // Never hand an invalid foothold plan to NMPC.
   if (stop_on_invalid_foothold_ && !foot_plan_result.ok) {
-    RCLCPP_WARN_THROTTLE(
-        node_->get_logger(), *node_->get_clock(),
-        static_cast<rcutils_duration_value_t>(1000),
-        "[safe-stop] withholding local plan: %d touchdown(s) without a valid "
-        "foothold (first: leg=%d horizon_idx=%d status=%d)",
-        foot_plan_result.failed_count, foot_plan_result.failed_leg,
-        foot_plan_result.failed_touchdown_index,
-        static_cast<int>(foot_plan_result.worst_status));
-    return false;
+    const bool near = foot_plan_result.nearest_failed_index >= 0 &&
+                      foot_plan_result.nearest_failed_index <= safe_stop_horizon_;
+    if (safe_stop_latch_ && near) {
+      // Phase 2B: latch a graceful stop. Keep publishing the plan; getReference()
+      // zeros cmd_vel so the existing STEP->STAND transition decelerates the
+      // body, lands the swing legs and holds a stand pose. Phase 2A-3 has
+      // already replaced the invalid touchdown(s) with the previous foothold,
+      // so nothing invalid reaches NMPC.
+      if (!safe_stop_latched_) {
+        RCLCPP_WARN(node_->get_logger(),
+                    "[safe-stop] latching graceful stop: impassable gap in the "
+                    "horizon (leg=%d nearest_idx=%d status=%d)",
+                    foot_plan_result.failed_leg,
+                    foot_plan_result.nearest_failed_index,
+                    static_cast<int>(foot_plan_result.worst_status));
+        safe_stop_latched_ = true;
+      }
+    } else if (!safe_stop_latch_) {
+      // Phase 2A behaviour: withhold the plan -> stale -> robot_driver PD hold.
+      RCLCPP_WARN_THROTTLE(
+          node_->get_logger(), *node_->get_clock(),
+          static_cast<rcutils_duration_value_t>(1000),
+          "[safe-stop] withholding local plan: %d touchdown(s) without a valid "
+          "foothold (first: leg=%d horizon_idx=%d status=%d)",
+          foot_plan_result.failed_count, foot_plan_result.failed_leg,
+          foot_plan_result.failed_touchdown_index,
+          static_cast<int>(foot_plan_result.worst_status));
+      return false;
+    }
+    // else (safe_stop_latch_ && !near): invalid foothold beyond safe_stop_horizon
+    // -> ignore this cycle; keep walking (the sanitised plan is safe for NMPC).
   }
   // Transform the new foot positions into the body frame for body planning
   local_footstep_planner_->getFootPositionsBodyFrame(
