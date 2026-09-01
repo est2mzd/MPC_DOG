@@ -34,7 +34,11 @@ Phase 2A〜4 を段階的に足してきたが、各フェーズは「その回�
 
 ## 結論
 
-**16/18 は期待どおり。2/18(幅 50 cm の穴)で「渡れず・止まらず・転倒」**。
+**16/18 は期待どおり(≤30 cm は回帰なしで渡り・≥100 cm は手前で安全停止)。
+2/18(幅 50 cm の穴)で「渡れず・止まらず・転倒」** — `max_crossable_gap` を
+0.6→0.54 に下げても直らず(2/2 で再現)。真因は閾値ではなく **地形フィルタの
+`InpaintFilter`(radius 0.4)が ~0.4〜0.9 m の穴を認識レイヤで埋めている**こと
+(下記 発見 A)。コードは 0.6 のまま、修正は Phase 5 へ。
 
 | シナリオ | ec | 結果 | 期待 | 備考 |
 |---|---|---|---|---|
@@ -50,33 +54,67 @@ Phase 2A〜4 を段階的に足してきたが、各フェーズは「その回�
 | strip50 / gap15 N=2 | .15 | CROSSED (x≈8.7) | ✓ | ※B |
 | strip25 / gap25 N=2 | .15 | CROSSED (x≈8.4) | ✓ | ※B |
 | strip25 / gap35 N=2 | .15 | CROSSED (x≈7.7) | ✓ | go2 が実際に跨げる最大級 ※B |
-| **strip25 / gap50 N=2** | .15 | **FELL** (x≈2.4, roll→−π) | **✗** | **A:止まらず落下** |
+| **strip25 / gap50 N=2** | .15 | **FELL** (x≈2.5, roll→±π/2〜π) | **✗** | **A:止まらず落下(2/2)** |
 | 単独 30 cm | .15 | CROSSED (x≈11.3) | ✓ | latch なし(地形が長い) |
 | 単独 100 cm | .15 | SAFE-STOP (x≈0.2) | ✓ | 前方プローブ |
 | 単独 1000 cm | .15 | SAFE-STOP (x≈0.3) | ✓ | 前方プローブ |
-| **15/15 ×2 → 50 cm** | .15 | **FELL** (x≈3.0, roll→π) | **✗** | **A:止まらず落下** |
+| **15/15 ×2 → 50 cm** | .15 | **FELL** (x≈3.0, roll→π) | **✗** | **A:止まらず落下(3/3)** |
 | 15/15 ×2 → 100 cm(Step 06) | .15 | SAFE-STOP (x≈0.9) | ✓ | 前方プローブ |
 
-### 発見 A(本物の穴):幅 0.35〜0.60 m の穴が「渡れず・止まらず」
+### 発見 A(本物の穴):~0.4〜0.9 m の穴が「渡れず・止まらず」
 
-`max_crossable_gap = 0.6`(m)は「穴の 0.6 m 以内に地面が戻れば渡れる穴とみなし、
-止めない」という設定。ところが go2(Raibert + クロール、0.3 m/s)が実際に
-跨げるのは **約 0.35 m** まで:
+観測:
+- 0.35 m の穴 → 渡り切る(2/2)
+- 0.50 m の穴(単独・小穴の後ろ、両方)→ **踏み込んで落下**(2/2。ログに
+  `EDGE_TOO_CLOSE` も latch も 0 件 = 安全層が一度も働いていない)
+- 1.0 m 以上 → 手前で安全停止
 
-- 0.35 m の穴 → 渡り切る
-- 0.50 m の穴 → **踏み込んで落下**(ログに `EDGE_TOO_CLOSE` も latch も 0 件。
-  安全層が一度も働いていない)
+`max_crossable_gap = 0.6` は「穴の先 0.6 m 以内に地面が戻れば渡れる穴とみなす」
+設定だが、これを 0.54 に下げても 0.50 m の穴は落下のまま。**閾値ではなかった。**
 
-→ **幅が 0.35〜0.60 m の穴は、コードは「渡れる」と判定して止めないが、
-ロボットは渡れない**。この帯が抜け穴になっている。
+#### 追検証:`max_crossable_gap` を下げても直らなかった
 
-**対策候補**(いずれも既定 `edge_clearance:0` は不変 = opt-in 時のみ影響):
+ユーザー方針(「30 cm 以下が渡れれば OK、それ超えは対象外・ただし落下は困る」)を
+受けて `max_crossable_gap` を **0.6 → 0.54** に下げて 11 本を再実行した:
 
-1. `max_crossable_gap` を 0.6 → **0.40 前後に下げる**。0.30 m(step03/04)は
-   「渡れる」のまま、0.45 m 以上は `EDGE_TOO_CLOSE` → 手前で安全停止。**推奨。**
-2. 現状維持。0.6 m は「オペレータ責任」と割り切って文書化。
+| 検証 | 結果 |
+|---|---|
+| step03 `ec0` / `ec0.15`、step04 `ec0.15` | CROSSED — **30 cm は回帰なし** |
+| 繰り返し 15/15 N=2、strip25 gap25 / **gap35**(2/2) | CROSSED |
+| 単独 100 / 1000 cm、15/15 ×2 → 100 cm | SAFE-STOP |
+| **strip25 gap50**(2/2)、**15/15 ×2 → 50 cm**(2/2) | **FELL(不変)** |
 
-→ どちらにするかはユーザー判断待ち(この Step では**コード未変更**)。
+→ **0.54 でも 0.50 m の穴は一度もフラグされず落下**(0.6 と同じ)。閾値の問題では
+なかった。`max_crossable_gap` は **0.6 に戻した**(コミット参照)。
+
+#### 本当の原因:地形フィルタの InpaintFilter
+
+Phase 3 のプローブが読む `traversability` レイヤは、`filter_chain.yaml` の
+**`InpaintFilter`(`radius: 0.4`)で穴が埋められた `z_inpainted` から作られる**。
+
+- 幅 0.15 m の穴 → 完全に埋まる(Step 05 で foot が 5 cm 帯に乗れたのはこのため)。
+- 幅 0.5〜0.6 m の穴 → **inpaint 半径 0.4 m がほぼ橋渡し**してしまい、
+  `traversability` が `foothold_obj_threshold`(0.6)を割るほど下がらない
+  → プローブが「連続する危険帯」を検出できない → ロボットが踏み込む
+  → 物理的な穴は本物なので落下。
+- 幅 1.0 m 以上の穴 → 中心が埋まりきらず `traversability` が谷になる → 検出 →
+  手前で安全停止。
+
+つまり **~0.4〜0.9 m の穴は認識(perception)側で埋められていて、
+foot placement 層からは「渡れる地面」に見えている**。
+
+**対策候補**:
+
+1. Phase 3 プローブを `traversability`(inpaint 済み)ではなく **生の elevation
+   レイヤの NaN** で判定する。生の `z` は物理メッシュの穴の幅ぶん(0.5 + 2×margin
+   ≈ 0.6 m)そのまま NaN なので、中くらいの穴も見える。**推奨(将来作業=Phase 5)。**
+2. `InpaintFilter` の `radius` を 0.4 → 0.15 程度に下げる。ただし surface normal /
+   slope / roughness も同じ `z_inpainted` から作るので影響範囲が広く、スタック
+   全体の再検証が必要。リスク高。
+3. 現状維持 + 文書化。0.4〜0.9 m の穴は「認識で埋まるため安全停止しない」と明記。
+
+→ この Step では**コード未変更**(`max_crossable_gap` は 0.6 のまま。yaml コメントに
+上記の注記を追加した)。プローブの作り直しは Phase 5 に回す。
 
 ### 発見 B(テスト地形の副作用、コードのバグではない):末尾 latch
 
@@ -128,15 +166,39 @@ single 1000cm         ec=1 | latch=1 | x=  0.30 minz=0.272 roll=-0.00 | SAFE-STO
 それ以外 → SAFE-STOP。`ec` は 1=`edge_clearance:0.15`、0=`0.0`。
 `latch` は `"latching graceful stop"` ログの件数。
 
+`max_crossable_gap:0.54` での再実行(`scratchpad/retune_verify.sh` +
+`scratchpad/rerun_flaky.sh`、曖昧ケースは 2 回ずつ):
+
+```
+step03 0.3m ec0        CROSSED (x=11.87)
+step03 0.3m ec0.15     CROSSED (x=11.15)   # 30cm 回帰なし(最重要)
+step04 0.3m ec0.15     CROSSED (x=10.52)
+rep 15/15 N=2          CROSSED (x=8.06,  latch=1 末尾)
+rep 25/gap25 N=2       CROSSED (x=8.41)
+rep 25/gap35 N=2       CROSSED (x=8.38 / 7.94)          # 2/2
+rep 25/gap50 N=2       FELL    (x=2.56 / 2.76, latch=0) # 2/2 本物の落下
+15/15 x2 -> 50cm       FELL    (x=3.18 / 3.06 / 2.94)   # 3/3
+single 100cm           SAFE-STOP (x=0.05)
+single 1000cm          SAFE-STOP (x=0.08)
+15/15 x2 -> 100cm      SAFE-STOP (x=0.75)
+```
+
+(初回 retune_verify で gap35/gap50 が x=-0.04 のまま出たのは NMPC 起動失敗の
+フレーク。再実行で gap35=CROSSED、gap50=FELL に確定。)
+
 ## 再現
 
 ```bash
-bash scratchpad/full_sweep.sh    # scratchpad は tmp。中身は本 md に転記済み
+bash scripts/trial/quadsdk_full_gap_sweep.sh   # 18 本の一括スイープ(ec:0.6)
+# 追検証(scratchpad、内容は本 md に転記済み):
+#   scratchpad/retune_verify.sh   max_crossable_gap:0.54 で 11 本
+#   scratchpad/rerun_flaky.sh     曖昧 3 ケースを 2 回ずつ
 ```
 
 `local_planner.yaml` は `cp` バックアップ → trap で復元(`git checkout` 不使用)。
 繰り返し・gap 可変・混合の地形は `gen_quadsdk_repeated_gap_world.py` が
-実行時に生成。
+実行時に生成。`InpaintFilter` の設定は
+`external/quad-sdk/quad_utils/config/filter_chain.yaml`(`filter2`, `radius: 0.4`)。
 
 ## 関連
 

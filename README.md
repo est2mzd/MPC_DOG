@@ -34,7 +34,7 @@
  - [Step 05b:安全停止の検証 — Phase 2A 単独では受動 PD ホールドが勢いを止めきれず転落。**Phase 3(`EDGE_TOO_CLOSE`、進行方向 forward-probe)を足すと、30 cm の穴は跨いで渡り・100 cm の穴の手前で直立停止**(渡れる穴は渡る/渡れない穴の手前で安全に止まる)](./agent_reports/steps/step_05b_quadsdk_phase2a_safe_stop.md)
  - [Step 06:15 cm 穴 ×2 → 1 m 穴 の複合地形で「落ちずに止まれるか」 — **Phase 2B で達成(3/3 で 15 cm 穴群の手前で直立静止・転倒なし)**。plan を凍結せず `cmd_vel:=0` で減速停止 + NMPC ホライズンより長い前方 lookahead(2.5 m)で 1 m 穴を早期検知。既存シナリオ(step03/04・Step 05・Step 05b)も回帰 OK](./agent_reports/steps/step_06_quadsdk_last_gap_1m.md)
  - [Step 07:Phase 4(`IK_UNREACHABLE`)の動作確認 — **30 cm / 100 cm × `ik_reach_check` OFF/ON の 4 通り**。Phase 4 ON でも 30 cm は渡り切る(機能後退なし)、100 cm は手前で停止。初版は IK の `is_exact` フラグで平地足場まで拾い 30 cm 渡りを止めた → midstance hip からの幾何距離判定に修正](./agent_reports/steps/step_07_quadsdk_phase4_ik_reach.md)
- - [Step 08:穴の数・間隔・幅を振った **全 18 シナリオの回帰スイープ** — 16/18 は期待どおり(渡れる穴は渡り切る/渡れない穴は手前で直立停止、step03/04 も回帰なし)。**幅 0.35〜0.60 m の穴で「渡れず・止まらず・転倒」**(`max_crossable_gap:0.6` が go2 の実力 ~0.35 m を過大評価。対策候補=0.40 前後へ、ユーザー判断待ち)](./agent_reports/steps/step_08_quadsdk_full_gap_sweep.md)
+ - [Step 08:穴の数・間隔・幅を振った **全 18 シナリオの回帰スイープ** — 16/18 は期待どおり(≤30 cm は回帰なしで渡り・≥100 cm は手前で直立停止)。**~0.4〜0.9 m の穴で「渡れず・止まらず・転倒」**。真因は `max_crossable_gap` の閾値ではなく **地形フィルタの `InpaintFilter`(radius 0.4)が中くらいの穴を認識レイヤで埋めている**こと(0.6→0.54 に下げても 2/2 で落下)。Phase 3 プローブを生 elevation の NaN で判定する修正が要る=Phase 5 へ](./agent_reports/steps/step_08_quadsdk_full_gap_sweep.md)
 
 ### 溝渡りの実行例(1 m 深・0.3 m 幅の溝を、足を溝に入れずに連続で渡る／`reference:=twist` + クロール歩容)
 
