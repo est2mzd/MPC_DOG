@@ -71,22 +71,22 @@ NMPC ホライズン(≈0.36 m 先)では 1 m 穴を認識するのが遅すぎ�
 |---|---|
 | ![Step06 転倒](./artifacts/gifs/quadsdk_step06_last1m_fall_10to30s.gif) | ![Step06 安全停止](./artifacts/gifs/quadsdk_step06_last1m_safestop_10to30s.gif) |
 
-### Step 07:Phase 4(`IK_UNREACHABLE`)— 30 cm / 100 cm × ON/OFF
+### 機能 ON/OFF の比較(30 cm の溝 / 100 cm の穴)
 
-Phase 4(選択足場が midstance hip から `ik_max_reach`=0.45 m を超えたら
-`IK_UNREACHABLE`)は **既定 OFF**。**ON にしても 30 cm の溝は渡り切り(機能後退
-なし)、100 cm の穴は手前で停止**。Phase 4 が実際に効く専用地形(地形マップの
-助走側を削って前方スナップを強制)では、ON=`IK_UNREACHABLE` 検知 → 手前で直立
-停止、OFF=同地形で届かない足場を実行して転倒。詳細は
+**ON** = `edge_clearance:=0.15`(Phase 3 の「渡れる穴/渡れない穴」判定 + Phase 2A/2B の安全停止)。
+**OFF** = `stop_on_invalid_foothold:=false` + `safe_stop_latch:=false` + `edge_clearance:=0`
+(この穴対応の作業を全部無効化 = 素の Quad-SDK の足場挙動)。0.3 m/s、他は同一条件。
+
+- **30 cm の溝**:ON でも OFF でも **渡り切る**(機能を足しても渡れる挙動は不変 = 機能後退なし)。
+- **100 cm の穴**:**OFF は穴に落下**(`x=2.6`, `z=−0.94`, 上下反転)、**ON は穴の手前で直立停止**(`x=0.19`, `z=0.31`)。
+
+| | 機能 OFF | 機能 ON |
+|---|---|---|
+| **30 cm の溝** | ![30cm off](./artifacts/gifs/quadsdk_onoff_g30_off.gif)<br>渡り切る(x≈11.7) | ![30cm on](./artifacts/gifs/quadsdk_onoff_g30_on.gif)<br>渡り切る(x≈11.1) |
+| **100 cm の穴** | ![100cm off](./artifacts/gifs/quadsdk_onoff_g100_off.gif)<br>**穴に落下**(x≈2.6, z≈−0.94) | ![100cm on](./artifacts/gifs/quadsdk_onoff_g100_on.gif)<br>**手前で直立停止**(x≈0.19) |
+
+Phase 4(`IK_UNREACHABLE`、脚が届かない足場の検知、既定 OFF)の単体確認は
 [Step 07 の検証記録](./agent_reports/steps/step_07_quadsdk_phase4_ik_reach.md)。
-
-| 30 cm + Phase 4 ON:渡り切る(12–40 s) | 100 cm + Phase 4 ON:手前で停止(10–30 s) |
-|---|---|
-| ![g30 cross](./artifacts/gifs/quadsdk_phase4_g30_ik_cross_12to40s.gif) | ![g100 stop](./artifacts/gifs/quadsdk_phase4_g100_ik_stop_10to30s.gif) |
-
-| 専用地形 + Phase 4 ON:届かない足場を検知 → 停止(10–30 s) | 同 OFF:届かない足場を実行して転倒(10–30 s) |
-|---|---|
-| ![Phase4 安全停止](./artifacts/gifs/quadsdk_phase4_ik_safestop_10to30s.gif) | ![Phase4 転倒](./artifacts/gifs/quadsdk_phase4_ik_fall_10to30s.gif) |
 
 ## Quadruped-PyMPC
 

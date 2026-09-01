@@ -58,6 +58,11 @@ artifacts/gifs/*.gif
 !artifacts/gifs/quadsdk_phase4_ik_safestop_10to30s.gif
 !artifacts/gifs/quadsdk_phase4_ik_fall.gif
 !artifacts/gifs/quadsdk_phase4_ik_fall_10to30s.gif
+# 機能 ON/OFF 比較(30cm 溝 / 100cm 穴):
+!artifacts/gifs/quadsdk_onoff_g30_off.gif
+!artifacts/gifs/quadsdk_onoff_g30_on.gif
+!artifacts/gifs/quadsdk_onoff_g100_off.gif
+!artifacts/gifs/quadsdk_onoff_g100_on.gif
 !artifacts/gifs/quadsdk_phase4_g100_ik_stop.gif
 !artifacts/gifs/quadsdk_phase4_g100_ik_stop_10to30s.gif
 !artifacts/gifs/quadsdk_phase4_g30_ik_cross.gif
@@ -114,4 +119,5 @@ artifacts/logs/quadsdk_quadsdk_p2b_*/
 artifacts/logs/quadsdk_quadsdk_p4_*/
 artifacts/logs/quadsdk_quadsdk_p4demo_*/
 artifacts/logs/quadsdk_quadsdk_p4v2_*/
+artifacts/logs/quadsdk_quadsdk_onoff_*/
 artifacts/logs/quadsdk_quadsdk_p4x_*/

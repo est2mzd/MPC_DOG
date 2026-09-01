@@ -49,11 +49,11 @@
 - 既定 `ik_reach_check: false` なので、**有効化して検証するまで全シナリオ不変**。
   `local_planner` テスト **40/40 green**。
 
-証拠 GIF:
-- `quadsdk_phase4_g30_ik_cross_12to40s.gif`(30 cm + Phase 4 ON → 渡り切る)
-- `quadsdk_phase4_g100_ik_stop_10to30s.gif`(100 cm + Phase 4 ON → 手前で停止)
-- `quadsdk_phase4_ik_safestop_10to30s.gif`(ikdemo + ON → 届かない足場を検知して停止)
-- `quadsdk_phase4_ik_fall_10to30s.gif`(ikdemo + OFF → 同地形で転倒)
+証拠 GIF(README「機能 ON/OFF の比較」に埋め込み):
+- `quadsdk_onoff_g30_off.gif` / `quadsdk_onoff_g30_on.gif`
+  (30 cm の溝:機能 OFF/ON いずれも渡り切る = 機能後退なし)
+- `quadsdk_onoff_g100_off.gif`(100 cm の穴:機能 OFF → 穴に落下)
+- `quadsdk_onoff_g100_on.gif`(100 cm の穴:機能 ON → 手前で直立停止)
 
 ---
 
