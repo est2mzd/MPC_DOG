@@ -36,6 +36,35 @@
  - [Step 07:Phase 4(`IK_UNREACHABLE`)の動作確認 — **30 cm / 100 cm × `ik_reach_check` OFF/ON の 4 通り**。Phase 4 ON でも 30 cm は渡り切る(機能後退なし)、100 cm は手前で停止。初版は IK の `is_exact` フラグで平地足場まで拾い 30 cm 渡りを止めた → midstance hip からの幾何距離判定に修正](./agent_reports/steps/step_07_quadsdk_phase4_ik_reach.md)
  - [Step 08:穴の数・間隔・幅を振った **全 18 シナリオの回帰スイープ** — 16/18 は期待どおり(≤30 cm は回帰なしで渡り・≥100 cm は手前で直立停止)。**~0.4〜0.9 m の穴で「渡れず・止まらず・転倒」**。真因は `max_crossable_gap` の閾値ではなく **地形フィルタの `InpaintFilter`(radius 0.4)が中くらいの穴を認識レイヤで埋めている**こと(0.6→0.54 に下げても 2/2 で落下)。Phase 3 プローブを生 elevation の NaN で判定する修正が要る=Phase 5 へ](./agent_reports/steps/step_08_quadsdk_full_gap_sweep.md)
 
+### 穴対応の現状:できること・できないこと(成功例・失敗例)
+
+現行コード(Phase 2A + 3(A) + 2B、`edge_clearance:=0.15` で有効化)を穴幅で振った結果。
+1 枚まとめは [まとめ(現状・成果・GIF・教訓)](./agent_reports/quadsdk_gap_foothold_summary.md)。
+
+| ✅ 幅 ≤0.30 m:渡り切る | ✅ 幅 ≥1.0 m:手前で直立停止 | ❌ 幅 0.4〜0.9 m:落下(未対応) |
+|---|---|---|
+| ![30cm 渡る](./artifacts/gifs/quadsdk_onoff_g30_on.gif) | ![100cm 止まる](./artifacts/gifs/quadsdk_onoff_g100_on.gif) | ![50cm 落下](./artifacts/gifs/quadsdk_gap50_fall.gif) |
+| step03/04・Step 05 と同じ(回帰なし) | プローブが横断前に検知 → `cmd_vel:=0` で減速停止 | 安全フラグ 0 件のまま踏み込み → 転倒(2〜3/3 で再現) |
+
+**なぜ中サイズの穴で落ちるか**:Phase 3 のプローブが読む `traversability` は、
+地形フィルタの `InpaintFilter`(`filter_chain.yaml`、radius 0.4)で穴を埋めた
+`z_inpainted` から作られる。**幅 0.5〜0.6 m の穴は inpaint 半径 0.4 m がほぼ
+橋渡しする**ので「渡れる地面」に見え、幅 1.0 m 以上だけ谷が残って検知できる。
+`max_crossable_gap` をいくら下げても直らない(閾値ではなくデータの問題)。
+
+**教訓**:
+
+1. **閾値を疑う前に、その閾値が読むデータを疑う。** 症状の出る層(foot placement)
+   ではなく、データを作る層(perception のフィルタ連鎖)を先に見るべきだった。
+2. **都合よく働いた機構は条件が変わると牙をむく。** Step 05 で 15 cm 穴を跨げた
+   のは inpaint が穴を平地に見せていたから。同じ仕組みが 50 cm では転倒要因になる。
+3. **地図の帯幅 ≠ 物理の穴幅。** 生成器ごとに `MESH_MARGIN` が違い、物理 0.30 m と
+   0.40 m の穴が地図では同じ 0.50 m。マップ座標で線を引くと物理的意味とズレる。
+4. **1 本の試行を信じない。** go2 の twist 歩容は非決定的で起動失敗フレークが
+   混ざる。曖昧な結果は 2〜3 回回してから結論する。
+5. **中断した回帰検証は最後まで回す。** 個別シナリオの成功を積んでも、穴幅を
+   振って回す回帰でしか出ない抜け(幅 0.5 m)があった。
+
 ### 溝渡りの実行例(1 m 深・0.3 m 幅の溝を、足を溝に入れずに連続で渡る／`reference:=twist` + クロール歩容)
 
 固定カメラ。凸条の目盛りは 5 m 間隔。詳細・CSV 根拠は

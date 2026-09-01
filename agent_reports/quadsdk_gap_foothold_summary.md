@@ -22,11 +22,17 @@ Go2(Quad-SDK、`reference:=twist`)で、以前 **深さ 1 m・幅 0.3 m の溝�
 
 - **安全のための 4 段**(認識 → 足場選択 → gate → 停止シーケンス)のうち、
   **段 2〜4 を実装完了**。
-- 狙った **主要シナリオ**(渡る 3・断崖前の安全停止 2)が **すべて成立**。
-  Phase 4(IK 可到達性)も専用地形で ON=停止/OFF=転倒 を実地確認(Step 07)。
+- **できること**:①**幅 ≤0.30 m の穴**は複数本でも渡り切る(step03/04・Step 05、
+  回帰なし)。②**幅 ≥1.0 m の穴/断崖**はプローブが横断前に検知し、`cmd_vel:=0`
+  で減速して手前で直立停止(Step 05b・06・07)。
+- **できないこと(Step 08 で判明)**:**幅およそ 0.4〜0.9 m の穴**は
+  「渡れず・止まらず・転倒」。真因は閾値ではなく、認識(perception)側の
+  `InpaintFilter`(radius 0.4)が中サイズの穴を埋めてしまい、足場選択層からは
+  「渡れる地面」に見えていること。`max_crossable_gap` を下げても直らなかった。
 - 新機能はすべて **既定 OFF / 従来挙動**(有効化して検証するまで step03/04・
-  Step 05 は不変)。`local_planner` テスト **40/40 green**。
-- 次は Phase 5(大きな足場補正時の減速)。
+  Step 05 は不変)。`local_planner` テスト **41/41 green**。
+- 次は Phase 5:**Phase 3 プローブを inpaint 済み traversability ではなく
+  生 elevation の NaN で判定**して、中サイズの穴も止められるようにする。
 
 ---
 
@@ -113,6 +119,51 @@ Go2(Quad-SDK、`reference:=twist`)で、以前 **深さ 1 m・幅 0.3 m の溝�
 
 Phase 4(`IK_UNREACHABLE`)の単体確認は `steps/step_07_quadsdk_phase4_ik_reach.md`。
 
+### 6. Step 08:全 18 シナリオ回帰 — できること・できないこと
+
+穴の数・平地幅・穴幅を振った 18 本を現行コードで一括実行(`edge_clearance:0.15`)。
+**16/18 は期待どおり。2/18(幅 0.5 m の穴)で転倒。**
+
+| 成功:幅 0.30 m は渡る | 成功:幅 1.0 m は手前で止まる | **失敗:幅 0.5 m は落下** |
+|---|---|---|
+| ![30 cross](../artifacts/gifs/quadsdk_onoff_g30_on.gif) | ![100 stop](../artifacts/gifs/quadsdk_onoff_g100_on.gif) | ![50 fall](../artifacts/gifs/quadsdk_gap50_fall.gif) |
+| step03/04・Step 05 と同じ(回帰なし) | プローブが横断前に検知 → 減速停止 | 安全フラグ 0 件のまま踏み込み → 転倒(2〜3/3 で再現) |
+
+失敗の切り分け:`max_crossable_gap` を 0.6→0.54 に下げても幅 0.5 m は落下のまま。
+`traversability` レイヤが `InpaintFilter`(`filter_chain.yaml`、radius 0.4)で
+埋めた `z_inpainted` から作られており、**幅 0.5〜0.6 m の穴は inpaint 半径
+0.4 m がほぼ橋渡ししてしまう** → プローブが「連続する危険帯」を取れない。
+幅 1.0 m 以上は中心が埋まらず谷が残るので検知できる。
+
+詳細:`steps/step_08_quadsdk_full_gap_sweep.md`
+
+---
+
+## 教訓
+
+1. **閾値を疑う前に、その閾値が読む「データ」を疑う。**
+   `max_crossable_gap` をいくら調整しても幅 0.5 m の穴は止められなかった。
+   原因は 2 つ上流の `InpaintFilter` が穴を埋めていたこと。**症状の出る層
+   (foot placement)ではなく、データを作る層(perception のフィルタ連鎖)を
+   最初に確認すべきだった。**
+2. **「小さい穴を渡れる」と「中サイズの穴で転ぶ」は同じ原因。**
+   Step 05 で 15 cm 穴を跨げたのは inpaint が穴を埋めて「ほぼ平地」に見せて
+   いたから。同じ仕組みが 50 cm では「渡れる地面に見えるが実際は落ちる」に
+   化ける。**都合よく働いた機構は、条件が変わると牙をむく。**
+3. **地図の帯幅 ≠ 物理の穴幅。** 生成器ごとに `MESH_MARGIN` が違い
+   (step03/04 は 0.10、他は 0.05)、物理 0.30 m の穴が地図では 0.50 m、
+   物理 0.40 m の穴も地図では 0.50 m。**マップ座標で線を引くと物理的な意味と
+   ズレる。** 生の値で判断できる所は生で判断する。
+4. **1 本の試行結果を信じない。** go2 の twist 歩容は非決定的で、同条件でも
+   `x=-0.04` の起動失敗フレークが混ざる。**曖昧な結果は 2〜3 回回してから
+   結論する**(判定スクリプトに「起動失敗」区分を明示的に入れた)。
+5. **中断した検証は必ず最後まで回す。** 「全シナリオ検証」を後回しにして
+   いる間、幅 0.5 m の穴という抜けは見つからなかった。**個別シナリオの成功を
+   積んでも、振って回す回帰でしか出ない穴がある。**
+6. **`RCLCPP_*_THROTTLE` の第 3 引数はミリ秒。** 巨大値 + ほぼ 0 の sim
+   クロックでログが 1 度も出ず、「gate が動いていない」と 30 分誤診した
+   (`trial_and_error.md`)。ログが出ない ≠ コードが動いていない。
+
 ---
 
 ## シナリオ ↔ 結果 ↔ 効いている Phase
@@ -125,6 +176,7 @@ Phase 4(`IK_UNREACHABLE`)の単体確認は `steps/step_07_quadsdk_phase4_ik_rea
 | Step 05b | 単独トレンチ 10 m / 100 cm | `edge_clearance:0.15` | 手前で直立停止 | 2A + 3(A)(+ 2B で滑らかに) |
 | Step 06 | 15 cm 穴 ×2 → 1 m 穴 | `edge_clearance:0.15` | 15 cm 穴群の手前で直立静止(3/3) | 2A + 3(A) + **2B** |
 | Step 07 | 30 cm / 100 cm × ik OFF/ON + 専用地形 | `ik_reach_check:0/1` | 30 cm は ON でも渡り切る(機能後退なし)、100 cm は停止、専用地形は ON で `IK_UNREACHABLE`→停止/OFF は転倒 | 2A + 2B + **4** |
+| **Step 08** | 穴数・平地幅・穴幅を振った 18 本 | `edge_clearance:0.15` | **16/18 OK**(≤0.30 m 渡る・≥1.0 m 停止)。**幅 0.4〜0.9 m は転倒**(InpaintFilter が穴を埋める) | 2A + 3(A) + 2B |
 
 ---
 
@@ -135,8 +187,9 @@ Phase 4(`IK_UNREACHABLE`)の単体確認は `steps/step_07_quadsdk_phase4_ik_rea
   `safe_stop_latch: true` だが **足場が全部 VALID の経路では no-op**。
 - `IK_UNREACHABLE` / `EDGE_TOO_CLOSE` はいずれも `!= VALID` なので、
   下流の gate(2A)と停止ラッチ(2B)がそのまま拾う(**追加配線ゼロ**)。
-- `local_planner` テスト **40/40 green**。
+- `local_planner` テスト **41/41 green**。
 - sim 回帰:step03/04・Step 05・Step 05b・Step 06 を毎フェーズ後に再走して確認。
+  Step 08 で穴幅を振った 18 本の一括回帰も追加。
 
 ## 未着手・保留
 
@@ -147,7 +200,10 @@ Phase 4(`IK_UNREACHABLE`)の単体確認は `steps/step_07_quadsdk_phase4_ik_rea
   斜め穴・旋回は将来一般化)。
 - 実センサ(LiDAR/深度 → 地図)処理はこの repo に無い。「穴」と「未観測」の
   区別、地図の鮮度は Phase 6。
-- Phase 5(大きな足場補正 = 大 snap 時の減速/刻み歩行)。
+- **幅 0.4〜0.9 m の穴(Step 08 の失敗)**:Phase 3 プローブが `InpaintFilter`
+  で埋まった `traversability` を読んでいるのが原因。**Phase 5 で生 elevation の
+  NaN を見るように直す**(または `InpaintFilter` の radius を下げる=影響範囲大)。
+- Phase 5(上記 + 大きな足場補正 = 大 snap 時の減速/刻み歩行)。
 
 ## 関連ドキュメント
 
@@ -155,4 +211,4 @@ Phase 4(`IK_UNREACHABLE`)の単体確認は `steps/step_07_quadsdk_phase4_ik_rea
 - `quadsdk_gap_foothold_trial_and_error.md` — 試行錯誤(外した見立て・踏んだバグ)
 - `quadsdk_gap_foothold_phase_progress.md` — コミット単位の実施ログ
 - `quadsdk_gap_foothold_mpc_code_analysis.md` — コード解析本体
-- `steps/step_05_*` / `step_05b_*` / `step_06_*` / `step_07_*` — 各シナリオの実測
+- `steps/step_05_*` / `step_05b_*` / `step_06_*` / `step_07_*` / `step_08_*` — 各シナリオの実測

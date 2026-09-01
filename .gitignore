@@ -63,6 +63,7 @@ artifacts/gifs/*.gif
 !artifacts/gifs/quadsdk_onoff_g30_on.gif
 !artifacts/gifs/quadsdk_onoff_g100_off.gif
 !artifacts/gifs/quadsdk_onoff_g100_on.gif
+!artifacts/gifs/quadsdk_gap50_fall.gif
 !artifacts/gifs/quadsdk_phase4_g100_ik_stop.gif
 !artifacts/gifs/quadsdk_phase4_g100_ik_stop_10to30s.gif
 !artifacts/gifs/quadsdk_phase4_g30_ik_cross.gif
