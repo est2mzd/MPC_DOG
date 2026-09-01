@@ -139,7 +139,13 @@ ON = `edge_clearance:=0.15`。OFF = `stop_on_invalid_foothold:=false` +
 を発見。詳細は
 [Step 08 の検証記録](./agent_reports/steps/step_08_quadsdk_full_gap_sweep.md)。
 
-| ✅ 幅 ≤0.30 m:渡り切る | ✅ 幅 ≥1.0 m:手前で直立停止 | ❌ 幅 0.4〜0.9 m:落下(未対応) |
+**タスク結果:穴幅 → 挙動**(単独トレンチ。`scripts/trial/step08_chart.py`)
+
+![Step08 穴幅と挙動](./artifacts/step_charts/step08_gap_width_vs_outcome.png)
+
+参考 GIF:
+
+| ✅ 幅 ≤0.30 m:渡り切る | ✅ 幅 ≥1.0 m:手前で直立停止 | ❌ 幅 0.5 m:落下(未対応) |
 |---|---|---|
 | ![30cm 渡る](./artifacts/gifs/quadsdk_onoff_g30_on.gif) | ![100cm 止まる](./artifacts/gifs/quadsdk_onoff_g100_on.gif) | ![50cm 落下](./artifacts/gifs/quadsdk_gap50_fall.gif) |
 
