@@ -196,6 +196,21 @@ TEST(LocalPlannerTest, StopOnInvalidFootholdParamDefaultsOnAndCanBeDisabled) {
   EXPECT_FALSE(off_planner.stop_on_invalid_foothold_);
 }
 
+// Phase 2B: graceful-stop latch params, defaults and overrides.
+TEST(LocalPlannerTest, SafeStopLatchParamsLoad) {
+  auto default_node = makeNode();
+  LocalPlanner default_planner(default_node);
+  EXPECT_TRUE(default_planner.safe_stop_latch_);
+  EXPECT_EQ(default_planner.safe_stop_horizon_, 40);
+  EXPECT_FALSE(default_planner.safe_stop_latched_);
+
+  auto node = makeNode({rclcpp::Parameter("local_planner.safe_stop_latch", false),
+                        rclcpp::Parameter("local_planner.safe_stop_horizon", 12)});
+  LocalPlanner planner(node);
+  EXPECT_FALSE(planner.safe_stop_latch_);
+  EXPECT_EQ(planner.safe_stop_horizon_, 12);
+}
+
 TEST(LocalPlannerTest, InitFootstepPlannerClampsInvalidGrfWeight) {
   auto high_node = makeNode(
       {rclcpp::Parameter("local_footstep_planner.grf_weight", 4.0)});

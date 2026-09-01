@@ -514,6 +514,20 @@ TEST(LocalFootstepPlannerTest, EdgeProbeIgnoresHoleBehindFarAndWhenDisabled) {
                                                Eigen::Vector3d(0.0, 0.0, 0.0))
                 .status,
             FootholdStatus::VALID);
+
+  // Foothold near the +x edge of the map (map is x in [-3, 3], no gap): the
+  // probe reaches the map boundary and stops without flagging -- the unmapped
+  // area beyond is not a cliff. (Phase 2B: this removed spurious EDGE_TOO_CLOSE
+  // on far-horizon footholds near the last mapped strip.)
+  const auto flat = makeTerrainWithGapBand(-2.9, -2.8);  // trivial band, far away
+  LocalFootstepPlanner edge_planner = makePlanner(0.15, 0.6);
+  edge_planner.updateMap(flat);
+  edge_planner.updateMap(loadTerrain(flat));
+  EXPECT_EQ(edge_planner
+                .getNearestValidFootholdResult(Eigen::Vector3d(2.8, 0.0, 0.0),
+                                               Eigen::Vector3d(2.8, 0.0, 0.0))
+                .status,
+            FootholdStatus::VALID);
 }
 
 TEST(LocalFootstepPlannerTest, WelzlMinimumCircleHandlesBoundaryCases) {
