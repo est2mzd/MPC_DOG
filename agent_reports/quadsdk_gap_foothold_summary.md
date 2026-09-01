@@ -25,14 +25,17 @@ Go2(Quad-SDK、`reference:=twist`)で、以前 **深さ 1 m・幅 0.3 m の溝�
 - **できること**:①**幅 ≤0.30 m の穴**は複数本でも渡り切る(step03/04・Step 05、
   回帰なし)。②**幅 ≥1.0 m の穴/断崖**はプローブが横断前に検知し、`cmd_vel:=0`
   で減速して手前で直立停止(Step 05b・06・07)。
-- **できないこと(Step 08 で判明)**:**幅およそ 0.4〜0.9 m の穴**は
-  「渡れず・止まらず・転倒」。真因は閾値ではなく、認識(perception)側の
-  `InpaintFilter`(radius 0.4)が中サイズの穴を埋めてしまい、足場選択層からは
-  「渡れる地面」に見えていること。`max_crossable_gap` を下げても直らなかった。
+- **できないこと**:**幅およそ 0.44〜0.60 m の穴**は「渡れず・止まらず・転倒」。
+  **原因(Step 09 の計測で確定)**:`traversability` は穴の内側を正しく危険(NaN)に
+  しているが、その危険帯 ≈ 物理の穴幅で、50 cm では 0.50 m。**しきい値
+  `max_crossable_gap` = 0.6 m がこれより大きいので「渡れる穴」に分類されて止めない**。
+  さらに既定 `edge_clearance:0` では幅チェック自体が走らず、足場が穴の縁マスに
+  スナップして転倒する。※ Step 08 と初版解説の「InpaintFilter が穴を埋めるから」は
+  **誤り**(`steps/step_09_...md` 参照)。
 - 新機能はすべて **既定 OFF / 従来挙動**(有効化して検証するまで step03/04・
   Step 05 は不変)。`local_planner` テスト **41/41 green**。
-- 次は Phase 5:**Phase 3 プローブを inpaint 済み traversability ではなく
-  生 elevation の NaN で判定**して、中サイズの穴も止められるようにする。
+- 次の一手候補:**`max_crossable_gap` を 0.6 → ~0.44** に下げる(50 cm を捕まえ、
+  30 cm は渡れる穴のまま)、または **穴チェックを生 `z` の NaN で判定**。
 
 ---
 
@@ -129,27 +132,31 @@ Phase 4(`IK_UNREACHABLE`)の単体確認は `steps/step_07_quadsdk_phase4_ik_rea
 | ![30 cross](../artifacts/gifs/quadsdk_onoff_g30_on.gif) | ![100 stop](../artifacts/gifs/quadsdk_onoff_g100_on.gif) | ![50 fall](../artifacts/gifs/quadsdk_gap50_fall.gif) |
 | step03/04・Step 05 と同じ(回帰なし) | プローブが横断前に検知 → 減速停止 | 安全フラグ 0 件のまま踏み込み → 転倒(2〜3/3 で再現) |
 
-失敗の切り分け:`max_crossable_gap` を 0.6→0.54 に下げても幅 0.5 m は落下のまま。
-`traversability` レイヤが `InpaintFilter`(`filter_chain.yaml`、radius 0.4)で
-埋めた `z_inpainted` から作られており、**幅 0.5〜0.6 m の穴は inpaint 半径
-0.4 m がほぼ橋渡ししてしまう** → プローブが「連続する危険帯」を取れない。
-幅 1.0 m 以上は中心が埋まらず谷が残るので検知できる。
+失敗の切り分け(**Step 09 の計測で確定・Step 08 の推測を訂正**):
+`traversability` は幅によらず穴の内側を正しく危険(NaN)にしている。危険帯の幅
+≈ 物理の穴幅で、50 cm → 0.50 m、100 cm → 1.00 m。**`max_crossable_gap` = 0.6 m が
+50 cm の危険帯(0.50 m)より大きいので「渡れる穴」に分類されて止めない。**
+100 cm(1.00 m)だけがしきい値を超えて安全停止する。Step 08 の 0.54 は 0.50 より
+大きく外れていただけで、**≤0.44 に下げれば 50 cm は捕まる**(「InpaintFilter が
+埋めるから」は誤りだった)。
 
-詳細:`steps/step_08_quadsdk_full_gap_sweep.md`
+詳細:`steps/step_09_terrain_grid_and_foothold_measurement.md`(セル計測)、
+`steps/step_08_quadsdk_full_gap_sweep.md`(スイープ)、
+`quadsdk_gap_foothold_probe_and_inpaint.md`(訂正版の解説)
 
 ---
 
 ## 教訓
 
-1. **閾値を疑う前に、その閾値が読む「データ」を疑う。**
-   `max_crossable_gap` をいくら調整しても幅 0.5 m の穴は止められなかった。
-   原因は 2 つ上流の `InpaintFilter` が穴を埋めていたこと。**症状の出る層
-   (foot placement)ではなく、データを作る層(perception のフィルタ連鎖)を
-   最初に確認すべきだった。**
-2. **「小さい穴を渡れる」と「中サイズの穴で転ぶ」は同じ原因。**
-   Step 05 で 15 cm 穴を跨げたのは inpaint が穴を埋めて「ほぼ平地」に見せて
-   いたから。同じ仕組みが 50 cm では「渡れる地面に見えるが実際は落ちる」に
-   化ける。**都合よく働いた機構は、条件が変わると牙をむく。**
+1. **「データを疑う」も、実データを計測してから言う。**
+   Step 08 と初版の解説 doc は「`InpaintFilter` が `traversability` まで穴を
+   埋める」と**推測で**書いたが、Step 09 でセル値を実測すると **穴の内側は幅に
+   よらず正しく NaN(危険)** だった。本当の原因は「しきい値 0.6 m が物理幅
+   0.5 m の危険帯より大きい」+「既定では幅チェック自体が走らない」の 2 つ。
+   **推測で原因を確定させず、1 段ずつ値を出してから結論すべきだった。**
+2. **しきい値の妥当性は、実際の帯幅と並べて初めて分かる。**
+   `traversability` の危険帯 ≈ 物理の穴幅、という規則性は計測するまで見えなかった。
+   規則が分かれば「`max_crossable_gap` を ~0.44 に下げれば直る」まで一直線。
 3. **地図の帯幅 ≠ 物理の穴幅。** 生成器ごとに `MESH_MARGIN` が違い
    (step03/04 は 0.10、他は 0.05)、物理 0.30 m の穴が地図では 0.50 m、
    物理 0.40 m の穴も地図では 0.50 m。**マップ座標で線を引くと物理的な意味と
@@ -176,7 +183,8 @@ Phase 4(`IK_UNREACHABLE`)の単体確認は `steps/step_07_quadsdk_phase4_ik_rea
 | Step 05b | 単独トレンチ 10 m / 100 cm | `edge_clearance:0.15` | 手前で直立停止 | 2A + 3(A)(+ 2B で滑らかに) |
 | Step 06 | 15 cm 穴 ×2 → 1 m 穴 | `edge_clearance:0.15` | 15 cm 穴群の手前で直立静止(3/3) | 2A + 3(A) + **2B** |
 | Step 07 | 30 cm / 100 cm × ik OFF/ON + 専用地形 | `ik_reach_check:0/1` | 30 cm は ON でも渡り切る(機能後退なし)、100 cm は停止、専用地形は ON で `IK_UNREACHABLE`→停止/OFF は転倒 | 2A + 2B + **4** |
-| **Step 08** | 穴数・平地幅・穴幅を振った 18 本 | `edge_clearance:0.15` | **16/18 OK**(≤0.30 m 渡る・≥1.0 m 停止)。**幅 0.4〜0.9 m は転倒**(InpaintFilter が穴を埋める) | 2A + 3(A) + 2B |
+| **Step 08** | 穴数・平地幅・穴幅を振った 18 本 | `edge_clearance:0.15` | **16/18 OK**(≤0.30 m 渡る・≥1.0 m 停止)。**幅 0.44〜0.60 m は転倒**(危険帯 ≈ 物理幅 < `max_crossable_gap` 0.6) | 2A + 3(A) + 2B |
+| **Step 09** | 15/25/30/35/50/100 cm を **セル単位で計測**(制御変更なし) | 出荷既定 | 50 cm 転倒の因果を確定:B(向こう岸スナップ)無し、`traversability` は穴内を正しく NaN、原因はしきい値と縁スナップ | 計装のみ |
 
 ---
 
@@ -200,9 +208,10 @@ Phase 4(`IK_UNREACHABLE`)の単体確認は `steps/step_07_quadsdk_phase4_ik_rea
   斜め穴・旋回は将来一般化)。
 - 実センサ(LiDAR/深度 → 地図)処理はこの repo に無い。「穴」と「未観測」の
   区別、地図の鮮度は Phase 6。
-- **幅 0.4〜0.9 m の穴(Step 08 の失敗)**:Phase 3 プローブが `InpaintFilter`
-  で埋まった `traversability` を読んでいるのが原因。**Phase 5 で生 elevation の
-  NaN を見るように直す**(または `InpaintFilter` の radius を下げる=影響範囲大)。
+- **幅 0.44〜0.60 m の穴(Step 08 の失敗)**:`max_crossable_gap` = 0.6 m が
+  危険帯(≈ 物理幅、50 cm で 0.50 m)より大きく「渡れる穴」に分類される +
+  既定で幅チェックが走らない。**候補:`max_crossable_gap` を ~0.44 へ、または
+  穴チェックを生 `z` の NaN で判定**(`steps/step_09_...md` §8)。
 - Phase 5(上記 + 大きな足場補正 = 大 snap 時の減速/刻み歩行)。
 
 ## 関連ドキュメント

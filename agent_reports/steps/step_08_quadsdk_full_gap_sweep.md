@@ -1,5 +1,15 @@
 # Step 08:穴の数・間隔・幅を変えた全シナリオ一括検証(回帰スイープ)
 
+> **訂正(Step 09、2026-09-02)**:本 Step の「真因は `InpaintFilter` が
+> `traversability` を埋めるから」は**誤り**。Step 09 のセル単位計測で、
+> 50 cm の穴の内側は `traversability = NaN`(正しく危険)だと確認した。
+> 本当の原因は「危険帯(≈ 物理幅 0.50 m)が `max_crossable_gap`(0.6 m)より
+> 小さいので渡れる穴に分類される」+「既定では幅チェック自体が走らない」。
+> `max_crossable_gap` を ~0.44 に下げれば 50 cm は捕まえられる(下で「しきい値
+> では直らない」としたのは誤り)。詳細:
+> `steps/step_09_terrain_grid_and_foothold_measurement.md`。以下の本文は
+> 実行当時の記録として残す。
+
 対象: `external/quad-sdk`(go2、`reference:=twist`、クロール歩容、0.3 m/s)。
 現行コード = Phase 2A(gate)+ Phase 3(A)(`EDGE_TOO_CLOSE` + 進行方向プローブ)+
 Phase 2B(graceful-stop latch + 前方 lookahead)+ Phase 4(`IK_UNREACHABLE`、既定 OFF)。
