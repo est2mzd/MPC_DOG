@@ -2,7 +2,93 @@
 
 #include <chrono>
 #include <cmath>
+#include <cstdio>
+#include <cstdlib>
+#include <fstream>
 #include <limits>
+
+namespace {
+
+// [MPC_DOG Step 09] Measurement-only. Enabled iff env MPCDOG_STEP09_DIR is set
+// and non-empty. Writes CSVs of the terrain-map layers and the per-touchdown
+// foothold selection so the "hole misread as safe" (A) vs "snapped to the far
+// side" (B) question can be answered from numbers, not guesses. Adds NOTHING to
+// the control path: no return value, cmd_vel, foothold or NMPC input changes.
+const char *step09Dir() {
+  static const char *d = std::getenv("MPCDOG_STEP09_DIR");
+  return (d != nullptr && d[0] != '\0') ? d : nullptr;
+}
+
+double step09Sample(const grid_map::GridMap &grid, const char *layer, double x,
+                    double y) {
+  const grid_map::Position p(x, y);
+  if (!grid.exists(layer) || !grid.isInside(p)) {
+    return std::numeric_limits<double>::quiet_NaN();
+  }
+  return grid.atPosition(layer, p);
+}
+
+// Dump the terrain-map row nearest y = 0 (the robot's path; the test trenches
+// are full-width in y so any row is representative). Written once per process.
+void step09DumpMapCrossSection(const grid_map::GridMap &grid,
+                               double obj_threshold, const std::string &dir) {
+  std::ofstream f(dir + "/step09_map_cross_section.csv");
+  if (!f) return;
+  f << "map_stamp,frame,cell_i,cell_j,x,y,z_raw,z_inpainted,z_smooth,slope,"
+       "roughness,hole_mask_recon,hole_mask_filtered,traversability,"
+       "traversability_mask,observed,inside_map,binary_safe\n";
+  const long stamp = static_cast<long>(grid.getTimestamp());
+  const std::string frame = grid.getFrameId();
+  const grid_map::Size sz = grid.getSize();
+  if (sz(0) == 0 || sz(1) == 0) return;
+  grid_map::Index c0;
+  int jc = grid.getIndex(grid_map::Position(0.0, 0.0), c0) ? c0(1) : sz(1) / 2;
+  auto lyr = [&](const char *n) -> const grid_map::Matrix * {
+    return grid.exists(n) ? &grid.get(n) : nullptr;
+  };
+  const grid_map::Matrix *Lz = lyr("z");
+  const grid_map::Matrix *Lzi = lyr("z_inpainted");
+  const grid_map::Matrix *Lzs = lyr("z_smooth");
+  const grid_map::Matrix *Lsl = lyr("slope");
+  const grid_map::Matrix *Lro = lyr("roughness");
+  const grid_map::Matrix *Ltr = lyr("traversability");
+  const grid_map::Matrix *Ltm = lyr("traversability_mask");
+  for (int i = 0; i < sz(0); ++i) {
+    grid_map::Position pos;
+    grid.getPosition(grid_map::Index(i, jc), pos);
+    const double z = Lz ? (*Lz)(i, jc) : std::numeric_limits<double>::quiet_NaN();
+    const double zi =
+        Lzi ? (*Lzi)(i, jc) : std::numeric_limits<double>::quiet_NaN();
+    const double zs =
+        Lzs ? (*Lzs)(i, jc) : std::numeric_limits<double>::quiet_NaN();
+    const double sl =
+        Lsl ? (*Lsl)(i, jc) : std::numeric_limits<double>::quiet_NaN();
+    const double ro =
+        Lro ? (*Lro)(i, jc) : std::numeric_limits<double>::quiet_NaN();
+    const double tr =
+        Ltr ? (*Ltr)(i, jc) : std::numeric_limits<double>::quiet_NaN();
+    const double tm =
+        Ltm ? (*Ltm)(i, jc) : std::numeric_limits<double>::quiet_NaN();
+    // hole_mask is deleted by filter_chain.yaml (filter16) before publish;
+    // reconstruct 1 - |z - z_inpainted| clamped to [0,1]. hole_mask_filtered
+    // (the 0.075 m mean) is NOT recoverable -> emitted as nan.
+    double hm = std::numeric_limits<double>::quiet_NaN();
+    if (std::isfinite(z) && std::isfinite(zi)) {
+      hm = std::max(0.0, std::min(1.0, 1.0 - std::abs(z - zi)));
+    }
+    const int observed = std::isfinite(z) ? 1 : 0;
+    const int safe = (std::isfinite(tr) && tr > obj_threshold) ? 1 : 0;
+    char buf[512];
+    std::snprintf(buf, sizeof(buf),
+                  "%ld,%s,%d,%d,%.4f,%.4f,%.5f,%.5f,%.5f,%.5f,%.5f,%.5f,nan,"
+                  "%.5f,%.5f,%d,1,%d\n",
+                  stamp, frame.c_str(), i, jc, pos.x(), pos.y(), z, zi, zs, sl,
+                  ro, hm, tr, tm, observed, safe);
+    f << buf;
+  }
+}
+
+}  // namespace
 
 LocalFootstepPlanner::LocalFootstepPlanner(rclcpp::Node::SharedPtr node)
     : node_(node) {}
@@ -195,6 +281,12 @@ FootPlanResult LocalFootstepPlanner::computeFootPlan(
     }
     ++plan_result.failed_count;
   };
+
+  // [MPC_DOG Step 09] measurement-only: collect per-touchdown foothold rows.
+  const char *s09_dir = step09Dir();
+  std::vector<std::string> s09_foot_rows;
+  const char *kS09Legs[4] = {"FL", "BL", "FR", "BR"};
+
   // Place new footholds at touchdown events.
   for (int j = 0; j < num_feet_; j++) {
     for (size_t i = 1; i < contact_schedule.size(); i++) {
@@ -312,6 +404,45 @@ FootPlanResult LocalFootstepPlanner::computeFootPlan(
           record_foothold_failure(foothold.status, j, static_cast<int>(i));
           foot_positions.block<1, 3>(i, 3 * j) =
               getFootData(foot_positions, i - 1, j);
+        }
+
+        // [MPC_DOG Step 09] record what was selected + the raw-layer values at
+        // the selected cell (answers: hole misread as safe, or snapped away).
+        if (s09_dir != nullptr) {
+          const double sx = foothold.position.x(), sy = foothold.position.y();
+          const double s_zraw = step09Sample(terrain_grid_, "z", sx, sy);
+          const double s_zinp = step09Sample(terrain_grid_, "z_inpainted", sx,
+                                             sy);
+          const double s_trav =
+              step09Sample(terrain_grid_, obj_fun_layer_.c_str(), sx, sy);
+          double s_hm = std::numeric_limits<double>::quiet_NaN();
+          if (std::isfinite(s_zraw) && std::isfinite(s_zinp)) {
+            s_hm = std::max(0.0, std::min(1.0, 1.0 - std::abs(s_zraw - s_zinp)));
+          }
+          const int s_obs = std::isfinite(s_zraw) ? 1 : 0;
+          const int s_safe =
+              (std::isfinite(s_trav) && s_trav > foothold_obj_threshold_) ? 1 : 0;
+          char rb[768];
+          // 20 columns, matching the header written at flush time.
+          std::snprintf(
+              rb, sizeof(rb),
+              "%.4f,%ld,%s,%s,%zu,%.4f,"      // time,stamp,frame,leg,td_idx,td_time
+              "%.5f,%.5f,%.5f,"               // nominal_x, nominal_y, nominal_trav
+              "%.5f,%.5f,%.5f,"               // selected_x, selected_y, selected_z
+              "%.5f,%.5f,%.5f,"               // sel_z_raw, sel_z_inpainted, sel_hole_mask
+              "%d,%d,"                        // sel_observed, sel_binary_safe
+              "%.5f,%.5f,%d",                 // snap_distance, hip_distance, status
+              node_->now().seconds(),
+              static_cast<long>(terrain_grid_.getTimestamp()),
+              terrain_grid_.getFrameId().c_str(), kS09Legs[j], i,
+              (current_plan_index + static_cast<int>(i)) * dt_,
+              foot_position_nominal.x(), foot_position_nominal.y(),
+              foothold.traversability_nominal, foothold.position.x(),
+              foothold.position.y(), foothold.position.z(), s_zraw, s_zinp, s_hm,
+              s_obs, s_safe, foothold.snap_distance,
+              (foothold.position - hip_position_midstance).norm(),
+              static_cast<int>(foothold.status));
+          s09_foot_rows.emplace_back(rb);
         }
 
       } else {
@@ -507,6 +638,31 @@ FootPlanResult LocalFootstepPlanner::computeFootPlan(
         diag_cfp_calls, diag_new_contacts, diag_snap_calls, diag_outside,
         current_plan_index, contact_schedule.size());
   }
+
+  // [MPC_DOG Step 09] measurement-only: flush the per-touchdown rows (append)
+  // and, once, the terrain-map cross-section. No effect on plan_result.
+  if (s09_dir != nullptr) {
+    const std::string foot_path = std::string(s09_dir) + "/step09_footholds.csv";
+    const bool need_header = !std::ifstream(foot_path).good();
+    std::ofstream ff(foot_path, std::ios::app);
+    if (ff) {
+      if (need_header) {
+        ff << "time,map_stamp,frame,leg,touchdown_index,touchdown_time,"
+              "nominal_x,nominal_y,nominal_traversability,selected_x,selected_y,"
+              "selected_z,selected_z_raw,selected_z_inpainted,"
+              "selected_hole_mask_recon,selected_observed,selected_binary_safe,"
+              "snap_distance,hip_distance,foothold_status\n";
+      }
+      for (const auto &r : s09_foot_rows) ff << r << "\n";
+    }
+    static bool s09_map_done = false;
+    if (!s09_map_done && terrain_grid_.getSize()(0) > 0 &&
+        terrain_grid_.exists("traversability")) {
+      step09DumpMapCrossSection(terrain_grid_, foothold_obj_threshold_, s09_dir);
+      s09_map_done = true;
+    }
+  }
+
   return plan_result;
 }
 
