@@ -174,6 +174,7 @@ void LocalPlanner::initLocalFootstepPlanner() {
       period_d, foothold_search_radius, foothold_obj_threshold;
   double edge_clearance = 0.0;      // Phase 3; 0 = disabled (pre-Phase-3)
   double max_crossable_gap = 0.6;   // Phase 3 crossability reach, m
+  bool ik_reach_check = false;      // Phase 4; false = disabled (pre-Phase-4)
   std::string obj_fun_layer;
   int period;
   std::vector<double> duty_cycles, phase_offsets;
@@ -203,6 +204,8 @@ void LocalPlanner::initLocalFootstepPlanner() {
       node_, "local_footstep_planner.edge_clearance", edge_clearance, 0.0);
   quad_utils::loadROSParamDefault(
       node_, "local_footstep_planner.max_crossable_gap", max_crossable_gap, 0.6);
+  quad_utils::loadROSParamDefault(
+      node_, "local_footstep_planner.ik_reach_check", ik_reach_check, false);
 
   period = period_d / dt_;
 
@@ -220,7 +223,7 @@ void LocalPlanner::initLocalFootstepPlanner() {
   local_footstep_planner_->setSpatialParams(
       ground_clearance, hip_clearance, grf_weight, standing_error_threshold,
       quadKD_, foothold_search_radius, foothold_obj_threshold, obj_fun_layer,
-      toe_radius_, edge_clearance, max_crossable_gap);
+      toe_radius_, edge_clearance, max_crossable_gap, ik_reach_check);
 
   past_footholds_msg_.feet.resize(num_feet_);
 }
