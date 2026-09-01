@@ -32,6 +32,7 @@ run() { # world tag dur
 run flat_wide             flat  25
 run flat_repgap_s15g15n3  r15   30
 run flat_gaps_2m          g30   30
+  run flat_trench_s09_30    t30   30
 run flat_trench_s09_50    g50   25
 run flat_trench_s09_100   g100  25
 echo "STEP12 MEASURE DONE -> $OUT"

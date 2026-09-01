@@ -247,7 +247,35 @@ Phase 4 と同じ 3D 距離 + 粗い前後左右ボックス)**+ 安全**(`trave
 
 ---
 
-### 現在の到達点(Step 11 時点):できること / できないこと
+#### Step 12:複数歩足場列の探索(shadow・制御変更なし)
+
+5 サイクルに 1 回、クロール順(`FL→BR→FR→BL`)で胴体を前方投影しながら 1 歩ずつ
+足場を置き、判定を出す(`FEASIBLE_TO_RANGE` / `BLOCKED_AT_STEP_K` / `UNKNOWN_BEFORE_RANGE`)。
+幅 1 の貪欲 + ステップ長上限 0.45 m。詳細は
+[Step 12 の検証記録](./agent_reports/steps/step_12_multistep_foothold_sequence_shadow.md)。
+
+**タスク結果:判定の推移(緑=FEASIBLE / 赤=BLOCKED)+ 1 サイクル分の予定足場列**
+
+![Step12 50cm 判定推移+予定足場列](./artifacts/step12/g50/step12_g50.png)
+
+50 cm 穴:胴体が近づくと判定が緑 → 赤に移り、予定足場列は穴の近縁 x=2.0 で止まる。
+
+| 地形 | 判定 | BLOCKED の k | 計算時間 中央値/最大 |
+|---|---|---|---|
+| 平地 | FEASIBLE 100 % | – | 0.6 / 3.4 ms |
+| 連続 15 cm | FEASIBLE 87 %(BLOCKED 0) | – | 0.6 / 3.3 ms |
+| 30 cm 単独 | FEASIBLE 72 % | 4〜31 | 0.6 / 2.6 ms |
+| 30 cm `flat_gaps_2m` | ⚠️ BLOCKED 60 %(保守的・§10) | 4〜31 | 0.5 / 1.9 ms |
+| **50 cm** | **BLOCKED 47 %**(接近で k 減少) | 4〜30 | 0.6 / 3.7 ms |
+| **100 cm** | **BLOCKED 47 %** | 2〜30 | 0.5 / 1.8 ms |
+
+計算時間は周期(≈33 ms)に十分収まる。50/100 cm で `BLOCKED_AT_STEP_K` が
+取れたので Step 13(停止余裕 M 歩)へ。`flat_gaps_2m`(危険帯 0.40 m)が保守的に
+BLOCK する件は MESH_MARGIN 由来で既知(Step 13〜15 で精緻化)。
+
+---
+
+### 現在の到達点(Step 12 時点):できること / できないこと
 
 **できること**
 

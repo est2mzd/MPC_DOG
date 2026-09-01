@@ -38,18 +38,21 @@ for d in sorted(p for p in os.listdir(root) if os.path.isdir(os.path.join(root, 
         r["max_feasible_progress_m"] = float(r["max_feasible_progress_m"])
         r["compute_time_us"] = float(r["compute_time_us"])
         r["blocked_step_k"] = int(r["blocked_step_k"])
-    # "walking" = drop the leading rows where progress is ~0 for many cycles
-    # (STAND). Use rows after the first with progress > 0.3 m.
-    i0 = next((i for i, r in enumerate(seq)
-               if r["max_feasible_progress_m"] > 0.3), 0)
-    walk = seq[i0:]
+    # meaningful verdicts: FEASIBLE, or BLOCKED at k>0 (a real gap ahead).
+    # BLOCKED at k=0 is the STAND phase or a post-fall pose -> noise, dropped.
+    walk = [r for r in seq
+            if r["verdict"] == "FEASIBLE_TO_RANGE"
+            or (r["verdict"] == "BLOCKED_AT_STEP_K" and r["blocked_step_k"] > 0)
+            or r["verdict"] == "UNKNOWN_BEFORE_RANGE"]
     mix = Counter(r["verdict"] for r in walk)
     total = sum(mix.values()) or 1
     mixs = "  ".join(f"{k.split('_')[0]}:{v*100//total}%" for k, v in mix.most_common())
-    cts = sorted(r["compute_time_us"] for r in walk)
+    bk = [r["blocked_step_k"] for r in walk if r["verdict"] == "BLOCKED_AT_STEP_K"]
+    bk_rng = f"k={min(bk)}..{max(bk)}" if bk else "-"
+    cts = sorted(r["compute_time_us"] for r in seq)
     med = cts[len(cts) // 2] if cts else 0
     mx = cts[-1] if cts else 0
-    print(f"{d:>6} | {mixs:>52} | {med:8.0f} / {mx:8.0f}")
+    print(f"{d:>6} | {mixs+'  '+bk_rng:>52} | {med:8.0f} / {mx:8.0f}")
 
     # ---- plot: verdict strip over cycles + a planned foothold sequence ----
     fig, (a1, a2) = plt.subplots(2, 1, figsize=(9.0, 4.4),
@@ -68,10 +71,14 @@ for d in sorted(p for p in os.listdir(root) if os.path.isdir(os.path.join(root, 
         for r in frows:
             r["x"] = float(r["x"])
             r["step_k"] = int(r["step_k"])
-        cyc = Counter(r["current_plan_index"] for r in frows)
-        # pick a mid-run cycle that has the most planned steps
-        best_c = max(cyc, key=lambda c: cyc[c])
-        pick = [r for r in frows if r["current_plan_index"] == best_c]
+        bycyc = {}
+        for r in frows:
+            bycyc.setdefault(r["current_plan_index"], []).append(r)
+        # pick the cycle whose planned footholds span the widest x range
+        best_c = max(bycyc,
+                     key=lambda c: max(x["x"] for x in bycyc[c]) -
+                     min(x["x"] for x in bycyc[c]))
+        pick = bycyc[best_c]
         for r in pick:
             a2.scatter(r["x"], r["step_k"], s=45, c=LEGCOL.get(r["leg"], "k"),
                        edgecolors="k", linewidths=0.4)
