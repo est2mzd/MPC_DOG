@@ -1,0 +1,1 @@
+951:[local_planner_node-1] [WARN] [1788306493.796088594] [robot_1.local_planner]: [safe-stop] latching graceful stop: uncrossable gap within 2.50 m ahead of the body

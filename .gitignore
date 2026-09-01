@@ -131,6 +131,7 @@ artifacts/logs/quadsdk_quadsdk_step09regr_*/
 artifacts/logs/quadsdk_quadsdk_step10_*/
 artifacts/logs/quadsdk_quadsdk_step11_*/
 artifacts/logs/quadsdk_quadsdk_step12_*/
+artifacts/logs/quadsdk_quadsdk_step13_*/
 # Step 09 raw dumps: keep the two CSVs, the cross-section PNG, and the per-trench
 # GIF; drop the bulky per-tick sim log / console log / intermediate mp4.
 artifacts/step09/*/state_log.csv
@@ -142,6 +143,8 @@ artifacts/step11/*/state_log.csv
 artifacts/step11/*/run.log
 artifacts/step12/*/state_log.csv
 artifacts/step12/*/run.log
+artifacts/step13/*/state_log.csv
+artifacts/step13/*/run.log
 artifacts/logs/quadsdk_quadsdk_p4x_*/
 # Step 10+ shared dump dir emits step09/step10/step11/... files regardless of
 # which step is running; keep only each dir's own step file.

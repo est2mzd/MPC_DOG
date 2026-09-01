@@ -275,7 +275,39 @@ BLOCK する件は MESH_MARGIN 由来で既知(Step 13〜15 で精緻化)。
 
 ---
 
-### 現在の到達点(Step 12 時点):できること / できないこと
+#### Step 13:停止距離の同定と M 歩マージン(shadow・制御変更なし)
+
+平地で latch → 停止させて `d_stop` を実測し、`d_stop = v·t_delay + v²/2a_safe` から
+`a_safe ≈ 0.44 m/s²` を同定。`required_stop_steps = ceil(d_stop / (v·0.225))` →
+`final_stop_steps = max(M, required)`。Step 12 の `BLOCKED_AT_STEP_K` に当てて
+shadow の `PASS / SLOW / STOP_REQUEST` を出す。詳細は
+[Step 13 の検証記録](./agent_reports/steps/step_13_step_margin_and_stopping_distance.md)。
+
+**タスク結果:速度 → 必要停止距離・歩数**(`scripts/trial/step13_analyze.py`)
+
+![Step13 停止距離](./artifacts/step13/step13_stopping_distance.png)
+
+| v | 実測 d_stop | 保守 d_stop | required_stop_steps |
+|---:|---:|---:|---:|
+| 0.30 m/s | **0.092 m** | 0.26 m | 4 |
+| 0.50 m/s | **0.118 m** | 0.48 m | 5 |
+
+d_stop は v とともに増える。**latch 後の物理減速は 0.1 m 程度と短い**(既存の
+`safe_stop_lookahead` が穴の ~1.9 m 手前で先に latch するため)。
+
+shadow 挙動(v=0.30、`final_stop_steps=4`):
+
+| 地形 | STOP_REQUEST | SLOW | |
+|---|---:|---:|---|
+| 平地 / 15 cm 連続 / 30 cm 単独 | **0 %** | 0〜14 % | ✅ 不要な停止を出さない |
+| 50 cm / 100 cm | 5 % | 34〜35 % | ✅ 遠くで SLOW → 近づいて STOP_REQUEST |
+
+⚠️ STOP_REQUEST 点のマージンは +0.01 m と薄い(d_stop が小さいため)。
+`stop_margin_steps` M を 2 → 4〜6 に上げるのが Step 14 の課題。
+
+---
+
+### 現在の到達点(Step 13 時点):できること / できないこと
 
 **できること**
 
