@@ -222,7 +222,32 @@ env ガード計装で 15/25/30/35/50/100 cm の地図断面 CSV + 足場 CSV �
 
 ---
 
-### 現在の到達点(Step 10 時点):できること / できないこと
+#### Step 11:1 歩の可到達領域と安全足場候補の列挙(shadow・制御変更なし)
+
+各脚の hip 周りの地図セルを走査し、**reach 内**(`‖セル − hip‖ ≤ ik_max_reach`、
+Phase 4 と同じ 3D 距離 + 粗い前後左右ボックス)**+ 安全**(`traversability > 0.6`、
+足裏 4 近傍も安全)**+ 観測済み**(生 `z` 有限)を満たす数 `n_valid` を記録。詳細は
+[Step 11 の検証記録](./agent_reports/steps/step_11_reachable_safe_foothold_candidates.md)。
+
+**タスク結果:前脚の有効足場候補数 `n_valid` vs hip 位置**(`scripts/trial/step11_analyze.py`)
+
+| 30 cm 穴:候補が残る(最小 43) | 100 cm 穴:穴の手前で 0 に落ちる |
+|---|---|
+| ![Step11 30cm](./artifacts/step11/g30/step11_g30_n_valid.png) | ![Step11 100cm](./artifacts/step11/g100/step11_g100_n_valid.png) |
+
+| 地形 | `n_valid` 最小(穴の近く) | 選択足場が全判定を通る率 | |
+|---|---:|---:|---|
+| 平地 | 131 | 100 % | ✅ |
+| 30 cm 穴 | **43** | 32 % | ✅ 候補は残る(縁足場が選ばれるのは選択ロジックの問題=Step 12〜) |
+| 50 cm 穴 | **0** | 17 % | ✅ 向こう岸は reach 外 |
+| 100 cm 穴 | **0** | 0 % | ✅ 穴全域で候補なし |
+
+→ 「30 cm は候補が残る / 50・100 cm は候補が消える」という Step 12(複数歩足場列)が
+`BLOCKED_AT_STEP_K` を出すための信号が取れた。
+
+---
+
+### 現在の到達点(Step 11 時点):できること / できないこと
 
 **できること**
 

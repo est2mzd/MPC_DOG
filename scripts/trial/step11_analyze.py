@@ -60,9 +60,17 @@ for d in sorted(p for p in os.listdir(root) if os.path.isdir(os.path.join(root, 
     rows = load(cp)
     front = [r for r in rows if r["leg"] in ("FL", "FR")]
 
-    # crude "near the gap" window: front-leg rows whose hip_x is in [1.4, 2.6]
-    # (gaps in the test worlds start at x=2.0). flat has no gap -> use all.
-    near = [r for r in front if 1.4 <= r["hip_x"] <= 2.8] or front
+    # gap x-bands per world: flat_gaps_2m (g30) has 0.30 m gaps at x~1.0 and ~3.0;
+    # the single-trench worlds (g50/g100) have the void starting at x=2.0.
+    GAPS = {
+        "g30": [(0.85, 1.15), (2.85, 3.15)],
+        "g50": [(2.0, 2.55)],
+        "g100": [(2.0, 3.05)],
+        "flat": [],
+    }
+    bands = GAPS.get(d, [])
+    near = [r for r in front
+            if any(lo - 0.25 <= r["hip_x"] <= hi + 0.05 for lo, hi in bands)] or front
     nv_min = min((r["n_valid"] for r in near), default=float("nan"))
     nv_med = sorted(r["n_valid"] for r in front)[len(front) // 2] if front else float("nan")
     sel_pass_rate = (sum(r["sel_passes_all"] for r in near) / len(near)) if near else float("nan")
@@ -80,17 +88,21 @@ for d in sorted(p for p in os.listdir(root) if os.path.isdir(os.path.join(root, 
 
     fig, ax = plt.subplots(figsize=(8.8, 3.0))
     for lg in ("FL", "FR"):
-        pts = [(r["time"], r["n_valid"]) for r in rows if r["leg"] == lg]
-        pts.sort()
+        pts = sorted((r["hip_x"], r["n_valid"]) for r in rows if r["leg"] == lg)
         if pts:
-            ax.plot([p[0] - pts[0][0] for p in pts], [p[1] for p in pts], ".-",
-                    ms=3, lw=0.8, color=COL[lg], label=f"{lg} n_valid")
+            ax.plot([p[0] for p in pts], [p[1] for p in pts], ".", ms=3,
+                    color=COL[lg], label=f"{lg} n_valid")
     ax.axhline(0, color="k", lw=0.6)
-    ax.set_xlabel("経過時間 [s](計画サイクル)")
+    for k, (lo, hi) in enumerate(bands):
+        ax.axvspan(lo, hi, color="0.5", alpha=0.28,
+                   label=("物理 void" if k == 0 else None))
+    ax.set_xlabel("前脚 hip の x 位置 [m]")
     ax.set_ylabel("到達可能・安全・観測済み\n候補セル数 n_valid")
     ttl = {"flat": "平地", "g30": "30 cm 穴", "g50": "50 cm 穴",
            "g100": "100 cm 穴"}.get(d, d)
-    ax.set_title(f"Step 11: {ttl} — 前脚(FL/FR)の有効足場候補数")
+    ax.set_title(f"Step 11: {ttl} — 前脚(FL/FR)の有効足場候補数 vs hip 位置")
+    if d != "flat":
+        ax.set_xlim(0.4, 4.2)
     ax.legend(fontsize=8)
     fig.tight_layout()
     fig.savefig(os.path.join(root, d, f"step11_{d}_n_valid.png"), dpi=120)
