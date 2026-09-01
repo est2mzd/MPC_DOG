@@ -26,7 +26,7 @@
  - [穴対応 Foot Placement 改善:**全体の考え方(概観)** — 安全のための 4 段(認識/足場選択/gate/停止シーケンス)、フェーズ ↔ 何を足したか ↔ どのシナリオで確かめたか、シナリオ一覧と現状、ユーザー判断の履歴](./agent_reports/quadsdk_gap_foothold_overview.md)
  - [穴対応 Foot Placement 改善:**試行錯誤の記録** — 外した見立て(15cm連続穴は成立困難 / gate だけで安全停止)、踏んだC++バグ(非voidの return 忘れ→UBで無限ループ / THROTTLE がms巨大値でログ0件)、Phase 3 を2回作り直した経緯、効いた作業のやり方](./agent_reports/quadsdk_gap_foothold_trial_and_error.md)
  - [穴対応:Foot Placement と NMPC 連携のコード解析(資料⇔コード照合表・terrain map の式・足場計画の入出力・NMPC への受け渡し・資料主張の再判定・改善フェーズ計画)](./agent_reports/quadsdk_gap_foothold_mpc_code_analysis.md)
- - [穴対応:**なぜ前方プローブは中サイズの穴を見逃すのか(データの流れとロジックの中身)** — 大学院初心者向け。PLY→grid_map→フィルタ連鎖(`InpaintFilter` radius 0.4)→`traversability`→プローブ A/B の疑似コード、30/40/50/100 cm でレイヤ断面がどう変わるか、危険帯 0.35〜0.9 m、`MESH_MARGIN` の落とし穴、Phase 5 の直し方](./agent_reports/quadsdk_gap_foothold_probe_and_inpaint.md)
+ - [穴対応:**なぜ穴の自動検知は中サイズの穴を見逃すのか(データの流れとロジックの中身)** — 大学院初心者向け。PLY→grid_map→フィルタ連鎖(穴埋め処理 radius 0.4)→「安全度」レイヤ→穴チェック①/②の疑似コード、30/40/50/100 cm で安全度の断面がどう変わるか、危険帯 0.35〜0.9 m、`MESH_MARGIN` の落とし穴、Phase 5 の直し方](./agent_reports/quadsdk_gap_foothold_probe_and_inpaint.md)
  - [穴対応 Foot Placement 改善:フェーズ実施ログ(何をどのコミットで変えたか。Phase 0 資料訂正 / Phase 1 FootholdResult 診断値)](./agent_reports/quadsdk_gap_foothold_phase_progress.md)
  - [穴対応 Foot Placement 改善:次チャットへの引き継ぎ(現状・次の 1 ステップ・Phase 2A をブロックしている確認事項・守るべきルール・ファイルの場所)](./agent_reports/handoff/quadsdk_gap_foothold_handoff.md)
  - [Step 03_1m / 04_1m:1m 深の穴を「足を入れずに」複数本連続で渡る(成功／歩容をクロールに調整・大学院初心者向け解説つき)](./agent_reports/steps/step_03_04_1m_quadsdk_gap_crossing.md)
