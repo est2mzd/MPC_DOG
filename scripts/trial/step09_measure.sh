@@ -5,6 +5,11 @@
 # The local_planner.yaml is NOT touched: this runs the repo exactly as it sits.
 set -u
 cd /home/takuya/work/mpc_dog
+# The repo .venv is Python 3.11 but ROS Jazzy's rclpy needs the system 3.12,
+# so the CSV state-logger crashes if the venv shadows python3. Strip it.
+unset VIRTUAL_ENV
+export PATH="/usr/bin:/bin:/usr/local/bin:${PATH}"
+hash -r 2>/dev/null || true
 SRC=external/quad-sdk/quad_simulator/quad_sim_scripts
 INST=ros2_ws/install/quad_sim_scripts/share/quad_sim_scripts
 OUT=artifacts/step09

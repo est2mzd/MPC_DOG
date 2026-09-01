@@ -4,6 +4,11 @@
 # max_crossable_gap is already 0.54 in the yaml.
 set -u
 cd /home/takuya/work/mpc_dog
+# The repo .venv is Python 3.11 but ROS Jazzy's rclpy needs the system 3.12,
+# so the CSV state-logger crashes if the venv shadows python3. Strip it.
+unset VIRTUAL_ENV
+export PATH="/usr/bin:/bin:/usr/local/bin:${PATH}"
+hash -r 2>/dev/null || true
 YAML=external/quad-sdk/local_planner/config/local_planner.yaml
 SCR=/tmp/claude-1000/-home-takuya-work-mpc-dog/f8678bee-2e6d-4ffb-b961-f3221713cee3/scratchpad
 INST=ros2_ws/install/quad_sim_scripts/share/quad_sim_scripts
