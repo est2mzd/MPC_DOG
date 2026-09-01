@@ -136,7 +136,8 @@ class LocalFootstepPlanner {
                         std::string obj_fun_layer, double toe_radius,
                         double edge_clearance = 0.0,
                         double max_crossable_gap = 0.6,
-                        bool ik_reach_check = false);
+                        bool ik_reach_check = false,
+                        double ik_max_reach = 0.45);
 
   /**
    * @brief Transform a vector of foot positions from the world to the body
@@ -383,16 +384,15 @@ class LocalFootstepPlanner {
    * return value in every case; only the extra fields are new.
    * @param[in] foot_position Nominal foothold to optimize around
    * @param[in] foot_position_prev_solve Foothold in prior solve
-   * @param[in] leg_index Leg this foothold is for (Phase 4 IK check); -1 skips
-   * @param[in] body_pos Body position at the touchdown (Phase 4 IK check)
-   * @param[in] body_rpy Body roll/pitch/yaw at the touchdown (Phase 4 IK check)
+   * @param[in] leg_index Leg this foothold is for (Phase 4 reach check); -1 skips
+   * @param[in] hip_world World-frame hip this foothold supports during stance
+   * (the midstance hip from computeFootPlan) -- Phase 4 reach check
    * @return FootholdResult with position + status + diagnostics
    */
   FootholdResult getNearestValidFootholdResult(
       const Eigen::Vector3d& foot_position,
       const Eigen::Vector3d& foot_position_prev_solve, int leg_index = -1,
-      const Eigen::Vector3d& body_pos = Eigen::Vector3d::Zero(),
-      const Eigen::Vector3d& body_rpy = Eigen::Vector3d::Zero()) const;
+      const Eigen::Vector3d& hip_world = Eigen::Vector3d::Zero()) const;
 
   /**
    * @brief Compute the minimum enclosing circle using Welzl's algorithm
@@ -570,11 +570,13 @@ class LocalFootstepPlanner {
   /// with no far side within this reach keep EDGE_TOO_CLOSE. Metres.
   double max_crossable_gap_ = 0.6;
 
-  /// Phase 4: when true, a VALID foothold is downgraded to IK_UNREACHABLE if
-  /// the existing leg IK cannot reach it exactly (too far, joint limits,
-  /// singular) from the predicted body pose at the touchdown. false disables
-  /// the check (pre-Phase-4 behaviour); needs a kinematics object.
+  /// Phase 4: when true, a VALID foothold whose distance from the leg's nominal
+  /// hip (at the predicted touchdown body pose) exceeds ik_max_reach_ is
+  /// downgraded to IK_UNREACHABLE. false disables the check (pre-Phase-4
+  /// behaviour); needs a kinematics object.
   bool ik_reach_check_ = false;
+  /// Phase 4: max hip-to-foothold distance treated as reachable, metres.
+  double ik_max_reach_ = 0.45;
 };
 
 #endif  // LOCAL_FOOTSTEP_PLANNER_H

@@ -41,7 +41,7 @@ void LocalFootstepPlanner::setSpatialParams(
     std::shared_ptr<quad_utils::QuadKD2> kinematics,
     double foothold_search_radius, double foothold_obj_threshold,
     std::string obj_fun_layer, double toe_radius, double edge_clearance,
-    double max_crossable_gap, bool ik_reach_check) {
+    double max_crossable_gap, bool ik_reach_check, double ik_max_reach) {
   ground_clearance_ = ground_clearance;
   hip_clearance_ = hip_clearance;
   standing_error_threshold_ = standing_error_threshold;
@@ -54,6 +54,7 @@ void LocalFootstepPlanner::setSpatialParams(
   edge_clearance_ = edge_clearance;
   max_crossable_gap_ = max_crossable_gap;
   ik_reach_check_ = ik_reach_check;
+  ik_max_reach_ = ik_max_reach;
 }
 
 void LocalFootstepPlanner::updateMap(const FastTerrainMap& terrain) {
@@ -300,8 +301,7 @@ FootPlanResult LocalFootstepPlanner::computeFootPlan(
             foot_positions.block<1, 3>(i, 3 * j);
         const FootholdResult foothold = getNearestValidFootholdResult(
             foot_position_nominal, foot_position_previous, j,
-            body_plan_stance.row(i).segment(0, 3),
-            body_plan_stance.row(i).segment(3, 3));
+            hip_position_midstance);
 
         if (foothold.status == FootholdStatus::VALID) {
           foot_positions.block<1, 3>(i, 3 * j) = foothold.position;
@@ -572,7 +572,7 @@ Eigen::Vector3d LocalFootstepPlanner::getNearestValidFoothold(
 FootholdResult LocalFootstepPlanner::getNearestValidFootholdResult(
     const Eigen::Vector3d& foot_position,
     const Eigen::Vector3d& foot_position_prev_solve, int leg_index,
-    const Eigen::Vector3d& body_pos, const Eigen::Vector3d& body_rpy) const {
+    const Eigen::Vector3d& hip_world) const {
   FootholdResult result;
   // Default = nominal, matching the prior "return nominal" fallback path.
   result.position = foot_position;
@@ -705,18 +705,17 @@ FootholdResult LocalFootstepPlanner::getNearestValidFootholdResult(
     }
   }
 
-  // Phase 4: is the chosen foothold actually reachable by this leg's IK from
-  // the predicted body pose at the touchdown? The footstep search can snap a
-  // foothold up to foothold_search_radius (0.7 m) away, well past the ~0.4 m
-  // leg reach, and NMPC does not check reach either. worldToFootIKWorldFrame()
-  // returns false when it had to clamp (too far / joint limit / singular);
-  // treat that as unreachable. ik_reach_check_ == 0 disables this.
+  // Phase 4: is the chosen foothold within this leg's reach? The footstep
+  // search can snap a foothold up to foothold_search_radius (0.7 m) away, past
+  // the leg's ~0.42 m full extension, and NMPC does not check reach either ->
+  // an unreachable foothold becomes a fixed NMPC parameter and the stance
+  // degenerates. Geometric check against the midstance hip this foot supports
+  // (passed in from computeFootPlan): a raw IK "not exact" flag was too noisy
+  // (it trips on every small clamp during normal walking). ik_reach_check_ == 0
+  // disables this.
   if (result.status == FootholdStatus::VALID && ik_reach_check_ &&
-      leg_index >= 0 && quadKD_ != nullptr) {
-    Eigen::Vector3d joint_state;
-    const bool exact = quadKD_->worldToFootIKWorldFrame(
-        leg_index, body_pos, body_rpy, result.position, joint_state);
-    if (!exact) {
+      leg_index >= 0) {
+    if ((result.position - hip_world).norm() > ik_max_reach_) {
       result.status = FootholdStatus::IK_UNREACHABLE;
     }
   }
