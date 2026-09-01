@@ -211,6 +211,18 @@ TEST(LocalPlannerTest, SafeStopLatchParamsLoad) {
   EXPECT_EQ(planner.safe_stop_horizon_, 12);
 }
 
+// Phase 4: ik_reach_check defaults off and can be turned on.
+TEST(LocalPlannerTest, IkReachCheckParamLoads) {
+  auto default_node = makeNode();
+  LocalPlanner default_planner(default_node);
+  EXPECT_FALSE(default_planner.local_footstep_planner_->ik_reach_check_);
+
+  auto on_node =
+      makeNode({rclcpp::Parameter("local_footstep_planner.ik_reach_check", true)});
+  LocalPlanner on_planner(on_node);
+  EXPECT_TRUE(on_planner.local_footstep_planner_->ik_reach_check_);
+}
+
 TEST(LocalPlannerTest, InitFootstepPlannerClampsInvalidGrfWeight) {
   auto high_node = makeNode(
       {rclcpp::Parameter("local_footstep_planner.grf_weight", 4.0)});
