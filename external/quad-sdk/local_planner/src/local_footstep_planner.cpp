@@ -92,6 +92,102 @@ void step09DumpMapCrossSection(const grid_map::GridMap &grid,
   }
 }
 
+// [MPC_DOG Step 11] Measurement-only: for one future touchdown, enumerate the
+// terrain-map cells that are (a) inside the leg's reach - the SAME 3D distance
+// test Phase 4 uses, `||cell - hip|| <= ik_max_reach`, plus a coarse fore/aft/
+// lateral box so it is not "spherical only" (instruction 2.3-6), (b) safe
+// (traversability > threshold) with all 4 orthogonal neighbours also safe
+// (foot-sole / edge margin), (c) observed (raw z finite; unknown != safe).
+// Appends one summary row per call. Nothing here feeds control.
+void step11EnumerateCandidates(const grid_map::GridMap &grid,
+                               const char *trav_layer, double obj_threshold,
+                               double toe_radius, const Eigen::Vector3d &hip,
+                               double ik_max_reach, double time_s, int plan_idx,
+                               const char *leg, size_t td_idx, double sel_x,
+                               double sel_y, const std::string &dir) {
+  const double R = (ik_max_reach > 0.0) ? ik_max_reach : 0.45;
+  const double res = std::max(grid.getResolution(), 1e-3);
+  // coarse go2 leg workspace box around the hip (documented as approximate)
+  const double fwd = 0.32, back = 0.28, lat = 0.26;
+  const bool have_z = grid.exists("z_inpainted");
+  const bool have_raw = grid.exists("z");
+  const bool have_tr = grid.exists(trav_layer);
+
+  auto trav_ok = [&](double x, double y) -> bool {
+    const grid_map::Position p(x, y);
+    if (!have_tr || !grid.isInside(p)) return false;
+    const double t = grid.atPosition(trav_layer, p);
+    return std::isfinite(t) && t > obj_threshold;
+  };
+
+  int n_reach = 0, n_safe = 0, n_valid = 0;
+  double min_valid_reach = std::numeric_limits<double>::quiet_NaN();
+  for (double x = hip.x() - back; x <= hip.x() + fwd + 1e-9; x += res) {
+    for (double y = hip.y() - lat; y <= hip.y() + lat + 1e-9; y += res) {
+      const grid_map::Position p(x, y);
+      if (!grid.isInside(p)) continue;
+      const double zc =
+          have_z ? grid.atPosition("z_inpainted", p) + toe_radius : 0.0;
+      const double d = std::sqrt((x - hip.x()) * (x - hip.x()) +
+                                 (y - hip.y()) * (y - hip.y()) +
+                                 (zc - hip.z()) * (zc - hip.z()));
+      if (d > R) continue;
+      ++n_reach;
+      if (!trav_ok(x, y)) continue;
+      ++n_safe;
+      const bool sole = trav_ok(x + res, y) && trav_ok(x - res, y) &&
+                        trav_ok(x, y + res) && trav_ok(x, y - res);
+      const double zr = have_raw ? grid.atPosition("z", p)
+                                 : std::numeric_limits<double>::quiet_NaN();
+      const bool observed = std::isfinite(zr);
+      if (sole && observed) {
+        ++n_valid;
+        if (!(min_valid_reach == min_valid_reach) || d < min_valid_reach)
+          min_valid_reach = d;
+      }
+    }
+  }
+
+  // does the actually-selected foothold pass the same tests?
+  int sel_reach = 0, sel_all = 0;
+  if (std::isfinite(sel_x) && std::isfinite(sel_y)) {
+    const grid_map::Position sp(sel_x, sel_y);
+    double szc =
+        (have_z && grid.isInside(sp))
+            ? grid.atPosition("z_inpainted", sp) + toe_radius
+            : 0.0;
+    const double sd = std::sqrt((sel_x - hip.x()) * (sel_x - hip.x()) +
+                                (sel_y - hip.y()) * (sel_y - hip.y()) +
+                                (szc - hip.z()) * (szc - hip.z()));
+    sel_reach = (sd <= R) ? 1 : 0;
+    const double szr = (have_raw && grid.isInside(sp)) ? grid.atPosition("z", sp)
+                                                      : std::nan("");
+    sel_all = (sel_reach && trav_ok(sel_x, sel_y) &&
+              trav_ok(sel_x + res, sel_y) && trav_ok(sel_x - res, sel_y) &&
+              trav_ok(sel_x, sel_y + res) && trav_ok(sel_x, sel_y - res) &&
+              std::isfinite(szr))
+                 ? 1
+                 : 0;
+  }
+
+  const std::string path = dir + "/step11_candidates.csv";
+  const bool hdr = !std::ifstream(path).good();
+  std::ofstream f(path, std::ios::app);
+  if (!f) return;
+  if (hdr) {
+    f << "time,current_plan_index,leg,touchdown_index,hip_x,hip_y,hip_z,"
+         "n_in_reach,n_safe,n_valid,min_valid_reach_dist,sel_x,sel_y,"
+         "sel_in_reach,sel_passes_all,ik_max_reach\n";
+  }
+  char b[384];
+  std::snprintf(b, sizeof(b),
+                "%.4f,%d,%s,%zu,%.5f,%.5f,%.5f,%d,%d,%d,%.5f,%.5f,%.5f,%d,%d,%.3f",
+                time_s, plan_idx, leg, td_idx, hip.x(), hip.y(), hip.z(), n_reach,
+                n_safe, n_valid, min_valid_reach, sel_x, sel_y, sel_reach,
+                sel_all, R);
+  f << b << "\n";
+}
+
 }  // namespace
 
 LocalFootstepPlanner::LocalFootstepPlanner(rclcpp::Node::SharedPtr node)
@@ -291,6 +387,9 @@ FootPlanResult LocalFootstepPlanner::computeFootPlan(
   std::vector<std::string> s09_foot_rows;
   const char *kS09Legs[4] = {"FL", "BL", "FR", "BR"};
 
+  // [MPC_DOG Step 11] enumerate reachable candidates once per leg per cycle.
+  bool s11_leg_done[4] = {false, false, false, false};
+
   // [MPC_DOG Step 10] measurement-only: reconstruct the future touchdown-event
   // list for each leg from the CURRENT gait phase (computeContactSchedule's own
   // output, which already tiles nominal_contact_schedule_ from
@@ -471,6 +570,24 @@ FootPlanResult LocalFootstepPlanner::computeFootPlan(
               (foothold.position - hip_position_midstance).norm(),
               static_cast<int>(foothold.status));
           s09_foot_rows.emplace_back(rb);
+        }
+
+        // [MPC_DOG Step 11] once per leg per plan cycle (the first touchdown of
+        // that leg in the horizon): enumerate reachable + safe + observed map
+        // cells around the leg's hip at this touchdown pose, and record whether
+        // the selected foothold passes the same tests. Shadow only.
+        if (s09_dir != nullptr && !s11_leg_done[j] &&
+            static_cast<int>(i) < body_plan.rows()) {
+          s11_leg_done[j] = true;
+          Eigen::Vector3d s11_hip;
+          quadKD_->worldToNominalHipFKWorldFrame(
+              j, body_plan.row(i).segment(0, 3),
+              body_plan.row(i).segment(3, 3), s11_hip);
+          step11EnumerateCandidates(
+              terrain_grid_, obj_fun_layer_.c_str(), foothold_obj_threshold_,
+              toe_radius_, s11_hip, ik_max_reach_, node_->now().seconds(),
+              current_plan_index, kS09Legs[j], i, foothold.position.x(),
+              foothold.position.y(), std::string(s09_dir));
         }
 
       } else {
