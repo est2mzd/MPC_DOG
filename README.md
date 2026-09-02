@@ -38,6 +38,11 @@
  - [Step 08:穴の数・間隔・幅を振った **全 18 シナリオの回帰スイープ** — 16/18 は期待どおり(≤30 cm は回帰なしで渡り・≥100 cm は手前で直立停止)。**~0.4〜0.9 m の穴で「渡れず・止まらず・転倒」**。※当初「真因は `InpaintFilter` が穴を埋めるから」としたが、Step 09 の計測で **誤りと判明**(下記/Step 09 参照)](./agent_reports/steps/step_08_quadsdk_full_gap_sweep.md)
  - [Step 09:Terrain Map と足場判断の **セル単位の定量計測**(制御変更なし、env ガード計装)— 15/25/30/35/50/100 cm の断面 CSV + 足場 CSV。**50 cm 転倒の因果を数値で確定**:向こう岸へのスナップ(B)は無し、`traversability` は穴の内側を正しく unsafe にしている。落ちるのは(1)既定 `edge_clearance:0` で幅チェックが走らず(2)スナップが **物理 void の縁 1 セル**(ぼかしで `traversability`=1.0 だが生 `z`=NaN)に足を置くため。`max_crossable_gap` を ≤0.44 に下げれば 50 cm は捕まる(Step 08 の「閾値では直らない」を訂正)](./agent_reports/steps/step_09_terrain_grid_and_foothold_measurement.md)
  - [なぜ 50 cm の穴で「数歩手前で止まる」がまだできないのか — **指示書 ↔ 実施の突き合わせ** — 指示書は Step 09〜16 の 8 段階で、「M 歩手前で停止」は Step 14 のゴール。いまは指示書 §9 が限定した **Step 09(計測のみ・制御不変)しか終えていない**ので止める処理が 1 行も入っていない。Step 10(未来脚順序)→11(到達可能な足場候補)→12(複数歩足場列)→13(停止余裕 M 歩)→14(graceful stop 接続)が必要](./agent_reports/steps/step_09b_why_50cm_not_stopping.md)
+ - [Step 10:現在の gait 位相から未来の脚着地順序・時刻を再構成(shadow・制御変更なし)。3 地形で脚順一致・間隔誤差 ≤3 ms](./agent_reports/steps/step_10_future_gait_event_prediction.md)
+ - [Step 11:1 歩の可到達領域と `traversability` 安全足場候補の列挙(shadow・制御変更なし)。30 cm は候補が残り、50/100 cm は候補が消える](./agent_reports/steps/step_11_reachable_safe_foothold_candidates.md)
+ - [Step 12:複数歩ぶんの足場列を前方へ探索し `BLOCKED_AT_STEP_K` を出す(shadow・制御変更なし)。判定は生 `z` の NaN 帯幅で行う](./agent_reports/steps/step_12_multistep_foothold_sequence_shadow.md)
+ - [Step 13:平地で latch → 停止させて `d_stop` を実測し `a_safe≈0.44 m/s²` を同定。`final_stop_steps = max(M, required)` を Step 12 の verdict に当てる(shadow・制御変更なし)](./agent_reports/steps/step_13_step_margin_and_stopping_distance.md)
+ - [Step 14:多歩足場列の判定を既存の Phase 2B graceful stop につなぐ(opt-in・**初めて制御パスに触れる**が全パラメータ既定 OFF)。`enabled:=true` + `apply_stop_request:=true` で **50/100 cm 空洞を 6/6 直立 SAFE-STOP・空洞縁まで ≈0.95 m の余裕**、15/30/35 cm は不要停止なし、feature OFF は Step 08 と一致](./agent_reports/steps/step_14_multistep_planner_safe_stop_integration.md)
 
 ### 実行例(時系列)
 
@@ -307,7 +312,43 @@ shadow 挙動(v=0.30、`final_stop_steps=4`):
 
 ---
 
-### 現在の到達点(Step 13 時点):できること / できないこと
+#### Step 14:多歩足場列の判定を graceful stop につなぐ(opt-in・初めて制御パスに触れる)
+
+Step 12 の `BLOCKED_AT_STEP_K` を Step 13 の M 歩マージンに当て、既存の Phase 2B
+graceful stop(`cmd_vel:=0` → STEP → STAND、plan は止めない)を発火させる。
+block が `final_stop_steps` 以内なら **停止**、より遠ければ `cmd_vel` を
+`slow_factor` 倍に **減速**(creep floor 0.12 m/s でクランプ)。新パラメータ
+`local_planner.multistep_planner`(`enabled` / `apply_stop_request` ほか)は
+**すべて既定 OFF**。詳細は
+[Step 14 の検証記録](./agent_reports/steps/step_14_multistep_planner_safe_stop_integration.md)。
+
+**タスク結果:停止位置(`scripts/trial/step14_analyze.py`、spawn x=−2.0、v=0.3 m/s、`edge_clearance` は 0)**
+
+![Step14 停止位置](./artifacts/step14/step14_stop_position.png)
+
+| シナリオ | mode | 判定 | 停止/最終 x | 空洞縁(x=2.0)までの余裕 |
+|---|---|---|---:|---:|
+| 50 cm 空洞 ×3 | ON | **SAFE-STOP**(直立) | 1.02 / 1.07 / 1.05 | 0.93〜0.98 m |
+| 100 cm 空洞 ×3 | ON | **SAFE-STOP**(直立) | 1.04 / 1.04 / 1.04 | 0.96 m |
+| 15 cm ×3 / 30 cm / 35 cm | ON | CROSSED(不要停止なし) | 6.88 / 8.02 / 5.43 | − |
+| 30 cm / 50 cm | OFF | CROSSED / FELL(= Step 08) | 8.35 / 2.09 | − |
+
+**試行錯誤(§9 に詳細)**:①block を `traversability` 候補数で決めていて 30/35 cm を
+誤停止 → **生 `z` の NaN 帯幅**(≥0.52 m で block)に差し替え。②`SLOW` を 333 Hz で
+毎周期 `×0.4` して指令速度が `0.4ⁿ` で潰れ、穴の 1.5 m 手前で失速 → **0.12 m/s の
+creep floor** でクランプ。③前方走査 1.5 m が長すぎて `STOP_REQUEST` が早すぎた
+(x=0.49) → NaN 帯は「1 歩の到達距離 `R`=0.45 m 以内で始まる」ときだけ block、
+走査も `R+帯幅+0.15 ≈ 1.12 m` に短縮 → 停止 x が 0.49 → 1.04 m、余裕 ≈0.95 m に収束。
+
+**Step 14 の結論**:多歩足場列プランナ ON(`enabled:=true` + `apply_stop_request:=true`)で
+**50/100 cm 空洞を 6/6 直立 SAFE-STOP、空洞の縁まで約 0.95 m の余裕**。渡れる
+15/30/35 cm は不要停止ゼロ。feature OFF は Step 08 と一致(30 cm 通過 / 50 cm 転倒)。
+`edge_clearance` を有効化しなくても、この 1 機能だけで 0.44〜0.60 m の「渡れず・
+止まらず・転倒」帯(Step 08〜13 の既知の穴)を塞げた。
+
+---
+
+### 現在の到達点(Step 14 時点):できること / できないこと
 
 **できること**
 
@@ -317,23 +358,25 @@ shadow 挙動(v=0.30、`final_stop_steps=4`):
 | **幅 ≤0.30 m の穴/溝を、足を入れずに複数本連続で渡る**(回帰なし) | Step 03/04、Step 05 |
 | **幅 ≥1.0 m の穴/断崖の手前で直立停止**(`edge_clearance:=0.15` 有効化時)。胴体前方 2.5 m をプローブ → `cmd_vel:=0` で減速 | Step 05b、Step 06 |
 | 脚が届かない足場の検知(`ik_reach_check:=true`、専用地形で確認。既定 OFF) | Step 07 |
+| **幅 0.44〜1.0 m の穴の手前で M 歩手前に直立停止**(`multistep_planner.enabled:=true` + `apply_stop_request:=true`、既定 OFF)。生 `z` の NaN 帯を着地脚ごとに前方 1 歩ぶん走査 → 遠い block は減速・近い block は Phase 2B 停止。50/100 cm で 6/6 直立停止・空洞縁まで ≈0.95 m の余裕、15/30/35 cm は不要停止なし | Step 10〜14 |
 
 **できないこと(既知の穴)**
 
 | 内容 | 詳細 |
 |---|---|
-| **幅およそ 0.44〜0.60 m の穴で「渡れず・止まらず・転倒」** | `max_crossable_gap`(0.6 m)が危険帯(≈ 物理幅 0.5 m)より大きく「渡れる穴」と誤判定。かつ既定 `edge_clearance:0` では幅チェック自体が走らず、足場が穴の縁セルにスナップして落ちる。→ `max_crossable_gap` を ~0.44 に下げるか、穴チェックを生 `z` の NaN で判定(**未着手**) |
-| 斜め穴・旋回中の穴 | プローブは +x 方向固定。全幅横断穴のみ対応 |
+| 幅およそ 0.44〜0.60 m の穴で「渡れず・止まらず・転倒」 | **既定 OFF のまま**なら Step 08〜13 と同じ(`max_crossable_gap` 0.6 m が危険帯より大きく「渡れる穴」と誤判定、`edge_clearance:0` で幅チェックも走らない)。`multistep_planner` を有効化すれば手前で直立停止する(Step 14) |
+| 斜め穴・旋回中の穴 | 前方走査は +x 方向固定。全幅横断穴のみ対応 |
 | 未観測領域と穴の区別 | 地図上どちらも `NaN`。「見えていない所」を安全と誤認しうる |
 | 実センサ(LiDAR/深度)からの地図生成 | この repo に無い(MuJoCo メッシュ由来のみ) |
-| 複数歩先の足場列計画・停止余裕の歩数換算 | 未実装(Step 10〜16 の対象) |
+| 計画した足場列を NMPC に渡して追従させる | 未実装。いまは shadow(判定のみ)+ 速度制限・停止のみ。足場の受け渡しは Step 15、全条件の回帰スイープは Step 16 |
 
 **安全機能のスイッチ(`local_planner.yaml` 既定)**:
 Phase 2A(無効足場を NMPC に渡さない)= **ON** /
 Phase 2B(検知時に減速停止)= **ON**(健全地形では no-op)/
 Phase 3(A)(渡れる穴/渡れない穴の区別、`edge_clearance`)= **OFF** /
-Phase 4(届かない足場の検知、`ik_reach_check`)= **OFF**。
-OFF の 2 つは、その実行で明示的に有効化したときだけ動く(既定では素の Quad-SDK 挙動)。
+Phase 4(届かない足場の検知、`ik_reach_check`)= **OFF** /
+多歩足場列プランナ(`multistep_planner.enabled` / `apply_stop_request`)= **OFF**。
+OFF の 3 つは、その実行で明示的に有効化したときだけ動く(既定では素の Quad-SDK 挙動)。
 
 1 枚まとめ:[まとめ doc](./agent_reports/quadsdk_gap_foothold_summary.md)。
 
