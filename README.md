@@ -346,8 +346,10 @@ creep floor** でクランプ。③前方走査 1.5 m が長すぎて `STOP_REQU
 **Step 14 の結論**:多歩足場列プランナ ON(`enabled:=true` + `apply_stop_request:=true`)で
 **50/100 cm 空洞を 6/6 直立 SAFE-STOP、空洞の縁まで約 0.95 m の余裕**。渡れる
 15/30/35 cm は不要停止ゼロ。feature OFF は Step 08 と一致(30 cm 通過 / 50 cm 転倒)。
-`edge_clearance` を有効化しなくても、この 1 機能だけで 0.44〜0.60 m の「渡れず・
-止まらず・転倒」帯(Step 08〜13 の既知の穴)を塞げた。
+`edge_clearance` を有効化しなくても、**生 `z` の NaN 帯 ≥ 0.52 m(物理でおよそ
+≥0.42〜0.50 m)の穴は block → 手前で停止**できるようになった(実測は 50/100 cm)。
+ただし NaN 帯が 0.52 のすぐ下(物理 ~0.35〜0.45 m)は block されず、速度次第で
+落下しうる(Step 16、[判断機の汎用性の整理](./agent_reports/steps/step_16b_upstream_decider_genericity.md))。
 
 ---
 
@@ -435,8 +437,9 @@ narrow trench で不安定なため実験段階のまま。
 
 | 内容 | 詳細 |
 |---|---|
-| 幅およそ 0.44〜0.60 m の穴で「渡れず・止まらず・転倒」 | **既定 OFF のまま**なら Step 08〜13 と同じ(`max_crossable_gap` 0.6 m が危険帯より大きく「渡れる穴」と誤判定、`edge_clearance:0` で幅チェックも走らない)。stop-only(`enabled` + `apply_stop_request`)を有効化すれば手前で直立停止する(Step 14/16) |
-| 渡れる穴の上限が速度依存 | 30 cm の穴は v=0.30 で全モード 3/3 通過だが、v=0.50 では stop-only/foothold-apply とも 1〜2/6 で落下。多歩プランナの block 閾値(`uncrossable_nan_width=0.52 m`)は速度非依存(Step 16) |
+| 物理でおよそ 0.35〜0.45 m の穴を「渡れる」と誤判定して速度次第で落下 | stop-only を有効にしても、生 `z` の NaN 帯がこの範囲(≈0.45〜0.54 m)だと block 閾値 `uncrossable_nan_width=0.52 m` を超えないので止まらず、渡ろうとする。v=0.30 なら渡れることが多いが v=0.50 で落下しうる。閾値が試験の溝幅に合わせた固定値で速度非依存なのが原因。汎用化の道筋は [判断機の汎用性の整理](./agent_reports/steps/step_16b_upstream_decider_genericity.md)(**未着手**) |
+| 30 cm の穴を高速で渡れると誤判定 | 30 cm(NaN 帯 0.40 m)は v=0.30 で全モード 3/3 通過だが v=0.50 では stop-only/apply とも 1〜2/6 で落下(同じく閾値が速度非依存、Step 16) |
+| 既定 OFF のままだと 0.44〜0.60 m の穴で落下 | 素の Quad-SDK 挙動(`max_crossable_gap` 0.6 m が「渡れる穴」と誤判定、`edge_clearance:0` で幅チェックも走らない)。**stop-only を有効化すれば ≥0.50 m は手前で直立停止する**(Step 14/16、実測 50/100 cm) |
 | 0.3 m 級の穴を 1 歩でまたぐ足場列を積極的に組む | 未到達。`apply_foothold` は「穴の上の足を前方へ寄せる回避ナッジ」止まりで、25/35 cm 単独トレンチで 1/6〜2/6 転倒。`step12PlanSequence` を Raibert ポリシ準拠に作り直す必要(Step 15/16) |
 | 斜め穴・旋回中の穴、未観測領域と穴の区別、実センサからの地図生成 | 前方走査は +x 固定・全幅横断穴のみ。地図上「未観測」と「穴」はどちらも `NaN`。地図は MuJoCo メッシュ由来のみ |
 | 40/75 cm 単独トレンチ、トロット歩容、穴 N≥2、平地幅掃引 | Step 16 で未計測(world 不足・スコープ外) |
