@@ -46,6 +46,7 @@
  - [Step 15:計画足場列を足場ノミナルへ差し込む(`apply_foothold:=true`、既定 OFF)。目前の 1 着地だけ、穴の上の Raibert ノミナルを計画足場側へ前方 ≤0.12 m 寄せる。**15/30 cm は 3/3 直立完走・planned↔actual がログで追え・NMPC 負荷は OFF と同水準**、50/100 cm は差し込まず(applied=0)Step 14 停止。world 座標直入れ→チャタリング→後ろ引き の 3 回の転倒を経て前方ナッジまで限定](./agent_reports/steps/step_15_multistep_foothold_nmpc_integration.md)
  - [Step 16:全回帰と限界 Map — 穴幅 15〜100 cm × {OFF, shadow, stop-only, foothold-apply} × v=0.30/0.50 を掃引(非決定条件は各 6 回)。**保護機能 ON の 18 run すべてで ≥50 cm への落下ゼロ**。stop-only は ≤35 cm 通過 / ≥50 cm 直立停止の境界が素直で NMPC 負荷も一定 → 実運用向け。foothold-apply は 25/35 cm 単独トレンチで 1/6〜2/6 転倒(実験段階)。当初課題「50 cm で数歩手前に止まれない」は stop-only 有効化で解決](./agent_reports/steps/step_16_multistep_terrain_planner_full_regression.md)
  - [上流の判断機は今どこまで「汎用」か(Step 16 時点の整理・大学院初心者向け)— 判断機の骨組み(歩容予測・生 `z` の NaN 判定・reach 判定・速度依存の停止距離)は汎用。「穴が何 m 以上で渡れないか」の境界値 `uncrossable_nan_width = 0.52 m` だけが試験の溝幅に合わせた固定値で、これは想定どおりの現状。速度非依存なので Step 16 で「30 cm は v=0.50 で落下」が出た。汎用化の道筋(能力から `max_crossable_gap(v, gait, ...)` を計算)を記載](./agent_reports/steps/step_16b_upstream_decider_genericity.md)
+ - [Step 17(実装前分析):Go2 前方ジャンプ — 後脚踏切パイプラインの現状と問題。現在の「リープ」は実質「四脚接地スクワット→(運が良ければ)四脚同時飛翔→四脚接地」で、`REAR_PUSH`(後脚のみ支持)も `FRONT_LAND`(前脚のみ着地)も**到達不能**(`local_footstep_planner.cpp:531-538` はデッドコード)。課題の問題 A〜E は行番号付きで全て実在を確認。GBP は点質量+単一合力モデルで後脚荷重配分・ピッチモーメントを表現不可、踏切の水平力の向きは乱数、NMPC/ID は計画接触のみ使用、primitive ID は 3 ファイルに重複定義、NMPC 脚別 GRF 上限 150 N/脚 は必要ピーク(推定 ≈477 N)に届かない。**レイヤ横断の大改修が必要**と判定し実装前に整理](./agent_reports/steps/step_17_forward_jump_code_analysis.md)
 
 ### 実行例(時系列)
 

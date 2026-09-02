@@ -235,6 +235,29 @@ TEST(LocalFootstepPlannerTest, ContactScheduleOverridesFlightAndLanding) {
   EXPECT_EQ(schedule[2], (std::vector<bool>{true, true, true, true}));
 }
 
+// Step 17 Stage 1: the forward-jump sub-phases map to explicit, reachable
+// contact schedules. Leg order is 0=FL 1=RL 2=FR 3=RR.
+TEST(LocalFootstepPlannerTest, ContactScheduleForwardJumpSubPhases) {
+  LocalFootstepPlanner planner = makePlanner();
+  Eigen::MatrixXd body_plan = Eigen::MatrixXd::Zero(6, 12);
+  std::vector<std::vector<bool>> schedule;
+
+  // PRELOAD(4) REAR_PUSH(5) FLIGHT(2) FRONT_LAND(6) SETTLE(7), then CONNECT(0).
+  Eigen::VectorXi primitives(6);
+  primitives << 4, 5, 2, 6, 7, 0;
+
+  planner.computeContactSchedule(0, body_plan, primitives, STEP, schedule);
+
+  ASSERT_EQ(schedule.size(), 6u);
+  EXPECT_EQ(schedule[0], (std::vector<bool>{true, true, true, true}));    // PRELOAD
+  EXPECT_EQ(schedule[1], (std::vector<bool>{false, true, false, true}));  // REAR_PUSH
+  EXPECT_EQ(schedule[2], (std::vector<bool>{false, false, false, false}));  // FLIGHT
+  EXPECT_EQ(schedule[3], (std::vector<bool>{true, false, true, false}));  // FRONT_LAND
+  EXPECT_EQ(schedule[4], (std::vector<bool>{true, true, true, true}));    // SETTLE
+  // CONNECT leaves the tiled nominal gait in place (trot phase 0 -> FL+RR).
+  EXPECT_EQ(schedule[5], (std::vector<bool>{true, false, false, true}));
+}
+
 TEST(LocalFootstepPlannerTest, FootPositionsTransformFromWorldToBody) {
   LocalFootstepPlanner planner = makePlanner();
   Eigen::VectorXd body = Eigen::VectorXd::Zero(12);

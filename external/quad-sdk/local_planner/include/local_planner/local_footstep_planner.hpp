@@ -14,6 +14,7 @@
 #include <quad_utils/fast_terrain_map.hpp>
 #include <quad_utils/function_timer.hpp>
 #include <quad_utils/math_utils.hpp>
+#include <quad_utils/primitive_ids.hpp>
 #include <quad_utils/quad_kd2.hpp>
 #include <quad_utils/ros_utils.hpp>
 #include <rclcpp/rclcpp.hpp>
@@ -551,17 +552,19 @@ class LocalFootstepPlanner {
   /// Weighting on GRF-based foothold adjustment
   double grf_weight_;
 
-  /// Primitive id for connect stance
-  const int CONNECT_STANCE = 0;
+  /// Primitive ids (values from quad_utils::PrimitiveId, the single source of
+  /// truth shared with the global body planner and rviz_interface). static
+  /// constexpr so they can be used as switch case labels.
+  static constexpr int CONNECT_STANCE = quad_utils::PRIM_CONNECT;
+  static constexpr int LEAP_STANCE = quad_utils::PRIM_LEAP_STANCE;
+  static constexpr int FLIGHT = quad_utils::PRIM_FLIGHT;
+  static constexpr int LAND_STANCE = quad_utils::PRIM_LAND_STANCE;
 
-  /// Primitive id for leap stance
-  const int LEAP_STANCE = 1;
-
-  /// Primitive id for flight phase
-  const int FLIGHT = 2;
-
-  /// Primitive id for landing stance
-  const int LAND_STANCE = 3;
+  /// Step 17 forward-jump sub-phases
+  static constexpr int PRELOAD = quad_utils::PRIM_PRELOAD;
+  static constexpr int REAR_PUSH = quad_utils::PRIM_REAR_PUSH;
+  static constexpr int FRONT_LAND = quad_utils::PRIM_FRONT_LAND;
+  static constexpr int SETTLE = quad_utils::PRIM_SETTLE;
 
   /// QuadKD class
   std::shared_ptr<quad_utils::QuadKD2> quadKD_;

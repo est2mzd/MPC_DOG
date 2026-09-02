@@ -526,21 +526,33 @@ void LocalFootstepPlanner::computeContactSchedule(
       contact_schedule[i] = nominal_contact_schedule_[(i + phase) % period_];
     }
   }
-  // Override nominal gait during leap, flight, and landing primitives.
+  // Override nominal gait during leap, flight, landing and the Step 17
+  // forward-jump sub-phases. Leg order is 0=FL 1=RL 2=FR 3=RR, so
+  // REAR_PUSH = rear legs only = {0,1,0,1} and FRONT_LAND = front legs only
+  // = {1,0,1,0}. The legacy LEAP_STANCE/LAND_STANCE map to full stance; the
+  // dead "leading_leg_liftoff_idx" branch that used to (never) produce a
+  // rear-only stance is removed - the rear-only support is now an explicit,
+  // time-extended REAR_PUSH primitive emitted by the global body planner.
   for (int i = 0; i < horizon_length_; i++) {
-    if (ref_primitive_plan(i) == LEAP_STANCE) {
-      int leading_leg_liftoff_idx = std::min(i, horizon_length_ - 1);
-
-      if (ref_primitive_plan(leading_leg_liftoff_idx) == FLIGHT) {
-        contact_schedule.at(i) = {false, true, false, true};
-      } else {
+    switch (ref_primitive_plan(i)) {
+      case LEAP_STANCE:
+      case LAND_STANCE:
+      case PRELOAD:
+      case SETTLE:
         contact_schedule.at(i) = {true, true, true, true};
-      }
-    } else if (ref_primitive_plan(i) == FLIGHT) {
-      std::fill(contact_schedule.at(i).begin(), contact_schedule.at(i).end(),
-                false);
-    } else if (ref_primitive_plan(i) == LAND_STANCE) {
-      contact_schedule.at(i) = {true, true, true, true};
+        break;
+      case REAR_PUSH:
+        contact_schedule.at(i) = {false, true, false, true};
+        break;
+      case FRONT_LAND:
+        contact_schedule.at(i) = {true, false, true, false};
+        break;
+      case FLIGHT:
+        std::fill(contact_schedule.at(i).begin(), contact_schedule.at(i).end(),
+                  false);
+        break;
+      default:
+        break;  // CONNECT / nominal gait: leave the tiled schedule untouched
     }
   }
 }

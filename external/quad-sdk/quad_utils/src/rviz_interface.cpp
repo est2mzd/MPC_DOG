@@ -342,7 +342,11 @@ void RVizInterface::robotPlanCallback(
         color.g = (float)back_left_color_[1] / 255.0;
         color.b = (float)back_left_color_[2] / 255.0;
       } else if (msg->primitive_ids[i] == LEAP_STANCE ||
-                 msg->primitive_ids[i] == LAND_STANCE) {
+                 msg->primitive_ids[i] == LAND_STANCE ||
+                 msg->primitive_ids[i] == PRELOAD ||
+                 msg->primitive_ids[i] == REAR_PUSH ||
+                 msg->primitive_ids[i] == FRONT_LAND ||
+                 msg->primitive_ids[i] == SETTLE) {
         color.r = (float)front_right_color_[0] / 255.0;
         color.g = (float)front_right_color_[1] / 255.0;
         color.b = (float)front_right_color_[2] / 255.0;

@@ -4,6 +4,7 @@
 #include <math.h>
 #include <quad_utils/fast_terrain_map.hpp>
 #include <quad_utils/math_utils.hpp>
+#include <quad_utils/primitive_ids.hpp>
 #include <quad_utils/ros_utils.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <unistd.h>
@@ -174,9 +175,23 @@ struct PlannerConfig {
 };
 
 /**
- * @brief Define phase labels
+ * @brief Define phase labels.
+ *
+ * Values come from quad_utils::PrimitiveId (the single source of truth shared
+ * with the local footstep planner and rviz_interface). CONNECT..LAND_STANCE
+ * are the upstream phases; PRELOAD..SETTLE are the Step 17 forward-jump
+ * sub-phases.
  */
-enum Phase { CONNECT, LEAP_STANCE, FLIGHT, LAND_STANCE };
+enum Phase {
+  CONNECT = quad_utils::PRIM_CONNECT,
+  LEAP_STANCE = quad_utils::PRIM_LEAP_STANCE,
+  FLIGHT = quad_utils::PRIM_FLIGHT,
+  LAND_STANCE = quad_utils::PRIM_LAND_STANCE,
+  PRELOAD = quad_utils::PRIM_PRELOAD,
+  REAR_PUSH = quad_utils::PRIM_REAR_PUSH,
+  FRONT_LAND = quad_utils::PRIM_FRONT_LAND,
+  SETTLE = quad_utils::PRIM_SETTLE
+};
 
 /**
  * @brief Define tree growing direction labels

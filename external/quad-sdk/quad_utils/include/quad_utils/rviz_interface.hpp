@@ -1,5 +1,6 @@
 #ifndef RVIZ_INTERFACE_H
 #define RVIZ_INTERFACE_H
+#include <quad_utils/primitive_ids.hpp>
 #include <quad_utils/ros_utils.hpp>
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2_ros/transform_broadcaster.h>
@@ -251,10 +252,15 @@ class RVizInterface {
   const int GLOBAL = 0;
   const int LOCAL = 1;
 
-  const int CONNECT = 0;
-  const int LEAP_STANCE = 1;
-  const int FLIGHT = 2;
-  const int LAND_STANCE = 3;
+  /// Primitive ids (values from quad_utils::PrimitiveId).
+  const int CONNECT = quad_utils::PRIM_CONNECT;
+  const int LEAP_STANCE = quad_utils::PRIM_LEAP_STANCE;
+  const int FLIGHT = quad_utils::PRIM_FLIGHT;
+  const int LAND_STANCE = quad_utils::PRIM_LAND_STANCE;
+  const int PRELOAD = quad_utils::PRIM_PRELOAD;
+  const int REAR_PUSH = quad_utils::PRIM_REAR_PUSH;
+  const int FRONT_LAND = quad_utils::PRIM_FRONT_LAND;
+  const int SETTLE = quad_utils::PRIM_SETTLE;
 };
 
 #endif  // RVIZ_INTERFACE_H
