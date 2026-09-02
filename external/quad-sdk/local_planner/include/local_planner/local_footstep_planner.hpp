@@ -85,6 +85,12 @@ struct FootPlanResult {
   int nearest_failed_index = -1;    //!< smallest horizon index among failures
                                     //!< (-1 if none); Phase 2B uses this to
                                     //!< decide how soon to start the stop
+
+  //! [MPC_DOG Step 12/14] multi-step foothold-sequence shadow result.
+  int multistep_blocked_k = -1;     //!< touchdown step where the sequence blocks
+  int multistep_blocked_leg = -1;   //!< leg index at that step
+  bool multistep_stop_request = false;  //!< blocked within final_stop_steps
+  bool multistep_slow = false;          //!< blocked, but beyond final_stop_steps
 };
 
 //! Local footstep planner for quadruped body plans
@@ -138,6 +144,16 @@ class LocalFootstepPlanner {
                         double max_crossable_gap = 0.6,
                         bool ik_reach_check = false,
                         double ik_max_reach = 0.45);
+
+  /**
+   * @brief [MPC_DOG Step 14] Configure the multi-step foothold-sequence shadow
+   * planner. When `enabled`, the sequence search runs every 5th cycle even
+   * without the CSV-dump env; when `apply_stop_request`, a BLOCKED_AT_STEP_K
+   * within final_stop_steps sets FootPlanResult::multistep_stop_request so the
+   * caller can latch the existing Phase 2B graceful stop.
+   */
+  void setMultistepParams(bool enabled, bool apply_stop_request,
+                          int stop_margin_steps, double planning_distance);
 
   /**
    * @brief Transform a vector of foot positions from the world to the body
@@ -577,6 +593,12 @@ class LocalFootstepPlanner {
   bool ik_reach_check_ = false;
   /// Phase 4: max hip-to-foothold distance treated as reachable, metres.
   double ik_max_reach_ = 0.45;
+
+  /// [MPC_DOG Step 14] multi-step foothold-sequence shadow planner config.
+  bool multistep_enabled_ = false;
+  bool multistep_apply_stop_ = false;
+  int multistep_stop_margin_steps_ = 4;
+  double multistep_planning_distance_ = 2.5;
 };
 
 #endif  // LOCAL_FOOTSTEP_PLANNER_H

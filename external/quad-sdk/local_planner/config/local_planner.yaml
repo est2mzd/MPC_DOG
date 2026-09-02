@@ -19,6 +19,12 @@
       safe_stop_latch: true               # [MPC_DOG Phase 2B] on an invalid foothold within safe_stop_horizon, latch a graceful stop (cmd_vel:=0 -> STEP->STAND -> hold, plan keeps publishing) instead of freezing the plan; false = Phase 2A withhold-the-plan behaviour
       safe_stop_horizon: 40               # [MPC_DOG Phase 2B] horizon-step window; only invalid footholds this close latch the stop (default = whole horizon)
       safe_stop_lookahead: 2.5            # [MPC_DOG Phase 2B-3] m to probe the terrain map forward from the body (independent of the NMPC horizon) for an uncrossable gap; latch the stop before entering a field of crossable gaps that ends at a cliff. 0 disables. No-op when edge_clearance == 0.
+      multistep_planner:
+        enabled: false                   # [MPC_DOG Step 12/14] run the shadow multi-step foothold-sequence search (every 5th cycle). false = off; the CSV-dump env (MPCDOG_STEPDUMP_DIR) also enables it for measurement.
+        apply_stop_request: false        # [MPC_DOG Step 14] act on the shadow verdict. false = shadow only (no control effect). true = BLOCKED_AT_STEP_K within final_stop_steps latches the Phase 2B graceful stop; a farther block scales cmd_vel by slow_factor.
+        stop_margin_steps: 4             # [MPC_DOG Step 13/14] user M. final_stop_steps = max(M, required_stop_steps from d_stop). Step 13 measured required ~4-7; M=4 gives a comfortable margin at 0.3 m/s.
+        planning_distance: 2.5           # [MPC_DOG Step 12] m to plan the foothold sequence forward (terrain_planning_distance).
+        slow_factor: 0.4                # [MPC_DOG Step 14] cmd_vel multiplier while SLOW (block beyond final_stop_steps).
     local_footstep_planner:
       grf_weight: 0.45                   # Blend weight between GRF and terrain foothold costs
       standing_error_threshold: 0.03     # Foot position error tolerated while standing, m

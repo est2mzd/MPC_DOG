@@ -197,12 +197,18 @@ void step11EnumerateCandidates(const grid_map::GridMap &grid,
 //   BLOCKED_AT_STEP_K     - no valid candidate at touchdown k
 //   UNKNOWN_BEFORE_RANGE  - ran off the mapped area first
 // Nothing here feeds control. Throttled to every 5th plan cycle.
-void step12PlanSequence(const grid_map::GridMap &grid,
-                        const std::shared_ptr<quad_utils::QuadKD2> &kd, double dt,
-                        int period, double bx, double by, double byaw, double bz,
-                        double v_fwd, double ik_max_reach, double toe_radius,
-                        double obj_threshold, double plan_distance, double time_s,
-                        int plan_idx, const std::string &dir) {
+struct Step12Result {
+  int verdict = 0;   // 0 FEASIBLE_TO_RANGE, 1 BLOCKED_AT_STEP_K, 2 UNKNOWN_BEFORE_RANGE
+  int blocked_k = -1;
+  int blocked_leg = -1;
+};
+
+Step12Result step12PlanSequence(
+    const grid_map::GridMap &grid,
+    const std::shared_ptr<quad_utils::QuadKD2> &kd, double dt, int period,
+    double bx, double by, double byaw, double bz, double v_fwd,
+    double ik_max_reach, double toe_radius, double obj_threshold,
+    double plan_distance, double time_s, int plan_idx, const std::string &dir) {
   const auto t_start = std::chrono::steady_clock::now();
   const char *legname[4] = {"FL", "BL", "FR", "BR"};
   const int order[4] = {0, 3, 2, 1};  // observed crawl touchdown order
@@ -230,6 +236,7 @@ void step12PlanSequence(const grid_map::GridMap &grid,
 
   std::string verdict = "FEASIBLE_TO_RANGE";
   int blocked_k = -1;
+  int blocked_leg_idx = -1;
   const char *blocked_leg = "-";
   double max_progress = 0.0;
   int placed = 0;
@@ -247,6 +254,7 @@ void step12PlanSequence(const grid_map::GridMap &grid,
       verdict = "UNKNOWN_BEFORE_RANGE";
       blocked_k = k;
       blocked_leg = legname[leg];
+      blocked_leg_idx = leg;
       break;
     }
     // enumerate candidates, keep min-cost valid one
@@ -290,6 +298,7 @@ void step12PlanSequence(const grid_map::GridMap &grid,
       verdict = "BLOCKED_AT_STEP_K";
       blocked_k = k;
       blocked_leg = legname[leg];
+      blocked_leg_idx = leg;
       break;
     }
     ++placed;
@@ -311,31 +320,41 @@ void step12PlanSequence(const grid_map::GridMap &grid,
                       std::chrono::steady_clock::now() - t_start)
                       .count();
 
-  const std::string sp = dir + "/step12_sequence.csv";
-  const bool sh = !std::ifstream(sp).good();
-  std::ofstream sf(sp, std::ios::app);
-  if (sf) {
-    if (sh) {
-      sf << "time,current_plan_index,verdict,blocked_step_k,blocked_leg,"
-            "n_placed,max_feasible_progress_m,plan_distance_m,compute_time_us\n";
+  if (!dir.empty()) {
+    const std::string sp = dir + "/step12_sequence.csv";
+    const bool sh = !std::ifstream(sp).good();
+    std::ofstream sf(sp, std::ios::app);
+    if (sf) {
+      if (sh) {
+        sf << "time,current_plan_index,verdict,blocked_step_k,blocked_leg,"
+              "n_placed,max_feasible_progress_m,plan_distance_m,compute_time_us\n";
+      }
+      char b[256];
+      std::snprintf(b, sizeof(b), "%.4f,%d,%s,%d,%s,%d,%.4f,%.2f,%ld", time_s,
+                    plan_idx, verdict.c_str(), blocked_k, blocked_leg, placed,
+                    max_progress, plan_distance, static_cast<long>(us));
+      sf << b << "\n";
     }
-    char b[256];
-    std::snprintf(b, sizeof(b), "%.4f,%d,%s,%d,%s,%d,%.4f,%.2f,%ld", time_s,
-                  plan_idx, verdict.c_str(), blocked_k, blocked_leg, placed,
-                  max_progress, plan_distance, static_cast<long>(us));
-    sf << b << "\n";
-  }
-  // planned foothold sequence: only every 20th call, to bound size
-  static long s12_foot_calls = 0;
-  if ((s12_foot_calls++ % 20) == 0 && !foot_rows.empty()) {
-    const std::string fp = dir + "/step12_footholds.csv";
-    const bool fh = !std::ifstream(fp).good();
-    std::ofstream ff(fp, std::ios::app);
-    if (ff) {
-      if (fh) ff << "time,current_plan_index,step_k,leg,x,y,hip_x,n_valid\n";
-      for (const auto &r : foot_rows) ff << r << "\n";
+    // planned foothold sequence: only every 20th call, to bound size
+    static long s12_foot_calls = 0;
+    if ((s12_foot_calls++ % 20) == 0 && !foot_rows.empty()) {
+      const std::string fp = dir + "/step12_footholds.csv";
+      const bool fh = !std::ifstream(fp).good();
+      std::ofstream ff(fp, std::ios::app);
+      if (ff) {
+        if (fh) ff << "time,current_plan_index,step_k,leg,x,y,hip_x,n_valid\n";
+        for (const auto &r : foot_rows) ff << r << "\n";
+      }
     }
   }
+  (void)us;
+  Step12Result out;
+  out.verdict = (verdict == "BLOCKED_AT_STEP_K")
+                    ? 1
+                    : (verdict == "UNKNOWN_BEFORE_RANGE" ? 2 : 0);
+  out.blocked_k = blocked_k;
+  out.blocked_leg = blocked_leg_idx;
+  return out;
 }
 
 }  // namespace
@@ -391,6 +410,16 @@ void LocalFootstepPlanner::setSpatialParams(
   max_crossable_gap_ = max_crossable_gap;
   ik_reach_check_ = ik_reach_check;
   ik_max_reach_ = ik_max_reach;
+}
+
+void LocalFootstepPlanner::setMultistepParams(bool enabled,
+                                              bool apply_stop_request,
+                                              int stop_margin_steps,
+                                              double planning_distance) {
+  multistep_enabled_ = enabled;
+  multistep_apply_stop_ = apply_stop_request;
+  multistep_stop_margin_steps_ = std::max(1, stop_margin_steps);
+  multistep_planning_distance_ = planning_distance;
 }
 
 void LocalFootstepPlanner::updateMap(const FastTerrainMap& terrain) {
@@ -564,19 +593,45 @@ FootPlanResult LocalFootstepPlanner::computeFootPlan(
     }
   }
 
-  // [MPC_DOG Step 12] shadow multi-step foothold search (every 5th cycle).
-  if (s09_dir != nullptr && body_plan.rows() > 1) {
+  // [MPC_DOG Step 12/14] multi-step foothold search (every 5th cycle). Runs for
+  // the CSV dump (s09_dir) and/or when the multi-step planner is enabled. When
+  // apply_stop_request is on, a BLOCKED_AT_STEP_K within final_stop_steps sets
+  // plan_result.multistep_stop_request so computeLocalPlan can latch the
+  // existing Phase 2B graceful stop; farther blocks set multistep_slow.
+  if ((s09_dir != nullptr || multistep_enabled_) && body_plan.rows() > 1) {
     static long s12_calls = 0;
     if ((s12_calls++ % 5) == 0) {
       const double v_fwd = std::min(
           1.0, std::max(0.0, (body_plan(body_plan.rows() - 1, 0) -
                               body_plan(0, 0)) /
                                  std::max(1e-6, (body_plan.rows() - 1) * dt_)));
-      step12PlanSequence(terrain_grid_, quadKD_, dt_, period_, body_plan(0, 0),
-                         body_plan(0, 1), body_plan(0, 5), body_plan(0, 2),
-                         v_fwd, ik_max_reach_, toe_radius_,
-                         foothold_obj_threshold_, 2.5, node_->now().seconds(),
-                         current_plan_index, std::string(s09_dir));
+      const Step12Result s12 = step12PlanSequence(
+          terrain_grid_, quadKD_, dt_, period_, body_plan(0, 0), body_plan(0, 1),
+          body_plan(0, 5), body_plan(0, 2), v_fwd, ik_max_reach_, toe_radius_,
+          foothold_obj_threshold_, multistep_planning_distance_,
+          node_->now().seconds(), current_plan_index,
+          s09_dir != nullptr ? std::string(s09_dir) : std::string());
+      if (multistep_apply_stop_ && s12.verdict == 1 && s12.blocked_k >= 0) {
+        // final_stop_steps from a conservative post-latch stopping model
+        // (a_safe ~ 0.44 m/s^2, t_delay ~ 0.19 s, floor 0.12 m, +0.10 m margin;
+        //  Step 13), converted to touchdown events (v * td_spacing).
+        const double v = std::max(0.05, v_fwd);
+        const double td_spacing =
+            (period_ > 0) ? (period_ * dt_ / 4.0) : 0.225;
+        double d_stop = v * 0.19 + v * v / (2.0 * 0.44);
+        d_stop = std::max(d_stop, 0.12) + 0.10;
+        const int req =
+            static_cast<int>(std::ceil(d_stop / (v * td_spacing)));
+        const int final_stop_steps =
+            std::max(multistep_stop_margin_steps_, req);
+        plan_result.multistep_blocked_k = s12.blocked_k;
+        plan_result.multistep_blocked_leg = s12.blocked_leg;
+        if (s12.blocked_k <= final_stop_steps) {
+          plan_result.multistep_stop_request = true;
+        } else {
+          plan_result.multistep_slow = true;
+        }
+      }
     }
   }
 

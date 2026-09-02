@@ -168,6 +168,19 @@ class LocalPlanner {
   /// the rest of the WALK session.
   bool safe_stop_latched_ = false;
 
+  /// [MPC_DOG Step 14] multi-step foothold-sequence planner -> control link.
+  /// enabled: run the shadow search; apply_stop_request: act on its verdict
+  /// (latch the Phase 2B graceful stop on STOP_REQUEST, scale cmd_vel on SLOW).
+  /// Both default false = pre-Step-14 behaviour.
+  bool multistep_enabled_ = false;
+  bool multistep_apply_stop_ = false;
+  int multistep_stop_margin_steps_ = 4;
+  double multistep_planning_distance_ = 2.5;
+  double multistep_slow_factor_ = 0.4;
+  /// Set each cycle from FootPlanResult::multistep_slow; getReference() scales
+  /// cmd_vel by multistep_slow_factor_ while it is true and not yet latched.
+  bool multistep_slow_active_ = false;
+
   /// Define map frame
   std::string map_frame_;
 

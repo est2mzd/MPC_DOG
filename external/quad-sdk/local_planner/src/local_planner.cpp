@@ -94,6 +94,24 @@ LocalPlanner::LocalPlanner(rclcpp::Node::SharedPtr node)
   quad_utils::loadROSParamDefault(node_, "local_planner.safe_stop_lookahead",
                                   safe_stop_lookahead_, 2.5);
 
+  // Step 14: multi-step foothold-sequence planner -> control link. All default
+  // to the pre-Step-14 behaviour (shadow off, no control effect).
+  quad_utils::loadROSParamDefault(
+      node_, "local_planner.multistep_planner.enabled", multistep_enabled_,
+      false);
+  quad_utils::loadROSParamDefault(
+      node_, "local_planner.multistep_planner.apply_stop_request",
+      multistep_apply_stop_, false);
+  quad_utils::loadROSParamDefault(
+      node_, "local_planner.multistep_planner.stop_margin_steps",
+      multistep_stop_margin_steps_, 4);
+  quad_utils::loadROSParamDefault(
+      node_, "local_planner.multistep_planner.planning_distance",
+      multistep_planning_distance_, 2.5);
+  quad_utils::loadROSParamDefault(
+      node_, "local_planner.multistep_planner.slow_factor",
+      multistep_slow_factor_, 0.4);
+
   // Convert kinematics
   quadKD_ = std::make_shared<quad_utils::QuadKD2>(node_, robot_ns_);
 
@@ -228,6 +246,9 @@ void LocalPlanner::initLocalFootstepPlanner() {
       quadKD_, foothold_search_radius, foothold_obj_threshold, obj_fun_layer,
       toe_radius_, edge_clearance, max_crossable_gap, ik_reach_check,
       ik_max_reach);
+  local_footstep_planner_->setMultistepParams(
+      multistep_enabled_, multistep_apply_stop_, multistep_stop_margin_steps_,
+      multistep_planning_distance_);
 
   past_footholds_msg_.feet.resize(num_feet_);
 }
@@ -363,6 +384,10 @@ void LocalPlanner::getReference() {
     // feet and holds a stand pose.
     if (safe_stop_latched_) {
       cmd_vel_.setZero();
+    } else if (multistep_apply_stop_ && multistep_slow_active_) {
+      // Step 14 SLOW: an impassable foothold sequence lies ahead but beyond
+      // final_stop_steps -> ease off the commanded speed and keep re-planning.
+      cmd_vel_ *= multistep_slow_factor_;
     }
     // Set initial ground height
     ref_ground_height_(0) = local_footstep_planner_->getTerrainHeight(
@@ -618,6 +643,31 @@ bool LocalPlanner::computeLocalPlan() {
     }
     // else (safe_stop_latch_ && !near): invalid foothold beyond safe_stop_horizon
     // -> ignore this cycle; keep walking (the sanitised plan is safe for NMPC).
+  }
+
+  // Step 14: multi-step foothold-sequence planner -> graceful stop / slow.
+  // Keeps publishing the plan; on STOP_REQUEST it latches the same Phase 2B
+  // path (getReference zeros cmd_vel -> STEP->STAND). SLOW just scales cmd_vel.
+  if (multistep_apply_stop_) {
+    if (foot_plan_result.multistep_stop_request && safe_stop_latch_ &&
+        !safe_stop_latched_) {
+      RCLCPP_WARN(node_->get_logger(),
+                  "[multistep-stop] latching graceful stop: foothold sequence "
+                  "blocked at step k=%d (leg=%d) within final_stop_steps",
+                  foot_plan_result.multistep_blocked_k,
+                  foot_plan_result.multistep_blocked_leg);
+      safe_stop_latched_ = true;
+    }
+    multistep_slow_active_ = foot_plan_result.multistep_slow;
+    if (multistep_slow_active_ && !safe_stop_latched_) {
+      RCLCPP_INFO_THROTTLE(
+          node_->get_logger(), *node_->get_clock(),
+          static_cast<rcutils_duration_value_t>(1000),
+          "[multistep-stop] SLOW: foothold sequence blocked at step k=%d "
+          "(leg=%d), beyond final_stop_steps",
+          foot_plan_result.multistep_blocked_k,
+          foot_plan_result.multistep_blocked_leg);
+    }
   }
   // Transform the new foot positions into the body frame for body planning
   local_footstep_planner_->getFootPositionsBodyFrame(
