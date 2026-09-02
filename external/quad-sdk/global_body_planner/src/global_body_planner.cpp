@@ -518,12 +518,14 @@ void GlobalBodyPlanner::spin() {
 }
 
 void GlobalBodyPlanner::buildForcedJumpPlan() {
-  // Start from the live robot state, snapped to nominal body height, with the
-  // requested forward take-off speed baked into the horizontal velocity (the
-  // jump refine step aims the horizontal GRF along this heading).
+  // Solve a valid *vertical* jump from rest first (baking a forward speed into
+  // s0.vel makes refineStance fail to converge). Then add the forward push as
+  // an explicit horizontal GRF component, sized as a fraction of the solved
+  // vertical GRF and capped by the friction cone. jump_takeoff_vx acts as that
+  // fraction lever: 0 = pure vertical hop, larger = more forward.
   State s0 = fullStateToState(robot_state_);
   s0.pos[2] = getTerrainZFromState(s0, planner_config_) + planner_config_.h_nom;
-  s0.vel << jump_takeoff_vx_, 0.0, 0.0;
+  s0.vel.setZero();
 
   const Eigen::Vector3d surf_norm(0.0, 0.0, 1.0);
   Action a;
@@ -537,6 +539,14 @@ void GlobalBodyPlanner::buildForcedJumpPlan() {
     return;
   }
   a.is_jump = true;  // stamp PRELOAD/REAR_PUSH/FRONT_LAND/SETTLE sub-phases
+
+  // Forward push: a horizontal GRF component ~ proportional to the requested
+  // forward take-off speed, as a fraction of the vertical GRF, capped by the
+  // friction cone (0.9*mu).
+  if (jump_takeoff_vx_ > 1e-6) {
+    double frac = std::min(0.3 * jump_takeoff_vx_, 0.9 * planner_config_.mu);
+    a.grf_0[0] = frac * a.grf_0[2];
+  }
 
   State s_land = applyAction(s0, a, planner_config_);
   std::vector<State> states{s0, s_land};
