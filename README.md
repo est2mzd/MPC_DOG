@@ -431,29 +431,57 @@ GIF は固定カメラ、左上に時刻。
 
 #### 渡れる地形 — 不要な停止をせず通過(既存回帰も維持)
 
-| # | 地形 | 結果 |
-|---|---|---|
-| 1 | 平地の前進 | ![](./artifacts/gifs/quadsdk_allsc_01_flat.gif) 通過(x=5.2) |
-| 2 | 深さ 1 m・幅 0.3 m の溝を複数本連続(Step 03/04) | ![](./artifacts/gifs/quadsdk_allsc_02_gaps2m.gif) 通過(x=8.2、回帰維持) |
-| 3 | 15 cm 平地 / 15 cm 穴 ×5 連続(Step 05) | ![](./artifacts/gifs/quadsdk_allsc_03_repgap15_n5.gif) 通過(x=8.0、回帰維持) |
-| 4 | 単独トレンチ 15 cm | ![](./artifacts/gifs/quadsdk_allsc_04_trench15.gif) 通過 |
-| 5 | 単独トレンチ 25 cm | ![](./artifacts/gifs/quadsdk_allsc_05_trench25.gif) 通過 |
-| 6 | 単独トレンチ 30 cm | ![](./artifacts/gifs/quadsdk_allsc_06_trench30.gif) 通過(不要停止なし) |
-| 7 | 単独トレンチ 35 cm | ![](./artifacts/gifs/quadsdk_allsc_07_trench35.gif) 通過 |
+**1. 平地の前進** — 通過(x=5.2)
+
+![平地](./artifacts/gifs/quadsdk_allsc_01_flat.gif)
+
+**2. 深さ 1 m・幅 0.3 m の溝を複数本連続(Step 03/04 の地形)** — 通過(x=8.2、回帰維持)
+
+![0.3m溝×複数](./artifacts/gifs/quadsdk_allsc_02_gaps2m.gif)
+
+**3. 15 cm 平地 / 15 cm 穴 ×5 連続(Step 05 の地形)** — 通過(x=8.0、回帰維持)
+
+![15-15連続×5](./artifacts/gifs/quadsdk_allsc_03_repgap15_n5.gif)
+
+**4. 単独トレンチ 15 cm** — 通過
+
+![単独15cm](./artifacts/gifs/quadsdk_allsc_04_trench15.gif)
+
+**5. 単独トレンチ 25 cm** — 通過
+
+![単独25cm](./artifacts/gifs/quadsdk_allsc_05_trench25.gif)
+
+**6. 単独トレンチ 30 cm** — 通過(不要停止なし)
+
+![単独30cm](./artifacts/gifs/quadsdk_allsc_06_trench30.gif)
+
+**7. 単独トレンチ 35 cm** — 通過
+
+![単独35cm](./artifacts/gifs/quadsdk_allsc_07_trench35.gif)
 
 #### 渡れない地形 — 手前で直立停止
 
-| # | 地形 | 結果 |
-|---|---|---|
-| 8 | 単独トレンチ 50 cm | ![](./artifacts/gifs/quadsdk_allsc_08_trench50_stop.gif) **縁の約 1 m 手前で直立停止**(`[multistep-stop] latching`) |
-| 9 | 単独トレンチ 100 cm | ![](./artifacts/gifs/quadsdk_allsc_09_trench100_stop.gif) **縁の約 1 m 手前で直立停止** |
-| 10 | 15 cm 穴 ×3 連続 → 1 m 穴 の複合地形(Step 06) | ![](./artifacts/gifs/quadsdk_allsc_10_composite_stop.gif) **15 cm 帯は渡り、1 m 穴の手前で直立停止** |
+**8. 単独トレンチ 50 cm** — 縁の約 1 m 手前で直立停止(`[multistep-stop] latching`)
+
+![単独50cm 停止](./artifacts/gifs/quadsdk_allsc_08_trench50_stop.gif)
+
+**9. 単独トレンチ 100 cm** — 縁の約 1 m 手前で直立停止
+
+![単独100cm 停止](./artifacts/gifs/quadsdk_allsc_09_trench100_stop.gif)
+
+**10. 15 cm 穴 ×3 連続 → 1 m 穴 の複合地形(Step 06 の地形)** — 15 cm 帯は渡り、1 m 穴の手前で直立停止
+
+![複合地形 停止](./artifacts/gifs/quadsdk_allsc_10_composite_stop.gif)
 
 #### 既知の限界 — 判断機の境界値が速度非依存
 
-| # | 地形 | 結果 |
-|---|---|---|
-| 11 | 単独トレンチ 30 cm を **v=0.50 m/s** で | ![](./artifacts/gifs/quadsdk_allsc_11_trench30_v050_fall.gif) **落下**。30 cm(NaN 帯 0.40 m)は block 閾値 `uncrossable_nan_width=0.52 m` を超えないので止まらず、高速だとクロールの安定余裕が足りず落ちる。閾値が固定値で速度を見ていないのが原因([判断機の汎用性の整理](./agent_reports/steps/step_16b_upstream_decider_genericity.md)) |
+**11. 単独トレンチ 30 cm を v=0.50 m/s で** — 落下
+
+![30cm 高速 落下](./artifacts/gifs/quadsdk_allsc_11_trench30_v050_fall.gif)
+
+30 cm(NaN 帯 0.40 m)は block 閾値 `uncrossable_nan_width=0.52 m` を超えないので止まらず、
+高速だとクロールの安定余裕が足りず落ちる。閾値が固定値で速度を見ていないのが原因
+([判断機の汎用性の整理](./agent_reports/steps/step_16b_upstream_decider_genericity.md))。
 
 **まとめ**:1 つの固定設定(stop-only)で、既存の通過シナリオ(平地・0.3 m 溝連続・
 15/15 連続・単独 ≤35 cm)は不要停止なく通過し、渡れない穴(単独 ≥50 cm・複合地形の
