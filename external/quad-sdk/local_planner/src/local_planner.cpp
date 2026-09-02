@@ -387,7 +387,16 @@ void LocalPlanner::getReference() {
     } else if (multistep_apply_stop_ && multistep_slow_active_) {
       // Step 14 SLOW: an impassable foothold sequence lies ahead but beyond
       // final_stop_steps -> ease off the commanded speed and keep re-planning.
-      cmd_vel_ *= multistep_slow_factor_;
+      // Clamp to a creep floor so SLOW does not compound to a full stop over
+      // successive cycles (that is what STOP_REQUEST is for).
+      const double sp = cmd_vel_.head<2>().norm();
+      const double kSlowFloor = 0.12;  // m/s
+      if (sp > kSlowFloor) {
+        const double scale =
+            std::max(multistep_slow_factor_, kSlowFloor / sp);
+        cmd_vel_(0) *= scale;
+        cmd_vel_(1) *= scale;
+      }
     }
     // Set initial ground height
     ref_ground_height_(0) = local_footstep_planner_->getTerrainHeight(
