@@ -96,6 +96,19 @@ struct PlannerConfig {
                                     // unless in flight
 
   bool enable_leaping = true;  // Leaping mode switch
+
+  // Step 17 forward-jump control. jump_mode:
+  //   0 = OFF        - no leaping at all (same effect as enable_leaping=false)
+  //   1 = AUTO       - try a normal connect first, leap only if it fails
+  //                    (upstream behaviour; leaps are NOT stamped as jumps)
+  //   2 = FORCE_LEAP - a successful normal connect does not end the search;
+  //                    prefer a valid leap, and stamp it with the explicit
+  //                    PRELOAD/REAR_PUSH/FLIGHT/FRONT_LAND/SETTLE sub-phases
+  int jump_mode = 1;
+  double jump_preload_fraction = 0.4;     // fraction of leap stance spent in
+                                          // PRELOAD before REAR_PUSH
+  double jump_front_land_fraction = 0.5;  // fraction of land stance spent in
+                                          // FRONT_LAND before SETTLE
   static const int num_reachability_points =
       4;  // Number of points on body used to check reachability
   static const int num_collision_points =
@@ -200,6 +213,11 @@ enum Phase {
 enum TreeDirection { FORWARD, REVERSE };
 
 /**
+ * @brief Step 17 forward-jump planning mode (PlannerConfig::jump_mode).
+ */
+enum JumpMode { JUMP_OFF = 0, JUMP_AUTO = 1, JUMP_FORCE_LEAP = 2 };
+
+/**
  * @brief Define exit flags
  */
 enum ExitFlag {
@@ -263,6 +281,11 @@ struct Action {
   double t_s_land;  // Time length of landing phase
   double dz_0;      // Velocity at the beginning of leaping phase
   double dz_f;      // Velocity at the end of landing phase
+  bool is_jump = false;  // Step 17: this leap is an explicit forward jump, so
+                         // the interpolated plan is stamped with the
+                         // PRELOAD/REAR_PUSH/FRONT_LAND/SETTLE sub-phases and
+                         // the take-off horizontal GRF is aimed forward
+                         // instead of sampled at a random azimuth.
 };
 
 struct StateActionResult {

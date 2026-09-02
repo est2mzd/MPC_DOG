@@ -31,7 +31,12 @@ bool RRT::newConfig(
       result.length = current_result.length;
     }
 
-    if (connect_result == REACHED) {
+    // In FORCE_LEAP mode a successful straight connect is kept only as a
+    // fallback: keep going and let the leap sampling below override it if a
+    // valid jump is found. In OFF/AUTO mode the connect ends the search as
+    // upstream.
+    if (connect_result == REACHED &&
+        planner_config.jump_mode != JUMP_FORCE_LEAP) {
       return true;
     }
   }

@@ -359,6 +359,18 @@ State interpStateActionPair(const State& s_in, const Action& a, double t0,
     s.vel[2] = a.dz_0;
   }
 
+  // Step 17: for an explicit forward jump, the single lumped leap stance is
+  // reported as PRELOAD (drop hips / shift CoM rearward) followed by
+  // REAR_PUSH (rear-leg-only take-off impulse); the landing stance is
+  // reported as FRONT_LAND (front legs touch down) followed by SETTLE. The
+  // physics (applyStance / getGRF) is unchanged - only the primitive id
+  // published to the local planner changes, which is what makes the
+  // rear-only / front-only contact schedule reachable.
+  const double preload_t =
+      a.is_jump ? planner_config.jump_preload_fraction * t_s : 0.0;
+  const double front_land_t =
+      a.is_jump ? planner_config.jump_front_land_fraction * t_s_land : 0.0;
+
   // Add points during stance phase
   for (double t = 0; t < t_s; t += dt) {
     interp_t.push_back(t0 + t);
@@ -370,7 +382,8 @@ State interpStateActionPair(const State& s_in, const Action& a, double t0,
     interp_reduced_plan.push_back(s_next);
     interp_GRF.push_back(getGRF(a, t, phase, planner_config));
 
-    interp_primitive_id.push_back(phase);
+    interp_primitive_id.push_back(
+        a.is_jump ? (t < preload_t ? PRELOAD : REAR_PUSH) : phase);
   }
 
   State s_takeoff = applyStance(s, a, phase, planner_config);
@@ -406,7 +419,8 @@ State interpStateActionPair(const State& s_in, const Action& a, double t0,
       interp_reduced_plan.push_back(s_next);
       interp_GRF.push_back(getGRF(a, t, phase, planner_config));
 
-      interp_primitive_id.push_back(phase);
+      interp_primitive_id.push_back(
+          a.is_jump ? (t < front_land_t ? FRONT_LAND : SETTLE) : phase);
     }
     s_final = applyStance(s_land, a, t_s_land, phase, planner_config);
   }
@@ -569,6 +583,7 @@ bool getRandomLeapAction(const State& s, const Eigen::Vector3d& surf_norm,
   a.t_s_land = a.t_s_leap;
   a.grf_0.setZero();
   a.grf_f.setZero();
+  a.is_jump = (planner_config.jump_mode == JUMP_FORCE_LEAP);
 
   bool is_valid = refineAction(s, a, planner_config);
 
@@ -622,9 +637,19 @@ bool refineStance(const State& s, int phase, Action& a,
   double f_z_nominal =
       ((dz_0 * 6.0 - g * t_s * 3.0) * (-1.0 / 2.0)) / (g * t_s);
 
-  // // Sample lateral forces, respecting friction about the nominal peak grf
+  // Sample lateral forces, respecting friction about the nominal peak grf.
+  // Step 17: for an explicit forward-jump take-off, aim the horizontal GRF
+  // along the leap's planar heading (problem D) instead of a random azimuth,
+  // and use most of the friction budget so the push actually drives the body
+  // forward. Landing stance keeps the random sample.
   double ang_az = 2 * M_PI * (double)rand() / RAND_MAX;
   double f_lateral_mag = (double)rand() / RAND_MAX * planner_config.mu;
+  if (a.is_jump && phase == LEAP_STANCE) {
+    Eigen::Vector2d heading = s.vel.head<2>();
+    if (heading.norm() < 1e-6) heading << 1.0, 0.0;  // default: +x
+    ang_az = atan2(heading.y(), heading.x());
+    f_lateral_mag = 0.9 * planner_config.mu;
+  }
   Eigen::Vector3d pos_f;
   grf_stance[0] = f_lateral_mag * f_z_nominal * cos(ang_az);
   grf_stance[1] = f_lateral_mag * f_z_nominal * sin(ang_az);

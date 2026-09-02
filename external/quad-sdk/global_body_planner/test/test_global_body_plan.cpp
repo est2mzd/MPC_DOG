@@ -79,3 +79,80 @@ TEST_F(GlobalBodyPlannerTestFixture, LoadPlanDataAndConvertToMsgs) {
   EXPECT_EQ(robot_plan_msg.states.size(), robot_plan_msg.primitive_ids.size());
   EXPECT_EQ(discrete_plan_msg.states.size(), states.size());
 }
+
+// Step 17: an Action flagged is_jump is interpolated into the explicit
+// PRELOAD -> REAR_PUSH -> FLIGHT -> FRONT_LAND -> SETTLE sub-phase sequence.
+// A plain leap (is_jump=false) still reports LEAP_STANCE / FLIGHT /
+// LAND_STANCE, so nothing changes for the upstream path.
+TEST_F(GlobalBodyPlannerTestFixture, JumpActionInterpEmitsSubPhases) {
+  using namespace planning_utils;
+  updateTerrainHeight(0.0);
+
+  planning_utils::State s = makeState(0.0, 0.0, 0.3, 0.6, 0.0, 0.0);
+
+  Action a;
+  a.grf_0 << 0.0, 0.0, 1.0;
+  a.grf_f << 0.0, 0.0, 1.0;
+  a.t_s_leap = 0.2;
+  a.t_f = 0.3;
+  a.t_s_land = 0.2;
+  a.dz_0 = 0.0;
+  a.dz_f = 0.0;
+
+  planner_config_.jump_preload_fraction = 0.4;
+  planner_config_.jump_front_land_fraction = 0.5;
+
+  auto collect = [&](const Action& act) {
+    std::vector<planning_utils::State> plan;
+    std::vector<planning_utils::GRF> grf;
+    std::vector<double> t;
+    std::vector<double> len{0.0};  // callers seed the cumulative length with 0
+    std::vector<int> ids;
+    interpStateActionPair(s, act, 0.0, 0.03, plan, grf, t, ids, len,
+                          planner_config_);
+    return ids;
+  };
+
+  // Plain leap: only legacy ids.
+  a.is_jump = false;
+  std::vector<int> plain = collect(a);
+  for (int id : plain) {
+    EXPECT_TRUE(id == LEAP_STANCE || id == FLIGHT || id == LAND_STANCE);
+  }
+
+  // Jump: the five sub-phases, in canonical order, no legacy leap/land ids.
+  a.is_jump = true;
+  std::vector<int> jump = collect(a);
+  ASSERT_FALSE(jump.empty());
+  EXPECT_EQ(jump.front(), PRELOAD);
+  EXPECT_EQ(jump.back(), SETTLE);
+
+  int rank_prev = -1;
+  const auto rank = [](int id) {
+    switch (id) {
+      case PRELOAD: return 0;
+      case REAR_PUSH: return 1;
+      case FLIGHT: return 2;
+      case FRONT_LAND: return 3;
+      case SETTLE: return 4;
+      default: return 99;
+    }
+  };
+  bool saw_preload = false, saw_rear_push = false, saw_flight = false,
+       saw_front_land = false, saw_settle = false;
+  for (int id : jump) {
+    EXPECT_NE(id, LEAP_STANCE);
+    EXPECT_NE(id, LAND_STANCE);
+    int r = rank(id);
+    ASSERT_LT(r, 99) << "unexpected primitive id " << id;
+    EXPECT_GE(r, rank_prev) << "sub-phases went backwards";
+    rank_prev = r;
+    saw_preload |= (id == PRELOAD);
+    saw_rear_push |= (id == REAR_PUSH);
+    saw_flight |= (id == FLIGHT);
+    saw_front_land |= (id == FRONT_LAND);
+    saw_settle |= (id == SETTLE);
+  }
+  EXPECT_TRUE(saw_preload && saw_rear_push && saw_flight && saw_front_land &&
+              saw_settle);
+}

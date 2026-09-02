@@ -1,6 +1,9 @@
 #include "global_body_planner/global_body_planner.hpp"
 
+#include <algorithm>
+#include <cctype>
 #include <chrono>
+#include <string>
 
 using namespace planning_utils;
 
@@ -75,6 +78,33 @@ GlobalBodyPlanner::GlobalBodyPlanner(rclcpp::Node::SharedPtr node)
     planner_config_.h_min = 0;
     planner_config_.h_max = 0.5;
   }
+
+  // Step 17 forward-jump mode. "auto" keeps the upstream behaviour, so the
+  // default is fully backward compatible. "off" is equivalent to
+  // enable_leaping:=false; "force_leap" makes the planner prefer a leap even
+  // when a normal connect would reach, and stamps the jump sub-phases.
+  std::string jump_mode_str = node_->declare_parameter<std::string>(
+      "global_body_planner.jump_mode", "auto");
+  std::transform(jump_mode_str.begin(), jump_mode_str.end(),
+                 jump_mode_str.begin(), ::tolower);
+  if (jump_mode_str == "off") {
+    planner_config_.jump_mode = planning_utils::JUMP_OFF;
+    planner_config_.enable_leaping = false;
+    planner_config_.num_leap_samples = 0;
+  } else if (jump_mode_str == "force_leap" || jump_mode_str == "force") {
+    planner_config_.jump_mode = planning_utils::JUMP_FORCE_LEAP;
+  } else {
+    planner_config_.jump_mode = planning_utils::JUMP_AUTO;
+  }
+  planner_config_.jump_preload_fraction = node_->declare_parameter<double>(
+      "global_body_planner.jump_preload_fraction", 0.4);
+  planner_config_.jump_front_land_fraction = node_->declare_parameter<double>(
+      "global_body_planner.jump_front_land_fraction", 0.5);
+  RCLCPP_INFO(node_->get_logger(),
+              "[global_body_planner] jump_mode=%s (%d), enable_leaping=%d, "
+              "num_leap_samples=%d",
+              jump_mode_str.c_str(), planner_config_.jump_mode,
+              planner_config_.enable_leaping, planner_config_.num_leap_samples);
 
   // In CBS mode, defer planning to plan_with_constraints service calls.
   // Default false preserves single-robot spin-loop planning.
