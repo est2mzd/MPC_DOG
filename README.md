@@ -44,6 +44,7 @@
  - [Step 13:平地で latch → 停止させて `d_stop` を実測し `a_safe≈0.44 m/s²` を同定。`final_stop_steps = max(M, required)` を Step 12 の verdict に当てる(shadow・制御変更なし)](./agent_reports/steps/step_13_step_margin_and_stopping_distance.md)
  - [Step 14:多歩足場列の判定を既存の Phase 2B graceful stop につなぐ(opt-in・**初めて制御パスに触れる**が全パラメータ既定 OFF)。`enabled:=true` + `apply_stop_request:=true` で **50/100 cm 空洞を 6/6 直立 SAFE-STOP・空洞縁まで ≈0.95 m の余裕**、15/30/35 cm は不要停止なし、feature OFF は Step 08 と一致](./agent_reports/steps/step_14_multistep_planner_safe_stop_integration.md)
  - [Step 15:計画足場列を足場ノミナルへ差し込む(`apply_foothold:=true`、既定 OFF)。目前の 1 着地だけ、穴の上の Raibert ノミナルを計画足場側へ前方 ≤0.12 m 寄せる。**15/30 cm は 3/3 直立完走・planned↔actual がログで追え・NMPC 負荷は OFF と同水準**、50/100 cm は差し込まず(applied=0)Step 14 停止。world 座標直入れ→チャタリング→後ろ引き の 3 回の転倒を経て前方ナッジまで限定](./agent_reports/steps/step_15_multistep_foothold_nmpc_integration.md)
+ - [Step 16:全回帰と限界 Map — 穴幅 15〜100 cm × {OFF, shadow, stop-only, foothold-apply} × v=0.30/0.50 を掃引(非決定条件は各 6 回)。**保護機能 ON の 18 run すべてで ≥50 cm への落下ゼロ**。stop-only は ≤35 cm 通過 / ≥50 cm 直立停止の境界が素直で NMPC 負荷も一定 → 実運用向け。foothold-apply は 25/35 cm 単独トレンチで 1/6〜2/6 転倒(実験段階)。当初課題「50 cm で数歩手前に止まれない」は stop-only 有効化で解決](./agent_reports/steps/step_16_multistep_terrain_planner_full_regression.md)
 
 ### 実行例(時系列)
 
@@ -384,7 +385,39 @@ NMPC 計算時間・iteration・cost・plan age は **ON でも OFF と同水準
 
 ---
 
-### 現在の到達点(Step 15 時点):できること / できないこと
+#### Step 16:全回帰と限界 Map
+
+穴幅 15/25/30/35/50/100 cm(単独トレンチ)× feature モード {OFF, shadow,
+stop-only, foothold-apply} を v=0.30/0.50 m/s・クロールで掃引し、
+**通過・停止・失敗の境界**を 1 枚にまとめた。非決定条件は各 6 回。詳細は
+[Step 16 の検証記録](./agent_reports/steps/step_16_multistep_terrain_planner_full_regression.md)。
+
+**タスク結果:限界 Map(`scripts/trial/step16_analyze.py`、v=0.30 m/s)**
+
+![Step16 限界 Map](./artifacts/step16/step16_limit_map.png)
+
+| | ≤35 cm(渡れる穴) | ≥50 cm(渡れない穴) | NMPC 計算時間 p95 |
+|---|---|---|---|
+| **OFF / shadow** | 通過(35 cm は 1/3 で落下) | **落下**(Step 08 ベースライン) | 40〜116 ms(穴で thrash) |
+| **stop-only**(Step 14) | 通過(15〜35 cm 全 6/6) | **直立停止 3/3**(縁の約 1 m 手前) | 16〜19 ms(一定) |
+| **foothold-apply**(Step 15) | 通過だが **25 cm 5/6・35 cm 4/6**(縁で転倒) | **直立停止 3/3** | 37〜76 ms(25/35 cm) |
+
+- **危険な穴(≥50 cm)への落下:保護機能 ON の 18 run すべてでゼロ。** 最優先条件を達成。
+- **stop-only が実運用向け**:≤35 cm 通過 / ≥50 cm 停止の境界が最も素直、NMPC 負荷も一定。
+- **foothold-apply は narrow trench(25/35 cm)で 1/6〜2/6 転倒**(前方ナッジが縁で
+  効きすぎる、Step 15 §9.4)。既定 OFF のまま、実験用。
+- **速度限界**:30 cm は v=0.30 で全モード 3/3 通過だが v=0.50 では 1〜2/6 で落下。
+  渡れる穴の上限は速度とともに縮む(block 閾値は速度非依存)。50 cm は v=0.50 でも 3/3 停止。
+- **未確認**:40/75 cm(world 無し)、トロット歩容、N≥2、平地幅掃引。
+
+**Step 16 の結論(= 8 段まとめ)**:当初の課題「50 cm の穴で数歩手前に止まれない」は
+**stop-only(`enabled` + `apply_stop_request`)の有効化で解決**(空洞縁の約 1 m 手前で
+3/3 直立停止、v=0.30/0.50 とも)。既定 OFF の回帰は全穴幅で維持。`apply_foothold` は
+narrow trench で不安定なため実験段階のまま。
+
+---
+
+### 現在の到達点(Step 16 時点):できること / できないこと
 
 **できること**
 
@@ -394,18 +427,18 @@ NMPC 計算時間・iteration・cost・plan age は **ON でも OFF と同水準
 | **幅 ≤0.30 m の穴/溝を、足を入れずに複数本連続で渡る**(回帰なし) | Step 03/04、Step 05 |
 | **幅 ≥1.0 m の穴/断崖の手前で直立停止**(`edge_clearance:=0.15` 有効化時)。胴体前方 2.5 m をプローブ → `cmd_vel:=0` で減速 | Step 05b、Step 06 |
 | 脚が届かない足場の検知(`ik_reach_check:=true`、専用地形で確認。既定 OFF) | Step 07 |
-| **幅 0.44〜1.0 m の穴の手前で M 歩手前に直立停止**(`multistep_planner.enabled:=true` + `apply_stop_request:=true`、既定 OFF)。生 `z` の NaN 帯を着地脚ごとに前方 1 歩ぶん走査 → 遠い block は減速・近い block は Phase 2B 停止。50/100 cm で 6/6 直立停止・空洞縁まで ≈0.95 m の余裕、15/30/35 cm は不要停止なし | Step 10〜14 |
-| **計画足場列を足場ノミナルへ差し込む**(`apply_foothold:=true`、既定 OFF)。目前の 1 着地だけ、穴の上の Raibert ノミナルを計画足場側へ前方 ≤0.12 m 寄せる。planned↔actual がログで追え、NMPC 負荷は増えず、50/100 cm では差し込まない(applied=0) | Step 15 |
+| **幅 ≥0.50 m の穴/断崖の手前で M 歩手前に直立停止**(`multistep_planner.enabled:=true` + `apply_stop_request:=true` = "stop-only"、既定 OFF)。生 `z` の NaN 帯を着地脚ごとに前方 1 歩ぶん走査 → 遠い block は減速・近い block は Phase 2B 停止。50/100 cm で **v=0.30/0.50 とも 3/3 直立停止**・空洞縁まで ≈1 m の余裕、≤35 cm は不要停止なし(6/6 通過)、NMPC 負荷は一定(Step 16) | Step 10〜14、Step 16 |
+| **計画足場列を足場ノミナルへ差し込む**(`apply_foothold:=true`、既定 OFF・**実験段階**)。目前の 1 着地だけ、穴の上の Raibert ノミナルを計画足場側へ前方 ≤0.12 m 寄せる。planned↔actual がログで追え、NMPC 負荷は増えず、50/100 cm では差し込まない(applied=0)。ただし 25/35 cm 単独トレンチで 1/6〜2/6 転倒(Step 16) | Step 15、Step 16 |
 
 **できないこと(既知の穴)**
 
 | 内容 | 詳細 |
 |---|---|
-| 幅およそ 0.44〜0.60 m の穴で「渡れず・止まらず・転倒」 | **既定 OFF のまま**なら Step 08〜13 と同じ(`max_crossable_gap` 0.6 m が危険帯より大きく「渡れる穴」と誤判定、`edge_clearance:0` で幅チェックも走らない)。`multistep_planner` を有効化すれば手前で直立停止する(Step 14) |
-| 斜め穴・旋回中の穴 | 前方走査は +x 方向固定。全幅横断穴のみ対応 |
-| 未観測領域と穴の区別 | 地図上どちらも `NaN`。「見えていない所」を安全と誤認しうる |
-| 実センサ(LiDAR/深度)からの地図生成 | この repo に無い(MuJoCo メッシュ由来のみ) |
-| 0.3 m 級の穴を 1 歩でまたぐ足場列を積極的に組む | 未到達。Step 15 の差し込みは「穴の上の足を前方へ寄せる穴回避ナッジ」止まり。`step12PlanSequence` が Raibert ポリシ準拠の足場を生成していないため(Step 16 の課題) |
+| 幅およそ 0.44〜0.60 m の穴で「渡れず・止まらず・転倒」 | **既定 OFF のまま**なら Step 08〜13 と同じ(`max_crossable_gap` 0.6 m が危険帯より大きく「渡れる穴」と誤判定、`edge_clearance:0` で幅チェックも走らない)。stop-only(`enabled` + `apply_stop_request`)を有効化すれば手前で直立停止する(Step 14/16) |
+| 渡れる穴の上限が速度依存 | 30 cm の穴は v=0.30 で全モード 3/3 通過だが、v=0.50 では stop-only/foothold-apply とも 1〜2/6 で落下。多歩プランナの block 閾値(`uncrossable_nan_width=0.52 m`)は速度非依存(Step 16) |
+| 0.3 m 級の穴を 1 歩でまたぐ足場列を積極的に組む | 未到達。`apply_foothold` は「穴の上の足を前方へ寄せる回避ナッジ」止まりで、25/35 cm 単独トレンチで 1/6〜2/6 転倒。`step12PlanSequence` を Raibert ポリシ準拠に作り直す必要(Step 15/16) |
+| 斜め穴・旋回中の穴、未観測領域と穴の区別、実センサからの地図生成 | 前方走査は +x 固定・全幅横断穴のみ。地図上「未観測」と「穴」はどちらも `NaN`。地図は MuJoCo メッシュ由来のみ |
+| 40/75 cm 単独トレンチ、トロット歩容、穴 N≥2、平地幅掃引 | Step 16 で未計測(world 不足・スコープ外) |
 
 **安全機能のスイッチ(`local_planner.yaml` 既定)**:
 Phase 2A(無効足場を NMPC に渡さない)= **ON** /
@@ -414,6 +447,9 @@ Phase 3(A)(渡れる穴/渡れない穴の区別、`edge_clearance`)= **OFF** /
 Phase 4(届かない足場の検知、`ik_reach_check`)= **OFF** /
 多歩足場列プランナ(`multistep_planner.enabled` / `apply_stop_request` / `apply_foothold`)= **OFF**。
 OFF の 3 つは、その実行で明示的に有効化したときだけ動く(既定では素の Quad-SDK 挙動)。
+危険な穴の手前で止めたい場合は **stop-only(`enabled` + `apply_stop_request`)を推奨**
+(Step 16 で ≤35 cm 通過 / ≥50 cm 直立停止・NMPC 負荷一定を確認)。`apply_foothold`
+は narrow trench で不安定なため実験用。
 
 1 枚まとめ:[まとめ doc](./agent_reports/quadsdk_gap_foothold_summary.md)。
 
