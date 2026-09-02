@@ -646,9 +646,13 @@ bool refineStance(const State& s, int phase, Action& a,
   double f_lateral_mag = (double)rand() / RAND_MAX * planner_config.mu;
   if (a.is_jump && phase == LEAP_STANCE) {
     Eigen::Vector2d heading = s.vel.head<2>();
-    if (heading.norm() < 1e-6) heading << 1.0, 0.0;  // default: +x
-    ang_az = atan2(heading.y(), heading.x());
-    f_lateral_mag = 0.9 * planner_config.mu;
+    if (heading.norm() < 1e-6) {
+      // No commanded forward speed -> pure vertical in-place jump.
+      f_lateral_mag = 0.0;
+    } else {
+      ang_az = atan2(heading.y(), heading.x());
+      f_lateral_mag = 0.9 * planner_config.mu;
+    }
   }
   Eigen::Vector3d pos_f;
   grf_stance[0] = f_lateral_mag * f_z_nominal * cos(ang_az);

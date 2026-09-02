@@ -100,6 +100,8 @@ GlobalBodyPlanner::GlobalBodyPlanner(rclcpp::Node::SharedPtr node)
       "global_body_planner.jump_preload_fraction", 0.4);
   planner_config_.jump_front_land_fraction = node_->declare_parameter<double>(
       "global_body_planner.jump_front_land_fraction", 0.5);
+  jump_takeoff_vx_ = node_->declare_parameter<double>(
+      "global_body_planner.jump_takeoff_vx", 0.0);
   RCLCPP_INFO(node_->get_logger(),
               "[global_body_planner] jump_mode=%s (%d), enable_leaping=%d, "
               "num_leap_samples=%d",
@@ -494,6 +496,13 @@ void GlobalBodyPlanner::spin() {
       continue;
     }
 
+    // Step 17: FORCE_LEAP replaces the RRT with one deterministic jump.
+    if (planner_config_.jump_mode == planning_utils::JUMP_FORCE_LEAP) {
+      forcedJumpSpinOnce();
+      r.sleep();
+      continue;
+    }
+
     // Set the start and goal states
     setStartState();
     setGoalState();
@@ -506,6 +515,82 @@ void GlobalBodyPlanner::spin() {
 
     r.sleep();
   }
+}
+
+void GlobalBodyPlanner::buildForcedJumpPlan() {
+  // Start from the live robot state, snapped to nominal body height, with the
+  // requested forward take-off speed baked into the horizontal velocity (the
+  // jump refine step aims the horizontal GRF along this heading).
+  State s0 = fullStateToState(robot_state_);
+  s0.pos[2] = getTerrainZFromState(s0, planner_config_) + planner_config_.h_nom;
+  s0.vel << jump_takeoff_vx_, 0.0, 0.0;
+
+  const Eigen::Vector3d surf_norm(0.0, 0.0, 1.0);
+  Action a;
+  bool ok = false;
+  for (int i = 0; i < 500 && !ok; ++i) {
+    ok = getRandomLeapAction(s0, surf_norm, a, planner_config_);
+  }
+  if (!ok) {
+    RCLCPP_ERROR_THROTTLE(node_->get_logger(), *node_->get_clock(), 2000,
+                          "[forced jump] could not build a valid jump action");
+    return;
+  }
+  a.is_jump = true;  // stamp PRELOAD/REAR_PUSH/FRONT_LAND/SETTLE sub-phases
+
+  State s_land = applyAction(s0, a, planner_config_);
+  std::vector<State> states{s0, s_land};
+  std::vector<Action> actions{a};
+
+  FullState start_full = stateToFullState(s0, robot_state_.ang[0],
+                                          robot_state_.ang[1],
+                                          robot_state_.ang[2], 0.0, 0.0, 0.0);
+  current_plan_.clear();
+  current_plan_.loadPlanData(VALID, start_full, 0.0, states, actions, dt_, 0.0,
+                             planner_config_);
+  current_plan_.setPublishedTimestamp(node_->now());
+  forced_jump_built_ = true;
+
+  RCLCPP_WARN(node_->get_logger(),
+              "[forced jump] built: vx0=%.2f t_s_leap=%.3f t_f=%.3f "
+              "t_s_land=%.3f dz_0=%.2f dz_f=%.2f grf_0=[%.2f %.2f %.2f] "
+              "land=(%.2f,%.2f,%.2f)",
+              jump_takeoff_vx_, a.t_s_leap, a.t_f, a.t_s_land, a.dz_0, a.dz_f,
+              a.grf_0[0], a.grf_0[1], a.grf_0[2], s_land.pos[0], s_land.pos[1],
+              s_land.pos[2]);
+}
+
+void GlobalBodyPlanner::forcedJumpSpinOnce() {
+  if (!forced_jump_built_) {
+    // Give the controller time to settle into a stand, then require the body
+    // to be essentially still before committing to the jump.
+    if ((node_->now() - reset_time_).seconds() < reset_publish_delay_ + 2.0) {
+      return;
+    }
+    if (robot_state_.vel.norm() > 0.15) {
+      RCLCPP_INFO_THROTTLE(node_->get_logger(), *node_->get_clock(), 1000,
+                           "[forced jump] waiting for the robot to settle "
+                           "(|v|=%.2f)",
+                           robot_state_.vel.norm());
+      return;
+    }
+    buildForcedJumpPlan();
+  }
+
+  if (!forced_jump_built_ || current_plan_.isEmpty()) return;
+
+  // Keep re-publishing the same fixed plan. The local planner walks its index
+  // forward with wall time and holds the final SETTLE state once the plan ends.
+  quad_msgs::msg::RobotPlan robot_plan_msg, discrete_robot_plan_msg;
+  robot_plan_msg.header.frame_id = map_frame_;
+  robot_plan_msg.header.stamp = node_->now();
+  discrete_robot_plan_msg.header = robot_plan_msg.header;
+  robot_plan_msg.global_plan_timestamp = current_plan_.getPublishedTimestamp();
+  discrete_robot_plan_msg.global_plan_timestamp =
+      current_plan_.getPublishedTimestamp();
+  current_plan_.convertToMsg(robot_plan_msg, discrete_robot_plan_msg);
+  body_plan_pub_->publish(robot_plan_msg);
+  discrete_body_plan_pub_->publish(discrete_robot_plan_msg);
 }
 
 void GlobalBodyPlanner::planWithConstraintsCallback(

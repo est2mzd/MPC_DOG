@@ -148,7 +148,11 @@ class Step17Recorder(Node):
             row["plan_nmpc_iterations"] = None
             row["plan_nmpc_cost"] = None
 
-        # 足先位置(実測) + 実測接触(シミュレータ) + 計画接触(control/grfs)
+        # 足先位置(実測) + 実測接触 + 計画接触(control/grfs)
+        # 実測接触の優先順:
+        #   1) state/ground_truth.feet[i].contact (シミュレータが埋めれば)
+        #   2) state/grfs.contact_states[i] (推定器)
+        #   3) 実測 normal force > 5 N のしきい値
         n_feet = len(msg.feet.feet)
         n_meas_contact_true = 0
         for i, leg in enumerate(LEG_ORDER):
@@ -157,14 +161,12 @@ class Step17Recorder(Node):
                 row[f"foot_{leg}_pos_x_m"] = fp.x
                 row[f"foot_{leg}_pos_y_m"] = fp.y
                 row[f"foot_{leg}_pos_z_m"] = fp.z
-                mc = bool(msg.feet.feet[i].contact)
-                row[f"measured_contact_{leg}"] = int(mc)
-                n_meas_contact_true += int(mc)
+                gt_contact = bool(msg.feet.feet[i].contact)
             else:
                 row[f"foot_{leg}_pos_x_m"] = None
                 row[f"foot_{leg}_pos_y_m"] = None
                 row[f"foot_{leg}_pos_z_m"] = None
-                row[f"measured_contact_{leg}"] = None
+                gt_contact = None
 
             if self._grf_planned is not None and i < len(self._grf_planned.contact_states):
                 row[f"planned_contact_{leg}"] = int(bool(self._grf_planned.contact_states[i]))
@@ -178,11 +180,32 @@ class Step17Recorder(Node):
                 row[f"grf_{leg}_y_N"] = 0.0
                 row[f"grf_{leg}_z_N"] = 0.0
 
-            # 実測 normal force: state/grfs があればその z、無ければ NMPC GRF の z で代用。
+            nf = None
+            est_contact = None
             if self._grf_measured is not None and i < len(self._grf_measured.vectors):
-                row[f"normal_force_{leg}_N"] = self._grf_measured.vectors[i].z
+                nf = self._grf_measured.vectors[i].z
+                if i < len(self._grf_measured.contact_states):
+                    est_contact = bool(self._grf_measured.contact_states[i])
+            if nf is None:
+                nf = row[f"grf_{leg}_z_N"]
+            row[f"normal_force_{leg}_N"] = nf
+
+            # foot-height contact proxy: on flat ground a planted toe sits at
+            # z ~= toe_radius (~0.024 m); >0.06 m means it has clearly left the
+            # ground. state/ground_truth.feet[].contact and state/grfs are not
+            # populated by this sim build, so this is the primary signal.
+            foot_z = row[f"foot_{leg}_pos_z_m"]
+            geom_contact = (foot_z is not None and foot_z < 0.06)
+
+            if gt_contact or est_contact or geom_contact:
+                mc = 1
+            elif nf is not None and nf > 5.0:
+                mc = 1
             else:
-                row[f"normal_force_{leg}_N"] = row[f"grf_{leg}_z_N"]
+                mc = 0
+            row[f"measured_contact_{leg}"] = mc
+            if mc == 1:
+                n_meas_contact_true += 1
 
         # 実飛翔: 4脚とも実測接触なしの最初の時刻を記録。
         if (self._first_flight_s is None and n_feet == 4

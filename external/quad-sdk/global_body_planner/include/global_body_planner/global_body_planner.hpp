@@ -146,6 +146,20 @@ class GlobalBodyPlanner {
    */
   void publishCurrentPlan();
 
+  /**
+   * @brief Step 17: when jump_mode == FORCE_LEAP, bypass the RRT entirely.
+   * Once the robot is standing still, build a single deterministic forward
+   * jump (PRELOAD -> REAR_PUSH -> FLIGHT -> FRONT_LAND -> SETTLE) from the
+   * current state and keep re-publishing it so the local planner has a
+   * stable target through flight and landing.
+   */
+  void forcedJumpSpinOnce();
+
+  /**
+   * @brief Build the one-shot forced jump plan into current_plan_.
+   */
+  void buildForcedJumpPlan();
+
   /// Subscriber for terrain map messages
   rclcpp::Subscription<grid_map_msgs::msg::GridMap>::SharedPtr terrain_map_sub_;
 
@@ -275,6 +289,10 @@ class GlobalBodyPlanner {
   double dt_;
 
   bool map_recieved_ = false;
+
+  /// Step 17 forced-jump state
+  bool forced_jump_built_ = false;
+  double jump_takeoff_vx_ = 0.0;  //!< desired forward take-off speed, m/s
 
   /// ID for status of planner
   int planner_status_;
