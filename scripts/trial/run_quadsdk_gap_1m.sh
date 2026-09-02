@@ -107,6 +107,13 @@ cleanup() {
     kill -KILL "-${pid}" 2>/dev/null || kill -KILL "${pid}" 2>/dev/null || true
   done
   wait "${PLAN_PID:-}" "${MUJOCO_PID:-}" 2>/dev/null || true
+  # mujoco_recorder は destructor で mp4 を finalize する(quad_mujoco.py の
+  # コメント: "Ctrl+C produces a finalized mp4")。SIGINT なら moov を書いて
+  # 有効な mp4 になるが、下の保険 pkill -9 が先に届くと moov 未書き込みで
+  # 壊れる(短い試行で頻発)。保険 kill の前に、名前指定で SIGINT を送り、
+  # プロセス消滅または最大8sまで待って finalize させる。
+  pkill -INT -f "mujoco_recorder" 2>/dev/null || true
+  for _ in $(seq 1 8); do pgrep -f "mujoco_recorder" >/dev/null 2>&1 || break; sleep 1; done
   # プロセスグループkillだけでは一部の子ノードが終了しきらず、次の試行の
   # 記録を汚染する事象を確認済み。名前パターンでの強制killを保険として追加する。
   # 2026-08-30: このパターンにgrid_map_visualization/topic_tools relay(terrain_map)/

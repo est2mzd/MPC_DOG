@@ -10,10 +10,17 @@
 # 使い方: bash scripts/trial/make_gif.sh <入力mp4> <出力gif> [fps] [幅px]
 set -euo pipefail
 
-IN_MP4="${1:?使い方: make_gif.sh <入力mp4> <出力gif> [fps] [幅px]}"
-OUT_GIF="${2:?使い方: make_gif.sh <入力mp4> <出力gif> [fps] [幅px]}"
+IN_MP4="${1:?使い方: make_gif.sh <入力mp4> <出力gif> [fps] [幅px] [開始s] [長さs]}"
+OUT_GIF="${2:?使い方: make_gif.sh <入力mp4> <出力gif> [fps] [幅px] [開始s] [長さs]}"
 FPS="${3:-10}"
 WIDTH="${4:-480}"
+# 5番目=切り出し開始[s]、6番目=切り出し長さ[s]。省略時は全体。
+# 追従なし固定カメラの録画は先頭に起立待ち(約7〜8s)が入るため、
+# 歩行区間だけを切り出したいときに使う。
+SS_ARG=()
+[ "${5:-}" != "" ] && SS_ARG=(-ss "${5}")
+T_ARG=()
+[ "${6:-}" != "" ] && T_ARG=(-t "${6}")
 
 if [ ! -f "${IN_MP4}" ]; then
   echo "ERROR: 入力mp4が見つかりません: ${IN_MP4}" >&2
@@ -28,6 +35,8 @@ trap 'rm -f "${PALETTE}"' EXIT
 # サムネイル表示になる)場合でも、時刻表示自体が静止画として見えることで
 # 「動いていない」ように見える原因の切り分けに使える。
 TOTAL_S="$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${IN_MP4}")"
+# 切り出し指定があれば、焼き込む合計時間は切り出し長さにする(pts は切り出し後 0 起点)。
+[ "${6:-}" != "" ] && TOTAL_S="${6}"
 TOTAL_S_FMT="$(printf '%.1f' "${TOTAL_S}")"
 FONT="/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf"
 OUT_BASENAME="$(basename "${OUT_GIF}")"
@@ -45,8 +54,8 @@ DRAWTEXT="${DRAWTEXT_TIME},${DRAWTEXT_NAME}"
 # 2パス方式(パレット生成→適用)で、単純な減色より高画質かつ低ファイルサイズにする。
 # 時刻・ファイル名の焼き込み(drawtext)はパレット生成・適用の両方で同じ
 # フィルタチェーンにする(焼き込んだ文字の背景も含めてパレットに反映させるため)。
-ffmpeg -y -i "${IN_MP4}" -vf "${DRAWTEXT},fps=${FPS},scale=${WIDTH}:-1:flags=lanczos,palettegen" "${PALETTE}" -loglevel error
-ffmpeg -y -i "${IN_MP4}" -i "${PALETTE}" \
+ffmpeg -y "${SS_ARG[@]}" "${T_ARG[@]}" -i "${IN_MP4}" -vf "${DRAWTEXT},fps=${FPS},scale=${WIDTH}:-1:flags=lanczos,palettegen" "${PALETTE}" -loglevel error
+ffmpeg -y "${SS_ARG[@]}" "${T_ARG[@]}" -i "${IN_MP4}" -i "${PALETTE}" \
   -filter_complex "${DRAWTEXT},fps=${FPS},scale=${WIDTH}:-1:flags=lanczos[x];[x][1:v]paletteuse" \
   -loop 0 "${OUT_GIF}" -loglevel error
 
