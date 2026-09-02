@@ -217,13 +217,15 @@ Step12Result step12PlanSequence(
   const double fwd = 0.32, back = 0.28, lat = 0.26;
   const double td_spacing = (period > 0) ? (period * dt / 4.0) : 0.225;
   const int kmax = 32;
-  // Max forward travel of one leg between its own consecutive touchdowns
-  // (instruction 2.3-8). Chosen so the actual crossing behaviour is admitted:
-  // the crawl gait bridges the ~0.40 m traversability-unsafe band of a 0.30 m
-  // step03/04 gap (Step 09) by stepping straight to the far strip, but cannot
-  // bridge a 0.50 m gap (~0.55 m near-edge->far-strip). 0.45 m sits between.
-  const double max_step_fwd = 0.45, max_step_back = 0.15;
-  double leg_prev_x[4] = {-1e9, -1e9, -1e9, -1e9};
+  // [MPC_DOG Step 14] The block decision is a raw-z-NaN band scan, not the
+  // traversability-based candidate scarcity that made Step 12 stop before
+  // crossable 0.30-0.35 m gaps. Step 09: raw z is NaN over the physical void
+  // (= physical width + 2*MESH_MARGIN) and is NOT eroded by the traversability
+  // edge blur. Widths: 15cm->0.25, 30cm(step03/04)->0.50, 35cm->0.45,
+  // 50cm->0.60, 100cm->1.10 m. 0.52 m admits <=35 cm gaps (crawl stages onto
+  // the far strip) and blocks >=50 cm.
+  const double uncrossable_nan_width = 0.52;
+  const double scan_ahead = 1.5;
 
   auto trav_ok = [&](double x, double y) -> bool {
     const grid_map::Position p(x, y);
@@ -257,36 +259,54 @@ Step12Result step12PlanSequence(
       blocked_leg_idx = leg;
       break;
     }
-    // enumerate candidates, keep min-cost valid one
+    // --- block decision: widest contiguous raw-z-NaN run ahead of the hip ---
+    double nan_run = 0.0, max_nan_run = 0.0;
+    double first_solid_x = std::numeric_limits<double>::quiet_NaN();
+    for (double d = 0.0; d <= scan_ahead + 1e-9; d += res) {
+      const grid_map::Position p(hip.x() + d, hip.y());
+      if (!grid.isInside(p)) break;
+      const double zr = have_raw ? grid.atPosition("z", p) : 0.0;
+      if (!std::isfinite(zr)) {
+        nan_run += res;
+        if (nan_run > max_nan_run) max_nan_run = nan_run;
+      } else {
+        nan_run = 0.0;
+        if (!std::isfinite(first_solid_x) && trav_ok(p.x(), p.y())) {
+          first_solid_x = hip.x() + d;
+        }
+      }
+    }
+    if (max_nan_run >= uncrossable_nan_width ||
+        !std::isfinite(first_solid_x)) {
+      verdict = "BLOCKED_AT_STEP_K";
+      blocked_k = k;
+      blocked_leg = legname[leg];
+      blocked_leg_idx = leg;
+      break;
+    }
+
+    // --- foothold placement (shadow only): nearest safe+observed reachable
+    //     cell to the hip, biased slightly forward. n_valid == 0 momentarily
+    //     when the hip is right over the near edge is NOT a block (the NaN-band
+    //     check above is the block criterion) - just step to first_solid_x. ---
     double best_cost = std::numeric_limits<double>::max();
-    double best_x = 0.0, best_y = 0.0;
+    double best_x = first_solid_x, best_y = hip.y();
     int n_valid = 0;
-    const double nom_x = hip.x() + 0.08;  // slight forward of the hip
     for (double x = hip.x() - back; x <= hip.x() + fwd + 1e-9; x += res) {
       for (double y = hip.y() - lat; y <= hip.y() + lat + 1e-9; y += res) {
         const grid_map::Position p(x, y);
-        if (!grid.isInside(p)) continue;
+        if (!grid.isInside(p) || !trav_ok(x, y)) continue;
+        const double zr = have_raw ? grid.atPosition("z", p) : std::nan("");
+        if (!std::isfinite(zr)) continue;
         const double zc =
             have_z ? grid.atPosition("z_inpainted", p) + toe_radius : 0.0;
         const double d = std::sqrt((x - hip.x()) * (x - hip.x()) +
                                    (y - hip.y()) * (y - hip.y()) +
                                    (zc - hip.z()) * (zc - hip.z()));
-        if (d > R || !trav_ok(x, y)) continue;
-        // step-length limit vs this leg's previous foothold in the sequence
-        if (leg_prev_x[leg] > -1e8 &&
-            (x - leg_prev_x[leg] > max_step_fwd ||
-             x - leg_prev_x[leg] < -max_step_back)) {
-          continue;
-        }
-        // light foot-sole / edge margin: the cell plus its along-travel
-        // neighbours safe (rejects an isolated 1-cell strip; admits the wide
-        // near/far strips the controller actually uses).
-        const bool sole = trav_ok(x + res, y) && trav_ok(x - res, y);
-        const double zr = have_raw ? grid.atPosition("z", p) : std::nan("");
-        if (!sole || !std::isfinite(zr)) continue;
+        if (d > R) continue;
         ++n_valid;
-        const double cost = std::fabs(x - nom_x) + std::fabs(y - hip.y()) +
-                            0.5 * std::fabs(y - prev_y) + 0.3 * (d / R);
+        const double cost = std::fabs(x - (hip.x() + 0.08)) +
+                            std::fabs(y - hip.y());
         if (cost < best_cost) {
           best_cost = cost;
           best_x = x;
@@ -294,18 +314,10 @@ Step12Result step12PlanSequence(
         }
       }
     }
-    if (n_valid == 0) {
-      verdict = "BLOCKED_AT_STEP_K";
-      blocked_k = k;
-      blocked_leg = legname[leg];
-      blocked_leg_idx = leg;
-      break;
-    }
     ++placed;
     max_progress = best_x - bx;
     prev_x = best_x;
     prev_y = best_y;
-    leg_prev_x[leg] = best_x;
     char fb[192];
     std::snprintf(fb, sizeof(fb), "%.4f,%d,%d,%s,%.5f,%.5f,%.5f,%d", time_s,
                   plan_idx, k, legname[leg], best_x, best_y, hip.x(), n_valid);
