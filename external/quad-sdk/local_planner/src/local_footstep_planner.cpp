@@ -201,6 +201,13 @@ struct Step12Result {
   int verdict = 0;   // 0 FEASIBLE_TO_RANGE, 1 BLOCKED_AT_STEP_K, 2 UNKNOWN_BEFORE_RANGE
   int blocked_k = -1;
   int blocked_leg = -1;
+  // [MPC_DOG Step 15] first planned touchdown foothold per leg index
+  // (0=FL,1=BL,2=FR,3=BR), world x/y. planned_ok[leg] is true only when that
+  // leg's first touchdown found a reachable+safe+observed cell (n_valid>0),
+  // i.e. not the first_solid_x fallback and not a blocked step.
+  double planned_x[4] = {0.0, 0.0, 0.0, 0.0};
+  double planned_y[4] = {0.0, 0.0, 0.0, 0.0};
+  bool planned_ok[4] = {false, false, false, false};
 };
 
 Step12Result step12PlanSequence(
@@ -250,6 +257,10 @@ Step12Result step12PlanSequence(
   double max_progress = 0.0;
   int placed = 0;
   std::vector<std::string> foot_rows;
+  // [MPC_DOG Step 15] first planned touchdown foothold per leg index
+  double pl_x[4] = {0.0, 0.0, 0.0, 0.0};
+  double pl_y[4] = {0.0, 0.0, 0.0, 0.0};
+  bool pl_ok[4] = {false, false, false, false};
 
   double prev_x = bx, prev_y = by;
   for (int k = 0; k < kmax; ++k) {
@@ -326,6 +337,14 @@ Step12Result step12PlanSequence(
       }
     }
     ++placed;
+    // [MPC_DOG Step 15] remember each leg's first touchdown foothold, but only
+    // when a genuine reachable+safe cell was found (not the first_solid_x
+    // fallback). This is what apply_foothold feeds to the nominal.
+    if (!pl_ok[leg] && n_valid > 0) {
+      pl_x[leg] = best_x;
+      pl_y[leg] = best_y;
+      pl_ok[leg] = true;
+    }
     max_progress = best_x - bx;
     prev_x = best_x;
     prev_y = best_y;
@@ -377,6 +396,11 @@ Step12Result step12PlanSequence(
                     : (verdict == "UNKNOWN_BEFORE_RANGE" ? 2 : 0);
   out.blocked_k = blocked_k;
   out.blocked_leg = blocked_leg_idx;
+  for (int L = 0; L < 4; ++L) {
+    out.planned_x[L] = pl_x[L];
+    out.planned_y[L] = pl_y[L];
+    out.planned_ok[L] = pl_ok[L];
+  }
   return out;
 }
 
@@ -437,10 +461,12 @@ void LocalFootstepPlanner::setSpatialParams(
 
 void LocalFootstepPlanner::setMultistepParams(bool enabled,
                                               bool apply_stop_request,
+                                              bool apply_foothold,
                                               int stop_margin_steps,
                                               double planning_distance) {
   multistep_enabled_ = enabled;
   multistep_apply_stop_ = apply_stop_request;
+  multistep_apply_foothold_ = apply_foothold;
   multistep_stop_margin_steps_ = std::max(1, stop_margin_steps);
   multistep_planning_distance_ = planning_distance;
 }
@@ -565,6 +591,12 @@ FootPlanResult LocalFootstepPlanner::computeFootPlan(
     Eigen::MatrixXd& foot_accelerations) {
   // [MPC_DOG DIAG]
   int diag_new_contacts = 0, diag_snap_calls = 0, diag_outside = 0;
+  // [MPC_DOG Step 15] per-leg: has the nearest touchdown already taken the
+  // planned foothold this call? (only the closest touchdown per leg is fed).
+  bool multistep_first_td_applied[4] = {false, false, false, false};
+  bool s15_leg_logged[4] = {false, false, false, false};
+  int diag_multistep_applied = 0;
+  std::vector<std::string> s15_rows;
 
   // Phase 2A: track whether every touchdown got a traversable in-map foothold.
   // Records the first failure and a total count; does not alter selection.
@@ -655,6 +687,17 @@ FootPlanResult LocalFootstepPlanner::computeFootPlan(
           plan_result.multistep_slow = true;
         }
       }
+      // [MPC_DOG Step 15] cache the planned first-touchdown foothold per leg so
+      // the placement loop below can feed it to the nominal (receding horizon:
+      // refreshed here every 5th cycle). Only when apply_foothold is opted in.
+      if (multistep_apply_foothold_) {
+        for (int L = 0; L < 4; ++L) {
+          multistep_planned_ok_[L] = s12.planned_ok[L];
+          multistep_planned_xy_[L] =
+              Eigen::Vector2d(s12.planned_x[L], s12.planned_y[L]);
+        }
+        multistep_planned_plan_index_ = current_plan_index;
+      }
     }
   }
 
@@ -737,6 +780,34 @@ FootPlanResult LocalFootstepPlanner::computeFootPlan(
         foot_position_raibert =
             hip_position_midstance + centrifugal + vel_tracking;
         foot_position_nominal = foot_position_raibert;
+
+        // [MPC_DOG Step 15] Receding-horizon foothold apply (opt-in). For each
+        // leg's nearest touchdown only, replace the Raibert nominal (x,y) with
+        // the multi-step planner's first planned foothold when one is available,
+        // fresh, and close enough to the nominal to be a sane local choice. The
+        // existing getNearestValidFootholdResult() below still runs as the final
+        // local micro-correction. When no planned foothold is available the
+        // nominal is left untouched; a vanished plan over a wide void is handled
+        // by the Step 14 SLOW / STOP_REQUEST path, not by a silent revert here.
+        bool s15_applied = false;
+        const double raibert_x = foot_position_raibert.x();
+        const double raibert_y = foot_position_raibert.y();
+        if (multistep_apply_foothold_ && multistep_enabled_ &&
+            !multistep_first_td_applied[j] && j >= 0 && j < 4 &&
+            multistep_planned_ok_[j] &&
+            (current_plan_index - multistep_planned_plan_index_) >= 0 &&
+            (current_plan_index - multistep_planned_plan_index_) < 50) {
+          const double dx = multistep_planned_xy_[j].x() - raibert_x;
+          const double dy = multistep_planned_xy_[j].y() - raibert_y;
+          if (std::hypot(dx, dy) <= foothold_search_radius_) {
+            foot_position_nominal.x() = multistep_planned_xy_[j].x();
+            foot_position_nominal.y() = multistep_planned_xy_[j].y();
+            multistep_first_td_applied[j] = true;
+            ++diag_multistep_applied;
+            s15_applied = true;
+          }
+        }
+
         grid_map::Position foot_position_grid_map = {foot_position_nominal.x(),
                                                      foot_position_nominal.y()};
 
@@ -814,6 +885,28 @@ FootPlanResult LocalFootstepPlanner::computeFootPlan(
               (foothold.position - hip_position_midstance).norm(),
               static_cast<int>(foothold.status));
           s09_foot_rows.emplace_back(rb);
+        }
+
+        // [MPC_DOG Step 15] planned foothold vs Raibert nominal vs snapped
+        // result, for the nearest touchdown of each leg (whether or not the
+        // planned value was actually applied). Lets a run show the planned <->
+        // actual correspondence and the residual snap correction.
+        if (s09_dir != nullptr && multistep_apply_foothold_ &&
+            j >= 0 && j < 4 && (s15_applied || !s15_leg_logged[j])) {
+          s15_leg_logged[j] = true;
+          char sb[384];
+          std::snprintf(
+              sb, sizeof(sb),
+              "%.4f,%d,%s,%zu,%d,%.5f,%.5f,%.5f,%.5f,%.5f,%.5f,%.5f,%d,%d",
+              node_->now().seconds(), current_plan_index, kS09Legs[j], i,
+              s15_applied ? 1 : 0,
+              multistep_planned_ok_[j] ? multistep_planned_xy_[j].x() : raibert_x,
+              multistep_planned_ok_[j] ? multistep_planned_xy_[j].y() : raibert_y,
+              raibert_x, raibert_y, foothold.position.x(), foothold.position.y(),
+              foothold.snap_distance,
+              current_plan_index - multistep_planned_plan_index_,
+              static_cast<int>(foothold.status));
+          s15_rows.emplace_back(sb);
         }
 
         // [MPC_DOG Step 11] once per leg per plan cycle (the first touchdown of
@@ -1063,8 +1156,25 @@ FootPlanResult LocalFootstepPlanner::computeFootPlan(
       }
       for (const auto &r : s10_gait_rows) gf << r << "\n";
     }
+
+    // [MPC_DOG Step 15] flush the planned-vs-actual foothold rows (append).
+    if (!s15_rows.empty()) {
+      const std::string s15_path =
+          std::string(s09_dir) + "/step15_footholds.csv";
+      const bool s15_hdr = !std::ifstream(s15_path).good();
+      std::ofstream s15f(s15_path, std::ios::app);
+      if (s15f) {
+        if (s15_hdr) {
+          s15f << "time,current_plan_index,leg,touchdown_index,applied,"
+                  "planned_x,planned_y,raibert_x,raibert_y,snapped_x,snapped_y,"
+                  "snap_distance,plan_age_cycles,foothold_status\n";
+        }
+        for (const auto &r : s15_rows) s15f << r << "\n";
+      }
+    }
   }
 
+  plan_result.multistep_applied_footholds = diag_multistep_applied;
   return plan_result;
 }
 

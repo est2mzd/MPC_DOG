@@ -91,6 +91,9 @@ struct FootPlanResult {
   int multistep_blocked_leg = -1;   //!< leg index at that step
   bool multistep_stop_request = false;  //!< blocked within final_stop_steps
   bool multistep_slow = false;          //!< blocked, but beyond final_stop_steps
+  int multistep_applied_footholds = 0;  //!< [Step 15] touchdowns whose nominal
+                                        //!< was replaced by a planned foothold
+                                        //!< this call (0 unless apply_foothold)
 };
 
 //! Local footstep planner for quadruped body plans
@@ -150,10 +153,14 @@ class LocalFootstepPlanner {
    * planner. When `enabled`, the sequence search runs every 5th cycle even
    * without the CSV-dump env; when `apply_stop_request`, a BLOCKED_AT_STEP_K
    * within final_stop_steps sets FootPlanResult::multistep_stop_request so the
-   * caller can latch the existing Phase 2B graceful stop.
+   * caller can latch the existing Phase 2B graceful stop. When `apply_foothold`
+   * ([MPC_DOG Step 15]), each leg's nearest touchdown nominal is replaced by
+   * the planned foothold (when one is available and sane) before the existing
+   * getNearestValidFootholdResult snap runs as the final local correction.
    */
   void setMultistepParams(bool enabled, bool apply_stop_request,
-                          int stop_margin_steps, double planning_distance);
+                          bool apply_foothold, int stop_margin_steps,
+                          double planning_distance);
 
   /**
    * @brief Transform a vector of foot positions from the world to the body
@@ -599,6 +606,16 @@ class LocalFootstepPlanner {
   bool multistep_apply_stop_ = false;
   int multistep_stop_margin_steps_ = 4;
   double multistep_planning_distance_ = 2.5;
+
+  /// [MPC_DOG Step 15] feed the planned foothold sequence to the nominal.
+  bool multistep_apply_foothold_ = false;
+  /// latest planned first-touchdown foothold per leg index, world x/y, and
+  /// whether it is usable; refreshed every 5th cycle by step12PlanSequence.
+  Eigen::Vector2d multistep_planned_xy_[4] = {
+      Eigen::Vector2d::Zero(), Eigen::Vector2d::Zero(), Eigen::Vector2d::Zero(),
+      Eigen::Vector2d::Zero()};
+  bool multistep_planned_ok_[4] = {false, false, false, false};
+  int multistep_planned_plan_index_ = -1;
 };
 
 #endif  // LOCAL_FOOTSTEP_PLANNER_H

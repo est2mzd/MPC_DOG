@@ -103,6 +103,9 @@ LocalPlanner::LocalPlanner(rclcpp::Node::SharedPtr node)
       node_, "local_planner.multistep_planner.apply_stop_request",
       multistep_apply_stop_, false);
   quad_utils::loadROSParamDefault(
+      node_, "local_planner.multistep_planner.apply_foothold",
+      multistep_apply_foothold_, false);
+  quad_utils::loadROSParamDefault(
       node_, "local_planner.multistep_planner.stop_margin_steps",
       multistep_stop_margin_steps_, 4);
   quad_utils::loadROSParamDefault(
@@ -247,8 +250,8 @@ void LocalPlanner::initLocalFootstepPlanner() {
       toe_radius_, edge_clearance, max_crossable_gap, ik_reach_check,
       ik_max_reach);
   local_footstep_planner_->setMultistepParams(
-      multistep_enabled_, multistep_apply_stop_, multistep_stop_margin_steps_,
-      multistep_planning_distance_);
+      multistep_enabled_, multistep_apply_stop_, multistep_apply_foothold_,
+      multistep_stop_margin_steps_, multistep_planning_distance_);
 
   past_footholds_msg_.feet.resize(num_feet_);
 }

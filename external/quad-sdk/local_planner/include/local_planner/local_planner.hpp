@@ -174,6 +174,10 @@ class LocalPlanner {
   /// Both default false = pre-Step-14 behaviour.
   bool multistep_enabled_ = false;
   bool multistep_apply_stop_ = false;
+  /// [MPC_DOG Step 15] apply_foothold: feed the planned foothold sequence to the
+  /// nominal (receding horizon, nearest touchdown per leg; existing snap still
+  /// runs as the final local correction). default false = pre-Step-15 behaviour.
+  bool multistep_apply_foothold_ = false;
   int multistep_stop_margin_steps_ = 4;
   double multistep_planning_distance_ = 2.5;
   double multistep_slow_factor_ = 0.4;

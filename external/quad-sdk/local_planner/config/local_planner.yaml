@@ -22,6 +22,7 @@
       multistep_planner:
         enabled: false                   # [MPC_DOG Step 12/14] run the shadow multi-step foothold-sequence search (every 5th cycle). false = off; the CSV-dump env (MPCDOG_STEPDUMP_DIR) also enables it for measurement.
         apply_stop_request: false        # [MPC_DOG Step 14] act on the shadow verdict. false = shadow only (no control effect). true = BLOCKED_AT_STEP_K within final_stop_steps latches the Phase 2B graceful stop; a farther block scales cmd_vel by slow_factor.
+        apply_foothold: false            # [MPC_DOG Step 15] feed the planned foothold sequence to the nominal (receding horizon, nearest touchdown per leg; the existing getNearestValidFoothold snap still runs as the final local correction). false = pre-Step-15 (nominal Raibert foothold). Run with apply_stop_request:true so a vanished plan over a wide void goes to SLOW/STOP, not a silent revert.
         stop_margin_steps: 4             # [MPC_DOG Step 13/14] user M. final_stop_steps = max(M, required_stop_steps from d_stop). Step 13 measured required ~4-7; M=4 gives a comfortable margin at 0.3 m/s.
         planning_distance: 2.5           # [MPC_DOG Step 12] m to plan the foothold sequence forward (terrain_planning_distance).
         slow_factor: 0.4                # [MPC_DOG Step 14] cmd_vel multiplier while SLOW (block beyond final_stop_steps).
