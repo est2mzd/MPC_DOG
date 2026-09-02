@@ -225,7 +225,14 @@ Step12Result step12PlanSequence(
   // 50cm->0.60, 100cm->1.10 m. 0.52 m admits <=35 cm gaps (crawl stages onto
   // the far strip) and blocks >=50 cm.
   const double uncrossable_nan_width = 0.52;
-  const double scan_ahead = 1.5;
+  // [MPC_DOG Step 14] A NaN band only blocks THIS touchdown when it begins
+  // within one step's reach (R) of the hip; a void farther than that is a
+  // later touchdown's problem and is caught at its own k. Scanning much
+  // farther (the old 1.5 m) made every early k "see" a void ~1.5 m ahead, so
+  // STOP_REQUEST fired ~1.5 m before the gap. scan_ahead now only needs to
+  // reach R + one band width so the full band can still be measured once its
+  // near edge is within reach.
+  const double scan_ahead = R + uncrossable_nan_width + 0.15;
 
   auto trav_ok = [&](double x, double y) -> bool {
     const grid_map::Position p(x, y);
@@ -261,16 +268,20 @@ Step12Result step12PlanSequence(
     }
     // --- block decision: widest contiguous raw-z-NaN run ahead of the hip ---
     double nan_run = 0.0, max_nan_run = 0.0;
+    double nan_start_d = -1.0;  // d at which the current NaN run began
     double first_solid_x = std::numeric_limits<double>::quiet_NaN();
     for (double d = 0.0; d <= scan_ahead + 1e-9; d += res) {
       const grid_map::Position p(hip.x() + d, hip.y());
       if (!grid.isInside(p)) break;
       const double zr = have_raw ? grid.atPosition("z", p) : 0.0;
       if (!std::isfinite(zr)) {
+        if (nan_start_d < 0.0) nan_start_d = d;
         nan_run += res;
-        if (nan_run > max_nan_run) max_nan_run = nan_run;
+        // only a band whose near edge is within one step's reach blocks here
+        if (nan_start_d <= R && nan_run > max_nan_run) max_nan_run = nan_run;
       } else {
         nan_run = 0.0;
+        nan_start_d = -1.0;
         if (!std::isfinite(first_solid_x) && trav_ok(p.x(), p.y())) {
           first_solid_x = hip.x() + d;
         }
