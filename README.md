@@ -45,6 +45,7 @@
  - [Step 14:多歩足場列の判定を既存の Phase 2B graceful stop につなぐ(opt-in・**初めて制御パスに触れる**が全パラメータ既定 OFF)。`enabled:=true` + `apply_stop_request:=true` で **50/100 cm 空洞を 6/6 直立 SAFE-STOP・空洞縁まで ≈0.95 m の余裕**、15/30/35 cm は不要停止なし、feature OFF は Step 08 と一致](./agent_reports/steps/step_14_multistep_planner_safe_stop_integration.md)
  - [Step 15:計画足場列を足場ノミナルへ差し込む(`apply_foothold:=true`、既定 OFF)。目前の 1 着地だけ、穴の上の Raibert ノミナルを計画足場側へ前方 ≤0.12 m 寄せる。**15/30 cm は 3/3 直立完走・planned↔actual がログで追え・NMPC 負荷は OFF と同水準**、50/100 cm は差し込まず(applied=0)Step 14 停止。world 座標直入れ→チャタリング→後ろ引き の 3 回の転倒を経て前方ナッジまで限定](./agent_reports/steps/step_15_multistep_foothold_nmpc_integration.md)
  - [Step 16:全回帰と限界 Map — 穴幅 15〜100 cm × {OFF, shadow, stop-only, foothold-apply} × v=0.30/0.50 を掃引(非決定条件は各 6 回)。**保護機能 ON の 18 run すべてで ≥50 cm への落下ゼロ**。stop-only は ≤35 cm 通過 / ≥50 cm 直立停止の境界が素直で NMPC 負荷も一定 → 実運用向け。foothold-apply は 25/35 cm 単独トレンチで 1/6〜2/6 転倒(実験段階)。当初課題「50 cm で数歩手前に止まれない」は stop-only 有効化で解決](./agent_reports/steps/step_16_multistep_terrain_planner_full_regression.md)
+ - [上流の判断機は今どこまで「汎用」か(Step 16 時点の整理・大学院初心者向け)— 判断機の骨組み(歩容予測・生 `z` の NaN 判定・reach 判定・速度依存の停止距離)は汎用。「穴が何 m 以上で渡れないか」の境界値 `uncrossable_nan_width = 0.52 m` だけが試験の溝幅に合わせた固定値で、これは想定どおりの現状。速度非依存なので Step 16 で「30 cm は v=0.50 で落下」が出た。汎用化の道筋(能力から `max_crossable_gap(v, gait, ...)` を計算)を記載](./agent_reports/steps/step_16b_upstream_decider_genericity.md)
 
 ### 実行例(時系列)
 
