@@ -43,6 +43,7 @@
  - [Step 12:複数歩ぶんの足場列を前方へ探索し `BLOCKED_AT_STEP_K` を出す(shadow・制御変更なし)。判定は生 `z` の NaN 帯幅で行う](./agent_reports/steps/step_12_multistep_foothold_sequence_shadow.md)
  - [Step 13:平地で latch → 停止させて `d_stop` を実測し `a_safe≈0.44 m/s²` を同定。`final_stop_steps = max(M, required)` を Step 12 の verdict に当てる(shadow・制御変更なし)](./agent_reports/steps/step_13_step_margin_and_stopping_distance.md)
  - [Step 14:多歩足場列の判定を既存の Phase 2B graceful stop につなぐ(opt-in・**初めて制御パスに触れる**が全パラメータ既定 OFF)。`enabled:=true` + `apply_stop_request:=true` で **50/100 cm 空洞を 6/6 直立 SAFE-STOP・空洞縁まで ≈0.95 m の余裕**、15/30/35 cm は不要停止なし、feature OFF は Step 08 と一致](./agent_reports/steps/step_14_multistep_planner_safe_stop_integration.md)
+ - [Step 15:計画足場列を足場ノミナルへ差し込む(`apply_foothold:=true`、既定 OFF)。目前の 1 着地だけ、穴の上の Raibert ノミナルを計画足場側へ前方 ≤0.12 m 寄せる。**15/30 cm は 3/3 直立完走・planned↔actual がログで追え・NMPC 負荷は OFF と同水準**、50/100 cm は差し込まず(applied=0)Step 14 停止。world 座標直入れ→チャタリング→後ろ引き の 3 回の転倒を経て前方ナッジまで限定](./agent_reports/steps/step_15_multistep_foothold_nmpc_integration.md)
 
 ### 実行例(時系列)
 
@@ -348,7 +349,42 @@ creep floor** でクランプ。③前方走査 1.5 m が長すぎて `STOP_REQU
 
 ---
 
-### 現在の到達点(Step 14 時点):できること / できないこと
+#### Step 15:計画足場列を Local Planner / NMPC へ差し込む(opt-in)
+
+Step 12 で探索した足場列を、いよいよ既存の足場ノミナルへ差し込む
+(`multistep_planner.apply_foothold:=true`、既定 OFF)。各脚の **目前の 1 着地
+だけ**、① 予測胴体 x が計画の前提と一致し ② Raibert ノミナルが穴の上で
+③ 計画足場が前方向、のとき Raibert を計画足場側へ **前方 ≤0.12 m** 寄せる。
+寄せた後も既存スナップを最終微修正として通す。詳細は
+[Step 15 の検証記録](./agent_reports/steps/step_15_multistep_foothold_nmpc_integration.md)。
+
+**タスク結果:計画足場の差し込み量 と NMPC 負荷(`scripts/trial/step15_analyze.py`)**
+
+![Step15 計画足場の差し込みと NMPC 負荷](./artifacts/step15/step15_foothold_apply.png)
+
+| シナリオ | mode | 判定 | applied | 計画足場−Raibert(中央値) | スナップ移動 |
+|---|---|---|---:|---:|---:|
+| 15 cm 連続 ×3 | ON | CROSSED(直立) | 53〜107 | +0.084〜0.091 m | 0.000 m |
+| 30 cm ×3 | ON | CROSSED(直立) | 126〜147 | +0.120〜0.128 m | 0.000 m |
+| 50 / 100 cm 空洞 | ON | SAFE-STOP(直立) | **0** | − | − |
+| 15 cm 連続 / 30 cm | OFF | CROSSED | 0 | − | − |
+
+NMPC 計算時間・iteration・cost・plan age は **ON でも OFF と同水準**。差し込んだ
+648 着地のうち 611 は後段スナップが動かさず(計画足場がそのまま NMPC へ)。
+
+**試行錯誤(§9 に詳細)**:①計画足場の world 座標をそのまま入れて転倒(胴体が
+前進すると古い点になる)。②遠い着地を毎周期いじって足場がチャタリングして転倒。
+③step12 の足場は Raibert より系統的に ~0.1 m 後ろで、入れると歩幅が縮んで転倒。
+→ **目前・胴体 x 一致・穴の上・前方向のみ・0.12 m クランプ**まで絞って直立完走。
+
+**Step 15 の結論**:計画足場 ↔ 実着地の対応がログで追え、NMPC 負荷は増えず、
+50/100 cm では到達不能足場を渡さず(applied=0)Step 14 停止が働き、feature OFF
+は回帰維持。ただし現状の差し込みは「穴回避の前方ナッジ」止まりで、0.3 m 級の
+穴を 1 歩でまたぐ足場列を積極的に組む用途には未到達(Step 16 の課題)。
+
+---
+
+### 現在の到達点(Step 15 時点):できること / できないこと
 
 **できること**
 
@@ -359,6 +395,7 @@ creep floor** でクランプ。③前方走査 1.5 m が長すぎて `STOP_REQU
 | **幅 ≥1.0 m の穴/断崖の手前で直立停止**(`edge_clearance:=0.15` 有効化時)。胴体前方 2.5 m をプローブ → `cmd_vel:=0` で減速 | Step 05b、Step 06 |
 | 脚が届かない足場の検知(`ik_reach_check:=true`、専用地形で確認。既定 OFF) | Step 07 |
 | **幅 0.44〜1.0 m の穴の手前で M 歩手前に直立停止**(`multistep_planner.enabled:=true` + `apply_stop_request:=true`、既定 OFF)。生 `z` の NaN 帯を着地脚ごとに前方 1 歩ぶん走査 → 遠い block は減速・近い block は Phase 2B 停止。50/100 cm で 6/6 直立停止・空洞縁まで ≈0.95 m の余裕、15/30/35 cm は不要停止なし | Step 10〜14 |
+| **計画足場列を足場ノミナルへ差し込む**(`apply_foothold:=true`、既定 OFF)。目前の 1 着地だけ、穴の上の Raibert ノミナルを計画足場側へ前方 ≤0.12 m 寄せる。planned↔actual がログで追え、NMPC 負荷は増えず、50/100 cm では差し込まない(applied=0) | Step 15 |
 
 **できないこと(既知の穴)**
 
@@ -368,14 +405,14 @@ creep floor** でクランプ。③前方走査 1.5 m が長すぎて `STOP_REQU
 | 斜め穴・旋回中の穴 | 前方走査は +x 方向固定。全幅横断穴のみ対応 |
 | 未観測領域と穴の区別 | 地図上どちらも `NaN`。「見えていない所」を安全と誤認しうる |
 | 実センサ(LiDAR/深度)からの地図生成 | この repo に無い(MuJoCo メッシュ由来のみ) |
-| 計画した足場列を NMPC に渡して追従させる | 未実装。いまは shadow(判定のみ)+ 速度制限・停止のみ。足場の受け渡しは Step 15、全条件の回帰スイープは Step 16 |
+| 0.3 m 級の穴を 1 歩でまたぐ足場列を積極的に組む | 未到達。Step 15 の差し込みは「穴の上の足を前方へ寄せる穴回避ナッジ」止まり。`step12PlanSequence` が Raibert ポリシ準拠の足場を生成していないため(Step 16 の課題) |
 
 **安全機能のスイッチ(`local_planner.yaml` 既定)**:
 Phase 2A(無効足場を NMPC に渡さない)= **ON** /
 Phase 2B(検知時に減速停止)= **ON**(健全地形では no-op)/
 Phase 3(A)(渡れる穴/渡れない穴の区別、`edge_clearance`)= **OFF** /
 Phase 4(届かない足場の検知、`ik_reach_check`)= **OFF** /
-多歩足場列プランナ(`multistep_planner.enabled` / `apply_stop_request`)= **OFF**。
+多歩足場列プランナ(`multistep_planner.enabled` / `apply_stop_request` / `apply_foothold`)= **OFF**。
 OFF の 3 つは、その実行で明示的に有効化したときだけ動く(既定では素の Quad-SDK 挙動)。
 
 1 枚まとめ:[まとめ doc](./agent_reports/quadsdk_gap_foothold_summary.md)。
