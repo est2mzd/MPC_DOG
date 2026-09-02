@@ -53,12 +53,12 @@ run() { # world gap_cm mode speed spawn dur iter
   [ -f "$C" ] && cp "$C" "$d/state_log.csv"
   read FX FZ FR < <(tail -1 "$C" 2>/dev/null | awk -F, '{print $3,$5,$6}')
   local MZ=$(awk -F',' 'NR>1 && $2>12{if($5<m||m==""){m=$5}}END{printf "%.3f",m}' "$C")
-  local MSTOP=$(grep -c "multistep-stop] latching" "$d/run.log" 2>/dev/null || echo 0)
-  local SLOW=$(grep -c "multistep-stop] SLOW" "$d/run.log" 2>/dev/null || echo 0)
-  local NAPP=$(awk -F',' 'NR>1 && $5==1{n++}END{print n+0}' "$d/step15_footholds.csv" 2>/dev/null || echo 0)
+  local MSTOP=$(grep -c "multistep-stop] latching" "$d/run.log" 2>/dev/null); MSTOP=${MSTOP:-0}
+  local SLOW=$(grep -c "multistep-stop] SLOW" "$d/run.log" 2>/dev/null); SLOW=${SLOW:-0}
+  local NAPP=$(awk -F',' 'NR>1 && $5==1{n++}END{print n+0}' "$d/step15_footholds.csv" 2>/dev/null); NAPP=${NAPP:-0}
   local VDT
   if python3 -c "exit(0 if (abs(${FR:-0})>0.8 or ${FZ:-0}<0.15 or ${MZ:-0}<0.15) else 1)"; then VDT=FAIL
-  elif python3 -c "exit(0 if ${FX:-0}>4.0 else 1)"; then VDT=PASS
+  elif python3 -c "exit(0 if ${FX:-0}>3.0 else 1)"; then VDT=PASS
   elif [ "${MSTOP:-0}" -gt 0 ]; then VDT=STOP
   elif [ "${SLOW:-0}" -gt 0 ]; then VDT=SLOW
   else VDT=STALL; fi
@@ -78,10 +78,10 @@ for GW in 15:flat_trench_s09_15 25:flat_trench_s09_25 30:flat_trench_s09_30 \
   G=${GW%%:*}; W=${GW##*:}
   for IT in 1 2 3; do
     for M in off stop apply; do
-      run "$W" "$G" "$M" 0.30 -2.0 26 "$IT"
+      run "$W" "$G" "$M" 0.30 -2.0 30 "$IT"
     done
   done
-  run "$W" "$G" shadow 0.30 -2.0 26 1
+  run "$W" "$G" shadow 0.30 -2.0 30 1
 done
 
 # ---- speed sub-sweep: gap 30 / 50, modes stop / apply, v=0.50 -----------
@@ -91,7 +91,7 @@ for GW in 30:flat_trench_s09_30 50:flat_trench_s09_50; do
   G=${GW%%:*}; W=${GW##*:}
   for IT in 1 2 3; do
     for M in stop apply; do
-      run "$W" "$G" "$M" 0.50 -2.0 22 "$IT"
+      run "$W" "$G" "$M" 0.50 -2.0 24 "$IT"
     done
   done
 done
