@@ -70,6 +70,8 @@ artifacts/gifs/*.gif
 !artifacts/gifs/quadsdk_phase4_g100_ik_stop_10to30s.gif
 !artifacts/gifs/quadsdk_phase4_g30_ik_cross.gif
 !artifacts/gifs/quadsdk_phase4_g30_ik_cross_12to40s.gif
+# 全シナリオ動作確認(stop-only 固定、world だけ変える)。1枚 <1MB。
+!artifacts/gifs/quadsdk_allsc_*.gif
 
 # backup/(2.0GB、未追跡)。archive/は履歴保持のため意図的にgit管理下にあり
 # (archive/README.md参照)、対象外とする
@@ -135,6 +137,9 @@ artifacts/logs/quadsdk_quadsdk_step13_*/
 artifacts/logs/quadsdk_quadsdk_step14_*/
 artifacts/logs/quadsdk_quadsdk_step15_*/
 artifacts/logs/quadsdk_quadsdk_step16_*/
+artifacts/logs/quadsdk_quadsdk_allrec_*/
+artifacts/logs/quadsdk_quadsdk_allrec_*_run.log
+artifacts/logs/quadsdk_quadsdk_allsc_*/
 # Step 09 raw dumps: keep the two CSVs, the cross-section PNG, and the per-trench
 # GIF; drop the bulky per-tick sim log / console log / intermediate mp4.
 artifacts/step09/*/state_log.csv
