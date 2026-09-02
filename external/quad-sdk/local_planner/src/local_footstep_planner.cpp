@@ -202,11 +202,14 @@ struct Step12Result {
   int blocked_k = -1;
   int blocked_leg = -1;
   // [MPC_DOG Step 15] first planned touchdown foothold per leg index
-  // (0=FL,1=BL,2=FR,3=BR), world x/y. planned_ok[leg] is true only when that
-  // leg's first touchdown found a reachable+safe+observed cell (n_valid>0),
-  // i.e. not the first_solid_x fallback and not a blocked step.
+  // (0=FL,1=BL,2=FR,3=BR): world x/y AND the nominal hip x/y it was chosen
+  // relative to. computeFootPlan applies (planned - planned_hip) as a
+  // body-tracking terrain offset, not the stale world position. planned_ok[leg]
+  // is true only when that leg's first touchdown found a reachable+safe+observed
+  // cell (n_valid>0), i.e. not the first_solid_x fallback and not a blocked step.
   double planned_x[4] = {0.0, 0.0, 0.0, 0.0};
   double planned_y[4] = {0.0, 0.0, 0.0, 0.0};
+  double planned_bx[4] = {0.0, 0.0, 0.0, 0.0};  // body x this touchdown planned for
   bool planned_ok[4] = {false, false, false, false};
 };
 
@@ -257,9 +260,10 @@ Step12Result step12PlanSequence(
   double max_progress = 0.0;
   int placed = 0;
   std::vector<std::string> foot_rows;
-  // [MPC_DOG Step 15] first planned touchdown foothold per leg index
+  // [MPC_DOG Step 15] first planned touchdown foothold + its body x, per leg
   double pl_x[4] = {0.0, 0.0, 0.0, 0.0};
   double pl_y[4] = {0.0, 0.0, 0.0, 0.0};
+  double pl_bx[4] = {0.0, 0.0, 0.0, 0.0};
   bool pl_ok[4] = {false, false, false, false};
 
   double prev_x = bx, prev_y = by;
@@ -343,6 +347,7 @@ Step12Result step12PlanSequence(
     if (!pl_ok[leg] && n_valid > 0) {
       pl_x[leg] = best_x;
       pl_y[leg] = best_y;
+      pl_bx[leg] = bxk;
       pl_ok[leg] = true;
     }
     max_progress = best_x - bx;
@@ -399,6 +404,7 @@ Step12Result step12PlanSequence(
   for (int L = 0; L < 4; ++L) {
     out.planned_x[L] = pl_x[L];
     out.planned_y[L] = pl_y[L];
+    out.planned_bx[L] = pl_bx[L];
     out.planned_ok[L] = pl_ok[L];
   }
   return out;
@@ -695,6 +701,7 @@ FootPlanResult LocalFootstepPlanner::computeFootPlan(
           multistep_planned_ok_[L] = s12.planned_ok[L];
           multistep_planned_xy_[L] =
               Eigen::Vector2d(s12.planned_x[L], s12.planned_y[L]);
+          multistep_planned_bx_[L] = s12.planned_bx[L];
         }
         multistep_planned_plan_index_ = current_plan_index;
       }
@@ -781,30 +788,55 @@ FootPlanResult LocalFootstepPlanner::computeFootPlan(
             hip_position_midstance + centrifugal + vel_tracking;
         foot_position_nominal = foot_position_raibert;
 
-        // [MPC_DOG Step 15] Receding-horizon foothold apply (opt-in). For each
-        // leg's nearest touchdown only, replace the Raibert nominal (x,y) with
-        // the multi-step planner's first planned foothold when one is available,
-        // fresh, and close enough to the nominal to be a sane local choice. The
-        // existing getNearestValidFootholdResult() below still runs as the final
-        // local micro-correction. When no planned foothold is available the
-        // nominal is left untouched; a vanished plan over a wide void is handled
-        // by the Step 14 SLOW / STOP_REQUEST path, not by a silent revert here.
+        // [MPC_DOG Step 15] Receding-horizon foothold apply (opt-in). Only the
+        // nearest touchdown of each leg, and only when
+        //   (a) it is imminent (about to commit, i <= kImminent) - editing a
+        //       far-horizon touchdown that then gets re-edited every replan
+        //       cycle makes the foothold chatter and the NMPC chase it,
+        //   (b) that touchdown's predicted body x matches the body x the plan
+        //       assumed for this leg (so the planned world position is current,
+        //       not a stale point the body has since walked past), and
+        //   (c) the Raibert nominal would land on a hole (raw z NaN) - i.e. the
+        //       foot needs rescuing, the same trigger the snap uses,
+        // then the nominal is moved toward the planned foothold, clamped to a
+        // small correction. getNearestValidFootholdResult() below still runs as
+        // the final local micro-correction. No planned foothold -> nominal
+        // untouched; a vanished plan over a wide void is handled by the Step 14
+        // SLOW / STOP_REQUEST path, not a silent revert here.
         bool s15_applied = false;
         const double raibert_x = foot_position_raibert.x();
         const double raibert_y = foot_position_raibert.y();
+        // step12 touchdown events are period*dt/4 = 0.225 s apart, so the first
+        // planned touchdown lands ~7-8 horizon steps out; edit only once it is
+        // within kImminent so it is not re-nudged for many replan cycles.
+        constexpr int kImminent = 12;        // horizon steps: only edit if this close
+        constexpr double kBxMatch = 0.06;    // m, body-x alignment tolerance
+        constexpr double kMaxDelta = 0.12;   // m, max nominal correction
         if (multistep_apply_foothold_ && multistep_enabled_ &&
             !multistep_first_td_applied[j] && j >= 0 && j < 4 &&
-            multistep_planned_ok_[j] &&
+            static_cast<int>(i) <= kImminent && multistep_planned_ok_[j] &&
             (current_plan_index - multistep_planned_plan_index_) >= 0 &&
-            (current_plan_index - multistep_planned_plan_index_) < 50) {
-          const double dx = multistep_planned_xy_[j].x() - raibert_x;
-          const double dy = multistep_planned_xy_[j].y() - raibert_y;
-          if (std::hypot(dx, dy) <= foothold_search_radius_) {
-            foot_position_nominal.x() = multistep_planned_xy_[j].x();
-            foot_position_nominal.y() = multistep_planned_xy_[j].y();
-            multistep_first_td_applied[j] = true;
-            ++diag_multistep_applied;
-            s15_applied = true;
+            (current_plan_index - multistep_planned_plan_index_) < 50 &&
+            static_cast<int>(i) < body_plan.rows() &&
+            std::abs(body_plan(i, 0) - multistep_planned_bx_[j]) < kBxMatch) {
+          const grid_map::Position rp(raibert_x, raibert_y);
+          const bool nominal_on_hole =
+              terrain_grid_.exists("z") && terrain_grid_.isInside(rp) &&
+              !std::isfinite(terrain_grid_.atPosition("z", rp));
+          double dx = multistep_planned_xy_[j].x() - raibert_x;
+          double dy = multistep_planned_xy_[j].y() - raibert_y;
+          const double dn = std::hypot(dx, dy);
+          // A planned foothold behind the nominal shortens the step and trips
+          // the crawl; only accept a forward / lateral nudge to dodge the hole.
+          if (nominal_on_hole && dx > -0.03) {
+            if (dn > 1e-4) {
+              const double s = std::min(1.0, kMaxDelta / dn);
+              foot_position_nominal.x() = raibert_x + dx * s;
+              foot_position_nominal.y() = raibert_y + dy * s;
+              multistep_first_td_applied[j] = true;
+              ++diag_multistep_applied;
+              s15_applied = true;
+            }
           }
         }
 

@@ -609,11 +609,14 @@ class LocalFootstepPlanner {
 
   /// [MPC_DOG Step 15] feed the planned foothold sequence to the nominal.
   bool multistep_apply_foothold_ = false;
-  /// latest planned first-touchdown foothold per leg index, world x/y, and
-  /// whether it is usable; refreshed every 5th cycle by step12PlanSequence.
+  /// latest planned first-touchdown foothold per leg index: world x/y and the
+  /// body x it was planned for. Only applied to an actual touchdown whose
+  /// predicted body x matches multistep_planned_bx_ (so the world position is
+  /// current, not stale), as a clamped correction. Refreshed every 5th cycle.
   Eigen::Vector2d multistep_planned_xy_[4] = {
       Eigen::Vector2d::Zero(), Eigen::Vector2d::Zero(), Eigen::Vector2d::Zero(),
       Eigen::Vector2d::Zero()};
+  double multistep_planned_bx_[4] = {0.0, 0.0, 0.0, 0.0};
   bool multistep_planned_ok_[4] = {false, false, false, false};
   int multistep_planned_plan_index_ = -1;
 };
