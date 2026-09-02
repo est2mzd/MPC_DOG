@@ -90,17 +90,25 @@ ax.set_xticks(range(len(gaps)))
 ax.set_xticklabels([f"{g} cm" for g in gaps])
 ax.set_yticks(range(len(MODES)))
 ax.set_yticklabels([MODE_LABEL[m] for m in MODES])
-for mi in range(len(MODES)):
+for mi, m in enumerate(MODES):
     for gi, g in enumerate(gaps):
         t = grid_txt.get((mi, g), "")
         if t:
             ax.text(gi, mi, t, ha="center", va="center", color="white",
                     fontsize=9, fontweight="bold")
+        # thick red border on any cell that fell at least once but is not
+        # dominant-FAIL (i.e. an unreliable "mostly passes" cell)
+        vs = [r["verdict"] for r in core if r["mode"] == m and r["gap_cm"] == g]
+        if vs and "FAIL" in vs and vs.count("FAIL") < len(vs) and \
+           VERDICTS[grid_idx[mi][gi]] != "FAIL":
+            ax.add_patch(plt.Rectangle((gi - 0.5, mi - 0.5), 1, 1, fill=False,
+                                       edgecolor="#c62828", lw=3.5))
 ax.set_xlabel("穴幅(単独トレンチ、N=1)")
 ax.set_title("Step 16 限界 Map:穴幅 × feature モード → 判定(v=0.30 m/s、クロール、各3回)")
 handles = [plt.Rectangle((0, 0), 1, 1, color=VCOL[v]) for v in VERDICTS]
-ax.legend(handles, VERDICTS, loc="center left", bbox_to_anchor=(1.01, 0.5),
-          frameon=False)
+handles.append(plt.Rectangle((0, 0), 1, 1, fill=False, edgecolor="#c62828", lw=3))
+ax.legend(handles, VERDICTS + ["1回以上転倒"], loc="center left",
+          bbox_to_anchor=(1.01, 0.5), frameon=False)
 fig.tight_layout()
 out = os.path.join(S16, "step16_limit_map.png")
 fig.savefig(out, dpi=120)
@@ -152,13 +160,40 @@ if sub:
         print(f"| {g} cm | " + " | ".join(cells) + " |")
 
 # ------- safety check --------------------------------------------
-print("\n### 安全チェック:≥50 cm の穴へ落下した run\n")
-bad = [r for r in rows if r["gap_cm"] >= 50 and r["verdict"] == "FAIL"]
-if not bad:
-    print("なし(全モード・全速度で ≥50 cm への落下ゼロ)。")
+# The safety-critical question: did any run with a PROTECTIVE feature (stop-only
+# or foothold-apply) fall into a >=50 cm hole? OFF / shadow falling there is the
+# documented Step 08 baseline, not a feature failure.
+print("\n### 安全チェック:保護機能 ON(stop-only / foothold-apply)で ≥50 cm の穴へ落下\n")
+prot_bad = [r for r in rows if r["gap_cm"] >= 50 and r["verdict"] == "FAIL"
+            and r["mode"] in ("stop", "apply")]
+if not prot_bad:
+    n_prot = sum(1 for r in rows if r["gap_cm"] >= 50 and r["mode"] in ("stop", "apply"))
+    print(f"**なし**({n_prot} run すべてで直立停止、≥50 cm への落下ゼロ)。")
 else:
     print("| tag | mode | speed | final_x | min_z |")
     print("|---|---|---|---:|---:|")
-    for r in bad:
+    for r in prot_bad:
         print(f"| g{r['gap_cm']}_{r['mode']}_v{int(r['speed']*100):03d}_{r['iter']} "
               f"| {r['mode']} | {r['speed']} | {r['final_x']} | {r['min_z']} |")
+base_bad = [r for r in rows if r["gap_cm"] >= 50 and r["verdict"] == "FAIL"
+            and r["mode"] in ("off", "shadow")]
+print(f"\n(参考:OFF / shadow は ≥50 cm で {len(base_bad)} 落下 = Step 08 の既知ベースライン。"
+      "shadow は制御影響ゼロなので OFF と同じ挙動。)")
+
+# ------- regression check: apply vs stop-only / off on crossable gaps ---
+print("\n### 回帰チェック:foothold-apply が渡れる穴(≤35 cm)で落下\n")
+reg = [r for r in rows if r["gap_cm"] <= 35 and r["mode"] == "apply"
+       and r["verdict"] == "FAIL"]
+if not reg:
+    print("なし。")
+else:
+    print("| tag | app | final_x | roll | min_z | 同条件 stop-only / off |")
+    print("|---|---:|---:|---:|---:|---|")
+    for r in reg:
+        peers = [(m, [x["verdict"] for x in rows
+                      if x["gap_cm"] == r["gap_cm"] and x["speed"] == r["speed"]
+                      and x["mode"] == m])
+                 for m in ("stop", "off")]
+        ps = "; ".join(f"{m}:{'/'.join(v)}" for m, v in peers)
+        print(f"| g{r['gap_cm']}_apply_v{int(r['speed']*100):03d}_{r['iter']} "
+              f"| {r['applied']} | {r['final_x']} | {r['final_roll']} | {r['min_z']} | {ps} |")
