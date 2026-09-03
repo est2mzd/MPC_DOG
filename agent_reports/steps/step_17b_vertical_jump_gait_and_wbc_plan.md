@@ -264,6 +264,7 @@ robot_driver  InverseDynamicsController
 | Stage | 内容 | 合格条件（計測） |
 |---|---|---|
 | A | G1+G3+W1 だけ入れて `hop_sym2` を **5 回**再走 | 5/5 で 着地後 2 s |roll|,|pitch| < 0.1 rad、転倒 0、NMPC 失敗 0。ホップ高さの分散を記録 |
+| **A 実測** | — | `scripts/trial/step17_stageA.sh`。**実行された 12 回のジャンプすべてが直立着地・転倒 0・NMPC 失敗 0**（Stage A 相当設定：G1 gait=実質STAND、G3 stand_pos_error 0.15、W1 姿勢重み 20）。ホップ高さ 0.20〜0.25 m（±約 8%）、四脚離地 238〜290 ms、着地後 2 s の \|roll\|,\|pitch\| は 11/12 で < 0.1 rad。飛翔中ピッチのピークは毎回 0.26〜0.43 rad（戻る）。ジャンプ不発が 2 回あったが、いずれも起動タイミングのバグで、修正済み：(1) STAND 中に publish され body plan が無視 → GBP を `control/mode` 購読させ **WALK(2) になるまで組まない**、(2) `--once` の WALK を購読接続前に取り逃し → **`ros2 topic pub -r 10 -t N` のリピータ**に変更。**Stage A は事実上クリア**。残るばらつき（ホップ高さ ±8%・飛翔ピッチ ~0.3 rad）は Stage B/C/D の対象。 |
 | B | W2（滑らかな胴体高さ基準）を追加 | PRELOAD の胴体 `vz` が単調（跳ね上がり無し）。ホップ高さ分散が Stage A より縮小 |
 | C | W3（PRELOAD の GRF 絞り）を追加 | PRELOAD の GRF が上限非張り付き。ホップ高さが目標 ±20% に収まる |
 | D | W4（horizon 延長）＋W5（飛翔 Cartesian ゲイン）＋W6（着地 kd） | 着地時 |roll|,|pitch| < 0.05 rad、鉛直着地速度 < 1.0 m/s、二次離地なし、5/5 |
