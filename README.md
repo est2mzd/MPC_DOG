@@ -432,13 +432,15 @@ NMPC + 逆動力学がそれを追従する。四脚対称踏切、NMPC の roll
 [Step 17 実装記録](./agent_reports/steps/step_17_forward_jump_rear_leg_push.md) と
 [Step 17b 分析・計画](./agent_reports/steps/step_17b_vertical_jump_gait_and_wbc_plan.md)。
 
-![Step17 その場垂直ジャンプ](./artifacts/gifs/quadsdk_step17_vertical_jump.gif)
+![Step17 その場垂直ジャンプ(Stage A)](./artifacts/gifs/quadsdk_step17_vertical_jump.gif)
 
-**計測(`flat_wide`、その場、2 回とも同条件)**:胴体 0.318 → 0.54 m(**+0.22 m**)、
-四脚が同時に離地している時間 **≈ 260 ms**、NMPC ソルバ失敗 **0**、着地後 2 s の
-\|roll\|,\|pitch\| < 0.003 rad で**転倒せず直立**、最大関節トルク ≈ 40 Nm。
-飛翔中にピッチが一時 ≈ 0.33 rad まで振れて戻る(余裕は小さい)。
-後脚のみ踏切(`REAR_PUSH`)を効かせる版と穴シナリオは残課題(Step 17b の計画)。
+**計測(`flat_wide`、その場、Step 17b Stage A 設定 = gait 実質STAND / stand_pos_error 0.15 /
+NMPC roll・pitch 重み 20)**:`scripts/trial/step17_stageA.sh` で複数回実行し、
+**実行された 12 回のジャンプすべてが直立着地・転倒 0・NMPC ソルバ失敗 0**。
+胴体 0.318 → 0.52〜0.55 m(**+0.20〜0.25 m**)、四脚が同時に離地している時間
+**238〜290 ms**、着地後 2 s の \|roll\|,\|pitch\| は 11/12 で < 0.1 rad、最大関節トルク
+≈ 40 Nm。飛翔中にピッチが一時 ≈ 0.3 rad まで振れて戻る(詰めは Step 17b の Stage C/D)。
+後脚のみ踏切(`REAR_PUSH`)を効かせる版と穴シナリオは残課題。
 
 ---
 
