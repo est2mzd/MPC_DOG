@@ -197,7 +197,7 @@ python3 "${REPO_ROOT}/src/trial/quadsdk_step17_jump.py" \
 RECORDER_PID=$!
 
 echo "[$(date '+%T.%3N')] STAND"
-ros2 topic pub --once "/${ROBOT_NS}/control/mode" std_msgs/msg/UInt8 "data: 1"
+ros2 topic pub -r 10 -t 25 "/${ROBOT_NS}/control/mode" std_msgs/msg/UInt8 "data: 1" >/dev/null 2>&1 &
 sleep "${STAND_SETTLE_S}"
 
 echo "[$(date '+%T.%3N')] planning stack (gbpl, jump_mode=${JUMP_MODE}, takeoff_vx=${JUMP_TAKEOFF_VX})"
@@ -209,7 +209,7 @@ PLAN_PID=$!
 sleep "${PLAN_STARTUP_S}"
 
 echo "[$(date '+%T.%3N')] WALK"
-ros2 topic pub --once "/${ROBOT_NS}/control/mode" std_msgs/msg/UInt8 "data: 2"
+ros2 topic pub -r 10 -t 60 "/${ROBOT_NS}/control/mode" std_msgs/msg/UInt8 "data: 2" >/dev/null 2>&1 &
 
 echo "[$(date '+%T.%3N')] running ${DURATION_S}s ..."
 sleep "${DURATION_S}"
