@@ -434,6 +434,14 @@ NMPC + 逆動力学がそれを追従する。四脚対称踏切、NMPC の roll
 
 ![Step17 その場垂直ジャンプ(Stage A)](./artifacts/gifs/quadsdk_step17_vertical_jump.gif)
 
+しゃがみ → 四脚で伸び上がり → **四脚同時に離地** → 前脚から接地 → 直立へ収束(1.3 倍スロー)。
+
+![Step17 ジャンプの body z / foot z / roll-pitch](./artifacts/step_charts/step17_stageA_jump.png)
+
+上=胴体高さ、中=4 脚の足先高さ(破線 0.06 m 超で離地)、下=roll/pitch。オレンジ帯が飛翔相。
+足先が 4 本とも閾値を超えて **270 ms 離地**、着地後は roll/pitch が ±0.01 rad へ収束。
+飛翔相で pitch が一時 −0.27 rad(≈15°)まで振れて戻る(= 余裕は小さい)。
+
 **計測(`flat_wide`、その場、Step 17b Stage A 設定 = gait 実質STAND / stand_pos_error 0.15 /
 NMPC roll・pitch 重み 20)**:`scripts/trial/step17_stageA.sh` で複数回実行し、
 **実行された 12 回のジャンプすべてが直立着地・転倒 0・NMPC ソルバ失敗 0**。
