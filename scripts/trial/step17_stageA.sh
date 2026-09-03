@@ -15,6 +15,8 @@ echo "iter,built,nmpc_fails,airborne_ms,hop_rise_m,max_roll,max_pitch,post2s_max
 for i in $(seq 1 "$N"); do
   TAG="step17_stageA_$i"
   echo "=== Stage A run $i / $N ($TAG) ==="
+  # clear any stale output so a startup-failed run cannot be scored on an old CSV
+  rm -rf "$REPO/artifacts/step17/$TAG"
   JUMP_TAKEOFF_VX=0.0 JUMP_DZ_LO=1.1 JUMP_DZ_HI=1.5 JUMP_TS_LO=0.20 JUMP_TS_HI=0.28 \
     JUMP_PRELOAD_FRACTION=1.0 JUMP_FRONT_LAND_FRACTION=0.0 JUMP_ATT_WEIGHT=20 \
     STEP_TAG="$TAG" bash scripts/trial/run_step17_jump.sh > "$OUT/${TAG}.log" 2>&1
