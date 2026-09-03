@@ -44,6 +44,18 @@
 
 ---
 
+## 0. 現時点の到達点（2026-09-03 追記）
+
+- **その場・垂直ジャンプは Stage A（G1 gait=実質STAND、G3 stand_pos_error 0.15、
+  W1 NMPC roll/pitch 重み 20）で成立**：実行された 12 回すべてが直立着地・転倒 0・
+  NMPC 失敗 0。ホップ 0.20〜0.25 m、四脚離地 238〜290 ms。
+  **ユーザー目標「垂直に跳んでこけずに着地」は満たしている。**
+- Stage B の naive W2（速度不連続を `dz_0` clamp で潰す）は**逆効果で撤回**（§9.2 W2 実測）。
+- 残る詰め（飛翔中ピッチ ~0.3 rad、ホップ高さ ±8%）は Stage C/D と「正しい W2
+  （本物のしゃがみ区間）」の追加作業。優先度はユーザー判断。
+
+---
+
 ## 3. 結論（先に書く）
 
 - **いまの「強制ジャンプ経路」は、実は gait をほぼバイパスしている。**
@@ -254,6 +266,7 @@ robot_driver  InverseDynamicsController
 |---|---|---|---|
 | W1 | NMPC `x_weights` の roll/pitch 要素を恒常的に引き上げ（例 0.5 → 15〜30）。ジャンプ時だけ切替える口をパラメータで持つ | 姿勢を保つ権限を NMPC に与える（`hop_sym2` で実証済み、正式化） | `go2.yaml` nmpc `x_weights`、切替は param |
 | W2 | **滑らかな胴体高さ基準**を強制ジャンプ経路で自前生成：静止 → しゃがみ（z を h_nom−Δ へ、`vz` を 0 から負へ 3 次補間）→ 伸び上がり（z を上へ、`vz` を離陸速度へ）→ 弾道 → 着地 → SETTLE。`getRandomLeapAction` の点質量 action の代わり／補正に使う | 速度不連続を消し、NMPC の初期過大追従を無くす（仮説 8-1） | `global_body_planner::buildForcedJumpPlan` |
+| W2 実測（naive 版・失敗） | `jump_crouch_vz` を導入し `a.dz_0 = −0.4` にして `refineAction` で再ソルブしただけの簡易版を試した。**逆効果**：`refineStance` は `dz_0` と GRF の大きさを連動させるので、`dz_0` を緩めると必要 GRF も小さくなり（`grf_0` 3.65 → 2.28、`dz_f` 1.91 → 0.73、`t_f` 0.39 → 0.18）、ホップが 0.22 m → 0.085 m の**貧弱なジャンプ**に。飛翔が浅く足先が地面を擦り、ロールが単調発散して反転（5 回中 実行 2 回とも FAIL）。→ **naive 版は撤回**（`jump_crouch_vz` は既定 0 で無効のまま残置）。正しい W2 は「同じ強い GRF/離陸速度は保ったまま、その前に本物のしゃがみ区間（別 action）を足して、踏切 action 開始時にロボットが実際に `dz_0` で降下している状態を作る」。別 action の primitive スタンプ・接続方法の設計が要る。 |
 | W3 | **PRELOAD 区間だけ GRF 上限を絞る**（`u_ub` z を 150 → 例 90〜110 N/脚）／または名目 GRF を体重付近から緩やかに増やす | PRELOAD の跳ね上がりすぎを抑え、ホップ高さのばらつきを減らす（仮説 8-2） | `quad_nlp`（primitive で u_ub をゲート）または `go2.yaml` |
 | W4 | NMPC **horizon_length を伸ばす**（26 → 34〜40、ジャンプ全長＋余裕）。`period` との関係（`horizon > period/dt`）も維持 | 着地相までホライズンに入れ、着地直前の最適化を近視眼的にしない（仮説 8-5） | `local_planner.yaml` |
 | W5 | 飛翔中だけ **Cartesian swing ゲインを有効化**（`swing_kp_cart` を [0,0,0] → 例 [400,400,400]、`kd_cart` も）し、足先目標を CoM 直下の矩形スタンスへ | 着地姿勢を能動的に作り、着地衝撃・姿勢外乱を再現可能にする（仮説 8-3, 8-4） | `go2.yaml`、足先目標は `local_footstep_planner` の FLIGHT/FRONT_LAND 区間 |
@@ -266,6 +279,7 @@ robot_driver  InverseDynamicsController
 | A | G1+G3+W1 だけ入れて `hop_sym2` を **5 回**再走 | 5/5 で 着地後 2 s |roll|,|pitch| < 0.1 rad、転倒 0、NMPC 失敗 0。ホップ高さの分散を記録 |
 | **A 実測** | — | `scripts/trial/step17_stageA.sh`。**実行された 12 回のジャンプすべてが直立着地・転倒 0・NMPC 失敗 0**（Stage A 相当設定：G1 gait=実質STAND、G3 stand_pos_error 0.15、W1 姿勢重み 20）。ホップ高さ 0.20〜0.25 m（±約 8%）、四脚離地 238〜290 ms、着地後 2 s の \|roll\|,\|pitch\| は 11/12 で < 0.1 rad。飛翔中ピッチのピークは毎回 0.26〜0.43 rad（戻る）。ジャンプ不発が 2 回あったが、いずれも起動タイミングのバグで、修正済み：(1) STAND 中に publish され body plan が無視 → GBP を `control/mode` 購読させ **WALK(2) になるまで組まない**、(2) `--once` の WALK を購読接続前に取り逃し → **`ros2 topic pub -r 10 -t N` のリピータ**に変更。**Stage A は事実上クリア**。残るばらつき（ホップ高さ ±8%・飛翔ピッチ ~0.3 rad）は Stage B/C/D の対象。 |
 | B | W2（滑らかな胴体高さ基準）を追加 | PRELOAD の胴体 `vz` が単調（跳ね上がり無し）。ホップ高さ分散が Stage A より縮小 |
+| **B 実測** | naive W2（`dz_0` clamp + 再ソルブ） | **失敗・撤回**（上表 W2 実測）。Stage A の強いジャンプの方が「速く綺麗に離陸する」ぶん安定していた。正しい W2（本物のしゃがみ区間）は未実装。**現時点の到達点は Stage A**：その場・垂直ジャンプが 12/12 で直立着地・転倒 0・NMPC 失敗 0。ユーザー目標「垂直に跳んでこけずに着地」は Stage A で満たしている。飛翔中ピッチ ~0.3 rad・ホップ高さ ±8% の詰めは C/D＋正しい W2 の追加作業。 |
 | C | W3（PRELOAD の GRF 絞り）を追加 | PRELOAD の GRF が上限非張り付き。ホップ高さが目標 ±20% に収まる |
 | D | W4（horizon 延長）＋W5（飛翔 Cartesian ゲイン）＋W6（着地 kd） | 着地時 |roll|,|pitch| < 0.05 rad、鉛直着地速度 < 1.0 m/s、二次離地なし、5/5 |
 | E | G2（明示的な着地後 hold）を入れ、ジャンプ→hold→通常制御 の遷移を確認 | 着地 2 s 後に通常制御へ戻しても直立維持、5/5 |
