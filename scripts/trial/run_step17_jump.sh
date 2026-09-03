@@ -46,11 +46,17 @@ JUMP_FRONT_LAND_FRACTION="${JUMP_FRONT_LAND_FRACTION:-0.5}"
 GBPL_MU="${GBPL_MU:-0.6}"                     # 踏切で滑らないよう mu を上げる
 JUMP_ATT_WEIGHT="${JUMP_ATT_WEIGHT:-25.0}"   # NMPC の roll/pitch 追従重み(既定 0.5)
 
-# --- NMPC 追従は素のトロット歩容前提。この実験の間だけ一時パッチ(trap で復元) ---
+# --- 一時パッチ(trap で復元) ---
+# Step 17b G1: ジャンプ中は接触が primitive で上書きされるが、ホライズンに漏れる
+# 非ジャンプステップも四脚接地にしたいので、gait をトロットではなく実質 STAND
+# (duty≈0.98 / phase 全 0)にする。
 GBPL_GAIT_PERIOD="${GBPL_GAIT_PERIOD:-0.36}"
-GBPL_GAIT_DUTY="${GBPL_GAIT_DUTY:-0.5}"
-GBPL_GAIT_PHASE="${GBPL_GAIT_PHASE:-[0.0, 0.5, 0.5, 0.0]}"
+GBPL_GAIT_DUTY="${GBPL_GAIT_DUTY:-0.98}"
+GBPL_GAIT_PHASE="${GBPL_GAIT_PHASE:-[0.0, 0.0, 0.0, 0.0]}"
 GBPL_HORIZON="${GBPL_HORIZON:-26}"
+# Step 17b G3: ジャンプで一時的に増える位置誤差でも着地後 STAND へ確実に落ちるよう
+# stand_pos_error_threshold を広げる。
+STAND_POS_ERR_THRESH="${STAND_POS_ERR_THRESH:-0.15}"
 
 GO2_YAML="${REPO_ROOT}/external/quad-sdk/quad_utils/config/go2.yaml"
 LP_YAML="${REPO_ROOT}/external/quad-sdk/local_planner/config/local_planner.yaml"
@@ -69,10 +75,10 @@ restore_cfg() {
 python3 - "$GO2_YAML" "$LP_YAML" "$GBP_YAML" "$GBPL_GAIT_PERIOD" "$GBPL_GAIT_DUTY" \
   "$GBPL_GAIT_PHASE" "$GBPL_HORIZON" "$JUMP_MODE" "$JUMP_PRELOAD_FRACTION" \
   "$JUMP_FRONT_LAND_FRACTION" "$GBPL_MU" "$JUMP_TAKEOFF_VX" "$JUMP_DZ_LO" "$JUMP_DZ_HI" \
-  "$JUMP_TS_LO" "$JUMP_TS_HI" "$JUMP_ATT_WEIGHT" <<'PY'
+  "$JUMP_TS_LO" "$JUMP_TS_HI" "$JUMP_ATT_WEIGHT" "$STAND_POS_ERR_THRESH" <<'PY'
 import re, sys
 (go2, lp, gbp, period, duty, phase, horizon, jump_mode, preload_frac,
- front_frac, mu, tvx, dz_lo, dz_hi, ts_lo, ts_hi, attw) = sys.argv[1:18]
+ front_frac, mu, tvx, dz_lo, dz_hi, ts_lo, ts_hi, attw, sper) = sys.argv[1:19]
 
 s = open(go2).read()
 s = re.sub(r'^(\s*period:\s*)[^\n#]*', rf'\g<1>{period} ', s, flags=re.M)
@@ -93,6 +99,7 @@ open(go2, 'w').write(s)
 
 s = open(lp).read()
 s = re.sub(r'^(\s*horizon_length:\s*)[0-9]+', rf'\g<1>{horizon}', s, flags=re.M)
+s = re.sub(r'^(\s*stand_pos_error_threshold:\s*)[^\n#]*', rf'\g<1>{sper} ', s, flags=re.M)
 open(lp, 'w').write(s)
 
 s = open(gbp).read()
@@ -111,9 +118,10 @@ for key, val in (("jump_mode", jump_mode),
         s = re.sub(r'^(\s*num_leap_samples:.*\n)',
                    rf'\g<1>      {key}: {val}\n', s, flags=re.M)
 open(gbp, 'w').write(s)
-print(f"[step17 harness] temp-patched: gait period={period} duty={duty} horizon={horizon} "
-      f"mu={mu} jump_mode={jump_mode} takeoff_vx={tvx} dz=[{dz_lo},{dz_hi}] t_s=[{ts_lo},{ts_hi}] "
-      f"preload_frac={preload_frac} front_land_frac={front_frac}")
+print(f"[step17 harness] temp-patched: gait period={period} duty={duty} phase={phase} "
+      f"horizon={horizon} stand_err={sper} mu={mu} jump_mode={jump_mode} "
+      f"dz=[{dz_lo},{dz_hi}] t_s=[{ts_lo},{ts_hi}] "
+      f"preload_frac={preload_frac} front_land_frac={front_frac} att_w={attw}")
 PY
 
 trap 'restore_cfg' EXIT
