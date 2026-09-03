@@ -52,6 +52,14 @@ GlobalBodyPlanner::GlobalBodyPlanner(rclcpp::Node::SharedPtr node)
           goal_state_topic, 10,
           std::bind(&GlobalBodyPlanner::goalStateCallback, this,
                     std::placeholders::_1));
+  // Step 17: watch the control mode so the forced jump only fires once the
+  // robot is actually following the local plan (WALK == 2), not while it is
+  // still in STAND and the body plan is ignored.
+  control_mode_sub_ = node_->create_subscription<std_msgs::msg::UInt8>(
+      "control/mode", 10,
+      [this](const std_msgs::msg::UInt8::SharedPtr msg) {
+        control_mode_ = msg->data;
+      });
   body_plan_pub_ =
       node_->create_publisher<quad_msgs::msg::RobotPlan>(body_plan_topic, 10);
   discrete_body_plan_pub_ = node_->create_publisher<quad_msgs::msg::RobotPlan>(
@@ -572,6 +580,15 @@ void GlobalBodyPlanner::buildForcedJumpPlan() {
 
 void GlobalBodyPlanner::forcedJumpSpinOnce() {
   if (!forced_jump_built_) {
+    // Only jump once the robot is in WALK (2) - in STAND the body plan is
+    // ignored, so a jump published early elapses before it can be executed.
+    if (control_mode_ != 2) {
+      RCLCPP_INFO_THROTTLE(node_->get_logger(), *node_->get_clock(), 2000,
+                           "[forced jump] waiting for WALK mode "
+                           "(control/mode=%d)",
+                           control_mode_);
+      return;
+    }
     // Give the controller time to settle into a stand, then require the body
     // to be essentially still before committing to the jump.
     if ((node_->now() - reset_time_).seconds() < reset_publish_delay_ + 2.0) {

@@ -11,6 +11,7 @@
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 #include <std_msgs/msg/bool.hpp>
+#include <std_msgs/msg/u_int8.hpp>
 #include <visualization_msgs/msg/marker_array.hpp>
 
 #include <grid_map_core/grid_map_core.hpp>
@@ -293,6 +294,8 @@ class GlobalBodyPlanner {
   /// Step 17 forced-jump state
   bool forced_jump_built_ = false;
   double jump_takeoff_vx_ = 0.0;  //!< desired forward take-off speed, m/s
+  int control_mode_ = 0;          //!< latest control/mode (2 == WALK)
+  rclcpp::Subscription<std_msgs::msg::UInt8>::SharedPtr control_mode_sub_;
 
   /// ID for status of planner
   int planner_status_;
