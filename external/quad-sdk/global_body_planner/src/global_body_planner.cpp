@@ -110,6 +110,8 @@ GlobalBodyPlanner::GlobalBodyPlanner(rclcpp::Node::SharedPtr node)
       "global_body_planner.jump_front_land_fraction", 0.5);
   jump_takeoff_vx_ = node_->declare_parameter<double>(
       "global_body_planner.jump_takeoff_vx", 0.0);
+  jump_crouch_vz_ = node_->declare_parameter<double>(
+      "global_body_planner.jump_crouch_vz", 0.0);
   RCLCPP_INFO(node_->get_logger(),
               "[global_body_planner] jump_mode=%s (%d), enable_leaping=%d, "
               "num_leap_samples=%d",
@@ -547,6 +549,23 @@ void GlobalBodyPlanner::buildForcedJumpPlan() {
     return;
   }
   a.is_jump = true;  // stamp PRELOAD/REAR_PUSH/FRONT_LAND/SETTLE sub-phases
+
+  // Step 17b W2: getRandomLeapAction sets dz_0 = -dz_impulse (~ -1.4 m/s), i.e.
+  // the plan's leap begins as if the body were already dropping fast, while the
+  // real robot is standing still (vz = 0). NMPC then over-drives the first
+  // PRELOAD samples. Re-solve the action from a gentle downward start speed
+  // (-jump_crouch_vz) so the reference vz is continuous with the robot.
+  if (jump_crouch_vz_ > 1e-6) {
+    Action a_orig = a;
+    a.dz_0 = -jump_crouch_vz_;
+    if (!refineAction(s0, a, planner_config_)) {
+      RCLCPP_WARN_THROTTLE(node_->get_logger(), *node_->get_clock(), 2000,
+                           "[forced jump] crouch-vz re-solve failed, using the "
+                           "original action");
+      a = a_orig;
+    }
+    a.is_jump = true;
+  }
 
   // Forward push: a horizontal GRF component ~ proportional to the requested
   // forward take-off speed, as a fraction of the vertical GRF, capped by the

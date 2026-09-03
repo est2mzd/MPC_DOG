@@ -45,6 +45,9 @@ JUMP_PRELOAD_FRACTION="${JUMP_PRELOAD_FRACTION:-0.4}"
 JUMP_FRONT_LAND_FRACTION="${JUMP_FRONT_LAND_FRACTION:-0.5}"
 GBPL_MU="${GBPL_MU:-0.6}"                     # 踏切で滑らないよう mu を上げる
 JUMP_ATT_WEIGHT="${JUMP_ATT_WEIGHT:-25.0}"   # NMPC の roll/pitch 追従重み(既定 0.5)
+# Step 17b W2: 踏切 action を「静止から急降下」ではなく、この緩い下向き速度から
+# 再ソルブ。0=無効。プランの vz をロボット実速度と連続にする。
+JUMP_CROUCH_VZ="${JUMP_CROUCH_VZ:-0.0}"
 
 # --- 一時パッチ(trap で復元) ---
 # Step 17b G1: ジャンプ中は接触が primitive で上書きされるが、ホライズンに漏れる
@@ -75,10 +78,11 @@ restore_cfg() {
 python3 - "$GO2_YAML" "$LP_YAML" "$GBP_YAML" "$GBPL_GAIT_PERIOD" "$GBPL_GAIT_DUTY" \
   "$GBPL_GAIT_PHASE" "$GBPL_HORIZON" "$JUMP_MODE" "$JUMP_PRELOAD_FRACTION" \
   "$JUMP_FRONT_LAND_FRACTION" "$GBPL_MU" "$JUMP_TAKEOFF_VX" "$JUMP_DZ_LO" "$JUMP_DZ_HI" \
-  "$JUMP_TS_LO" "$JUMP_TS_HI" "$JUMP_ATT_WEIGHT" "$STAND_POS_ERR_THRESH" <<'PY'
+  "$JUMP_TS_LO" "$JUMP_TS_HI" "$JUMP_ATT_WEIGHT" "$STAND_POS_ERR_THRESH" \
+  "$JUMP_CROUCH_VZ" <<'PY'
 import re, sys
 (go2, lp, gbp, period, duty, phase, horizon, jump_mode, preload_frac,
- front_frac, mu, tvx, dz_lo, dz_hi, ts_lo, ts_hi, attw, sper) = sys.argv[1:19]
+ front_frac, mu, tvx, dz_lo, dz_hi, ts_lo, ts_hi, attw, sper, cvz) = sys.argv[1:20]
 
 s = open(go2).read()
 s = re.sub(r'^(\s*period:\s*)[^\n#]*', rf'\g<1>{period} ', s, flags=re.M)
@@ -111,7 +115,8 @@ s = re.sub(r'^(\s*t_s_max:\s*)[^\n#]*', rf'\g<1>{ts_hi} ', s, flags=re.M)
 for key, val in (("jump_mode", jump_mode),
                  ("jump_preload_fraction", preload_frac),
                  ("jump_front_land_fraction", front_frac),
-                 ("jump_takeoff_vx", tvx)):
+                 ("jump_takeoff_vx", tvx),
+                 ("jump_crouch_vz", cvz)):
     if re.search(rf'^\s*{key}:\s', s, flags=re.M):
         s = re.sub(rf'^(\s*{key}:\s*)[^\n#]*', rf'\g<1>{val} ', s, flags=re.M)
     else:
@@ -121,7 +126,7 @@ open(gbp, 'w').write(s)
 print(f"[step17 harness] temp-patched: gait period={period} duty={duty} phase={phase} "
       f"horizon={horizon} stand_err={sper} mu={mu} jump_mode={jump_mode} "
       f"dz=[{dz_lo},{dz_hi}] t_s=[{ts_lo},{ts_hi}] "
-      f"preload_frac={preload_frac} front_land_frac={front_frac} att_w={attw}")
+      f"preload_frac={preload_frac} front_land_frac={front_frac} att_w={attw} crouch_vz={cvz}")
 PY
 
 trap 'restore_cfg' EXIT

@@ -294,6 +294,8 @@ class GlobalBodyPlanner {
   /// Step 17 forced-jump state
   bool forced_jump_built_ = false;
   double jump_takeoff_vx_ = 0.0;  //!< desired forward take-off speed, m/s
+  double jump_crouch_vz_ = 0.0;   //!< re-solve the leap from this gentle
+                                  //!< downward start speed, m/s (0 = disabled)
   int control_mode_ = 0;          //!< latest control/mode (2 == WALK)
   rclcpp::Subscription<std_msgs::msg::UInt8>::SharedPtr control_mode_sub_;
 
