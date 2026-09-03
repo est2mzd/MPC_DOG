@@ -72,6 +72,8 @@ artifacts/gifs/*.gif
 !artifacts/gifs/quadsdk_phase4_g30_ik_cross_12to40s.gif
 # 全シナリオ動作確認(stop-only 固定、world だけ変える)。1枚 <1MB。
 !artifacts/gifs/quadsdk_allsc_*.gif
+# Step 17 その場・垂直ジャンプ(平地・穴なし)。<0.5MB。
+!artifacts/gifs/quadsdk_step17_vertical_jump.gif
 
 # backup/(2.0GB、未追跡)。archive/は履歴保持のため意図的にgit管理下にあり
 # (archive/README.md参照)、対象外とする

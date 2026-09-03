@@ -423,6 +423,25 @@ narrow trench で不安定なため実験段階のまま。
 
 ---
 
+#### Step 17:その場・垂直ジャンプ(平地・穴なし)
+
+`jump_mode:=force_leap` で `global_body_planner` が RRT を回さず、ロボットが静止した
+瞬間に 1 回のジャンプ経路(`PRELOAD→FLIGHT→SETTLE`)を組み立てて `body_plan` に流し、
+NMPC + 逆動力学がそれを追従する。四脚対称踏切、NMPC の roll/pitch 追従重みを
+0.5→20。詳細は
+[Step 17 実装記録](./agent_reports/steps/step_17_forward_jump_rear_leg_push.md) と
+[Step 17b 分析・計画](./agent_reports/steps/step_17b_vertical_jump_gait_and_wbc_plan.md)。
+
+![Step17 その場垂直ジャンプ](./artifacts/gifs/quadsdk_step17_vertical_jump.gif)
+
+**計測(`flat_wide`、その場、2 回とも同条件)**:胴体 0.318 → 0.54 m(**+0.22 m**)、
+四脚が同時に離地している時間 **≈ 260 ms**、NMPC ソルバ失敗 **0**、着地後 2 s の
+\|roll\|,\|pitch\| < 0.003 rad で**転倒せず直立**、最大関節トルク ≈ 40 Nm。
+飛翔中にピッチが一時 ≈ 0.33 rad まで振れて戻る(余裕は小さい)。
+後脚のみ踏切(`REAR_PUSH`)を効かせる版と穴シナリオは残課題(Step 17b の計画)。
+
+---
+
 ### 全シナリオ動作確認(制御設定を stop-only に固定し、world だけ変える)
 
 **制御パラメータは 1 セットに固定**した:
