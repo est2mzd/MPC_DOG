@@ -1,10 +1,15 @@
 # Step 17：Go2 前方ジャンプ — 実装記録
 
 対象読者：この課題に初めて触れる人。
-状態：**平地・穴なしでの「その場ジャンプ」と「短い前方ジャンプ(後脚 +38 cm)」を
-計測値で確認済み。** 事実・計測・推測を分けて書く。
+状態：**平地・穴なしでの「その場・垂直ジャンプ」を計測値で確認し、ここでクローズ
+（2026-09-03、ユーザー判断）。** 短い前方ジャンプ（後脚 +38 cm）も計測済みだが、
+最終的な要件は「その場・垂直・こけずに着地」に絞られた。後脚のみ踏切（`REAR_PUSH`）・
+穴シナリオは未実施。堅牢化（Stage C/D）の分析と設計は別紙。事実・計測・推測を分けて書く。
 
-関連：実装前分析は [step_17_forward_jump_code_analysis.md](./step_17_forward_jump_code_analysis.md)。
+関連：
+- 実装前分析 [step_17_forward_jump_code_analysis.md](./step_17_forward_jump_code_analysis.md)
+- 垂直ジャンプの gait/WBC 分析・計画（クローズ判断つき）
+  [step_17b_vertical_jump_gait_and_wbc_plan.md](./step_17b_vertical_jump_gait_and_wbc_plan.md)
 
 ---
 
