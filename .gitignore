@@ -9,6 +9,8 @@ __pycache__/
 .venv/
 .env
 .env.workshop
+# このマシンの cmake パス。共有設定ではない。
+.vscode/
 *.egg-info/
 .pytest_cache/
 
@@ -185,3 +187,15 @@ artifacts/step16/*/step09_*
 artifacts/step16/*/step10_*
 artifacts/step16/*/step11_*
 artifacts/step16/*/step12_*
+# Step 13 v015 は空の latch と生ログだけ。v030/v050 の latch.txt は追跡済み。
+artifacts/step13/v015/
+# Step 17 の生ダンプ（mp4 / 毎tick CSV / コンソール）。README の GIF と
+# Stage A の jump plot は追跡済みのまま残す。
+artifacts/logs/quadsdk_step17_*/
+artifacts/step17/*/clip.mp4
+artifacts/step17/*/state_log.csv
+artifacts/step17/*/trials_summary.csv
+artifacts/step17/*/fwd_jump.gif
+artifacts/step17/*/hop.gif
+artifacts/step17/stageA/
+artifacts/step17/stageB/
