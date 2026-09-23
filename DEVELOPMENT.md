@@ -51,6 +51,18 @@
  - [Step 17(実装前分析):Go2 前方ジャンプ — 後脚踏切パイプラインの現状と問題。現在の「リープ」は実質「四脚接地スクワット→(運が良ければ)四脚同時飛翔→四脚接地」で、`REAR_PUSH`(後脚のみ支持)も `FRONT_LAND`(前脚のみ着地)も**到達不能**(`local_footstep_planner.cpp:531-538` はデッドコード)。課題の問題 A〜E は行番号付きで全て実在を確認。GBP は点質量+単一合力モデルで後脚荷重配分・ピッチモーメントを表現不可、踏切の水平力の向きは乱数、NMPC/ID は計画接触のみ使用、primitive ID は 3 ファイルに重複定義、NMPC 脚別 GRF 上限 150 N/脚 は必要ピーク(推定 ≈477 N)に届かない。**レイヤ横断の大改修が必要**と判定し実装前に整理](./agent_reports/steps/step_17_forward_jump_code_analysis.md)
  - [Step 17(実装・進行中):前方ジャンプ。方針を「平地・穴なし・その場ジャンプ・後脚位置で計測」に絞り、`jump_mode:=force_leap` で GBP が RRT を回さず 1 回のジャンプ経路を決定論的に publish、NMPC+ID が追従。**計測**(`flat_wide`):その場ジャンプ `step17_hop_sym2`/`step17_hop_rep1` = 胴体 +0.22 m・四脚離地 ≈260 ms・着地後直立維持・NMPC 失敗 0・転倒なし(2/2 再現、ただし飛翔中ピッチが一時 ~0.33 rad)。短前方ジャンプ `step17_fwd_b` = **後脚前進 +0.386 m(≥30 cm)**・四脚離地 314 ms・着地後直立維持。REAR_PUSH/FRONT_LAND を実際に効かせる(姿勢発散回避のため現状は四脚対称ホップ)と穴シナリオは残課題。`colcon test` 112 pass。ブランチ `feature/jump`](./agent_reports/steps/step_17_forward_jump_rear_leg_push.md)
  - [Step 17b(分析・計画):その場・垂直ジャンプを「こけずに」着地させる — gait と WBC(NMPC/逆動力学)の調整計画(大学院初心者向け)。**結論**:強制ジャンプ経路は既に gait をほぼバイパスしており(接触は primitive 上書き、着地後は四脚 hold→STAND)、こけた `hop_v0` の原因は gait でなく WBC 側 — 後脚のみ踏切で前脚支持なし・NMPC の roll/pitch 追従重みが既定 0.5 で弱い・点質量プランの鉛直速度が不連続。堅牢化は主に WBC:姿勢重みの恒常引き上げ・PRELOAD の GRF 形状づけ・滑らかなしゃがみ→伸展の胴体高さ基準・horizon 延長・飛翔中 Cartesian swing ゲイン有効化・着地 kd。gait 側は「着地後の四脚 hold 保証」など限定的。Stage A〜F の段階計画つき](./agent_reports/steps/step_17b_vertical_jump_gait_and_wbc_plan.md)
+ - [Step 18 横幅:床の横幅だけを ±0.8 m に狭めたら `foothold_search_radius` 0.7 m が床の横端に届き、最初の蹴上の手前 x=1.2 m で横転した。幅は ±1.5 m に戻す](./agent_reports/steps/step_18_stair_floor_width.md)
+ - [Step 18 蹴上の手前の傾き:横幅を戻した走行は x=2.88 m まで横転せず、最初の蹴上 x=3 m の手前で、平地にいるのに段の方へ傾いて落ちた。傾きは半径 0.4 m の `smooth_normal_vectors` から来る](./agent_reports/steps/step_18_stair_approach_pitch.md)
+ - [Step 18 残っていた映像:`t01` から `t03` は mp4 だけで状態 CSV が無く、`t06` は最初の蹴上の手前まで直立したあとロールが崩れて後退した](./agent_reports/steps/step_18_remaining_videos.md)
+ - [Step 18 足場の高さと初期位置:着地の z は xy のあと `z_inpainted` を足す。段の中央へ x を移す処理はソースにあるが、動いている計画器では `stair_tread_snap_max_run` が 0 で止まっている](./agent_reports/steps/step_18_foothold_z.md)
+ - [Step 18 踏面の長さに応じた足場:0.24 m の踏面は中央へ寄せられる。1.00 m の踏面は中央が遠すぎて、`stair_tread_snap_max_run` 0.4 m では中央化の対象から外れる。今後は段端からの安全距離と、脚が届く候補のうち公称着地点に近い地点を選ぶ](./agent_reports/steps/step_18_stair_tread_foothold_plan.md)
+ - [Step 19 地形を切り替えない足場判定:足先全体の支持、Go2 の逆運動学、振り足経路の地形高さを `shadow` で記録し、足場と振り軌道は変えない。単体試験 51 件は通った](./agent_reports/steps/step_19_terrain_independent_foothold_shadow.md)
+ - [Step 19 影計測の第1試行:階段の 2 m 手前から接近し、x=0.967 m で転倒した。計画周期が 333 Hz の約 3 ms を超え、NMPC が連続して失敗した](./agent_reports/steps/step_19_shadow_trial_01.md)
+ - [Step 19 同一プログラムの地形回帰:world だけを平地、0.30 m 穴、1.00 m 溝、階段、15 cm 穴×5 に変える。平地と穴は成功し、階段は最初の蹴上の手前 x=2.77 m で転倒した。平滑法線を 0.10 m にしても最初の段で転倒した](./agent_reports/steps/step_19_unified_terrain_regression.md)
+ - [Step 20 振り足の地形頂点:経路上の最大地形高さから求めた頂点を振り足軌道へ適用した。平地の頂点は変えない。階段の第1試行は最初の蹴上を 0.035 m 超えたあと転倒し、適用前の最大 x=3.074 m を超えなかった](./agent_reports/steps/step_20_swing_terrain_enforce.md)
+ - [Step 21 形状の段階:10 段から始めず、高さ 0.10 m、奥行き 0.35 m の 1 段を上って下りるところから難しくする。上り専用の試行は判定に使わない](./agent_reports/steps/step_21_stair_shape_curriculum.md)
+ - [Step 22 高さと段数:高さ 0.10 m・奥行き 0.35 m と、日本の階段寸法 3 組を、2・4・6・8・10 段の上り下りで比べる。0.10 m は 4 段だけ失敗し、0.15 m・奥行き 0.30 m は段の上か下りで転倒した](./agent_reports/steps/step_22_stair_height_step_matrix.md)
+ - [Step 23 ロバスト性:高さ 0.15 m、奥行き 0.30 m、上り 4＋下り 4 を反復する。支持判定、段端後退、支持三角形、前足の奥置きは完走を 5/5 にしていない。選ぶ設定は基準 0.10 m/s。第17章は、高さ・踏面・段数を変えた形状確認である](./agent_reports/steps/step_23_stair_robustness.md)
 
 ### 実行例(時系列)
 

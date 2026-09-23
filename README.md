@@ -4,7 +4,45 @@ Go2 を Quad-SDK の NMPC で歩かせる。いま記録している地形は、
 
 開発の経緯は [DEVELOPMENT.md](./DEVELOPMENT.md) にある。環境構築は [Step 01](./agent_reports/step01/quad_sdk_environment_and_step01.md) にある。
 
-歩容は3系統とも `external/quad-sdk/quad_utils/config/go2.yaml` のクロールである。周期 0.90 s、接地割合 0.75、位相 `[0.0, 0.75, 0.5, 0.25]`。
+## Quad-SDK main からの変更
+
+分類は [元コードからの変更まとめ](./agent_reports/quadsdk_original_code_tuning_summary.md) と同じ。比較先は `robomechanics/quad-sdk` main。
+
+### 追加機能
+
+- Phase 1 `FootholdResult`: 足場の成否。位置は従来どおり
+- Phase 2A `stop_on_invalid_foothold`: 無効足場を NMPC へ渡さない
+- Phase 2B `safe_stop_lookahead` 2.5 m: 前方の渡れない穴で `cmd_vel` を 0
+- Phase 3 `edge_clearance`: 穴縁を `EDGE_TOO_CLOSE`。カタログは 0
+- Phase 4 `ik_reach_check`: 届かない足場を `IK_UNREACHABLE`。カタログは false
+- `multistep_planner` + `apply_stop_request`: 生 `z` の NaN 幅が 0.52 m 以上で停止。平面と穴は ON。`apply_foothold` は false
+- `swing_terrain_check_mode: enforce`: 振り足頂点を経路の地形より上へ。平地は従来頂点
+- `foothold_support_check_mode: shadow`: 足先全体の支持を記録。選択は変えない
+- `foothold_edge_inset_mode` / `support_triangle_shift_mode` / `front_next_tread_mode` / `top_nose_down_pitch_rad`: 段端後退、支持三角形、前足の奥置き、頭下げ。階段カタログは off / 0
+
+### パラメータ修正
+
+- 歩容: trot → crawl
+- `period`: 0.36 → 0.90 s
+- `duty_cycles`: 0.5 → 0.75
+- `phase_offsets`: `[0, 0.5, 0.5, 0]` → `[0, 0.75, 0.5, 0.25]`
+- `foothold_search_radius`: 0.25 → 0.70 m
+- `ground_clearance`: 0.07 → 0.10 m
+- `horizon_length`: 26 → 40（0.78 → 1.20 s）
+- `stand_cmd_vel_threshold`: 0.1 → 0.05
+- ヨー境界: ±π → ±10 rad
+- `smooth_surface_normals` 半径: 0.40 → 0.10 m
+
+### ビルド・実行
+
+- 線形ソルバ: `ma27` → `mumps`
+- `reference`: `gbpl` → `twist`
+- ロボット: Spirit → Go2
+- 速度: 平面と穴は `cmd_vel` 0.30 m/s、階段は 0.10 m/s
+
+### 変更なし
+
+- 剛体の運動方程式、摩擦円錐、胴体の `x_weights`
 
 ## 平面
 
