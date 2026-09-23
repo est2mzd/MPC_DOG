@@ -1,6 +1,6 @@
 # MPC Dog
 
-Go2 を Quad-SDK の NMPC で動かす。いま記録している例は、平面、穴、階段、ジャンプの4系統である。平面・穴・階段は制御を固定し、地形の変数だけを変える。ジャンプは平地で、前方離陸速度だけを変える。GIF は、その条件の代表1本である。成功が無い階段だけ、1回目の失敗を置く。
+Go2 を Quad-SDK の NMPC で動かす。いま記録している例は、平面、穴、階段、ジャンプ、復帰の5系統である。平面・穴・階段は制御を固定し、地形の変数だけを変える。ジャンプは平地で、前方離陸速度だけを変える。復帰は歩行用の NMPC を使わず、転倒姿勢から立位へ戻して歩き直す。GIF は、その条件の代表1本である。成功が無い階段だけ、1回目の失敗を置く。
 
 開発の経緯は [DEVELOPMENT.md](./DEVELOPMENT.md) にある。環境構築は [Step 01](./agent_reports/step01/quad_sdk_environment_and_step01.md) にある。
 
@@ -259,6 +259,40 @@ JUMP_TAKEOFF_VX=<vx> JUMP_DZ_LO=1.1 JUMP_DZ_HI=1.5 \
 短い前方。`JUMP_TAKEOFF_VX=0.3`。成功。
 
 ![短い前方ジャンプ](./artifacts/gifs/quadsdk_step17_fwd_jump.gif)
+
+## 復帰
+
+歩行用の NMPC は使わない。`recovery_controller` が最終の `control/joint_command` を出し、歩行側の関節指令は `control/walking_joint_command` へ退避する。既存の `robot_driver`、local planner、NMPC のソースは変えていない。計画は [姿勢復帰モードの実装計画](./agent_reports/recovery_modes/recovery_modes_plan.md)、試行は [姿勢復帰モードの試行記録](./agent_reports/recovery_modes/recovery_modes_trials.md) にある。
+
+平地の成功は、仰向け、右横倒し、左横倒しのそれぞれから直立へ戻り、2 m 以上歩くことである。速度指令は 0.10 m/s、world は `flat_wide.xml` である。
+
+```bash
+bash scripts/trial/run_recovery_trial.sh flat <supine|left_side|right_side> <tag>
+```
+
+| 初期姿勢 | 試行 | 移動距離 | 結果 |
+| --- | --- | ---: | --- |
+| 仰向け | R12 | 5.66 m | 成功 |
+| 右横倒し | R14 | 3.10 m | 成功 |
+| 左横倒し | R32 | 6.55 m | 成功 |
+
+仰向け。試行 R12。成功。
+
+![仰向けから復帰](./artifacts/gifs/quadsdk_recovery_flat_supine.gif)
+
+右横倒し。試行 R14。成功。
+
+![右横倒しから復帰](./artifacts/gifs/quadsdk_recovery_flat_right.gif)
+
+左横倒し。試行 R32。成功。
+
+![左横倒しから復帰](./artifacts/gifs/quadsdk_recovery_flat_left.gif)
+
+階段は、高さ 0.15 m、踏面 0.30 m、上り4＋下り4の `jp_stair_matrix_h15_d30_n04.xml` を歩いて自然転倒したあと起き上がる。試行 R28 は 1 回で直立へ戻って歩行を再開したが、復帰後の yaw は約 1.80 rad で、階段の前方ではなく横へ進んだ。
+
+```bash
+bash scripts/trial/run_recovery_trial.sh stair auto <tag>
+```
 
 ## Quadruped-PyMPC
 

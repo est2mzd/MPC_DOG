@@ -87,7 +87,9 @@
 
 ### 復帰
 
- - [姿勢復帰モードの実装計画(歩行用 MPC を使わず、関節空間の状態機械で転倒姿勢から立位へ戻す)](./agent_reports/recovery_modes/recovery_modes_plan.md)
+ - [姿勢復帰モードの実装計画(歩行用 MPC を使わず、姿勢判定と関節キーフレームで転倒姿勢から立位へ戻す)](./agent_reports/recovery_modes/recovery_modes_plan.md)
+ - [姿勢復帰モードの試行記録(平地の仰向け・左右と、高さ 0.15 m の階段での復帰試行 R01 から R32)](./agent_reports/recovery_modes/recovery_modes_trials.md)
+ - [README の復帰(平地3姿勢の成功 GIF と実行コマンド)](./README.md#復帰)
 
 ### 実行例(時系列)
 

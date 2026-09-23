@@ -1,0 +1,106 @@
+detection:
+  upright_up_min: 0.82
+  upright_height_min: 0.22
+  upright_hold_time: 1.0
+  fall_up_max: 0.57
+  fall_height_max: 0.18
+  fall_confirm_time: 0.4
+  settled_angular_speed_max: 1.2
+  supine_up_max: -0.55
+  side_abs_up_max: 0.65
+
+control:
+  publish_rate: 200.0
+  recovery_timeout: 28.0
+  final_hold_time: 2.0
+  max_attempts: 3
+  resume_ramp_time: 2.0
+  cmd_vel_timeout: 0.5
+  stand_joints: [0.0, 0.8, -1.5]
+  reach_joints: [0.55, 0.35, -1.00, 0.55, 0.35, -1.00, -0.55, 0.35, -1.00, -0.55, 0.35, -1.00]
+  reach_duration: 0.50
+  stand_kp: [50.0, 50.0, 50.0]
+  stand_kd: [3.0, 3.0, 3.0]
+  safety_kd: 3.0
+  torque_limit: [25.0, 25.0, 35.0]
+
+sequences:
+  supine:
+    - name: open_gap
+      duration: 0.35
+      joints: [0.95, 2.60, -1.50, 0.95, 2.60, -1.50, -0.95, 2.60, -1.50, -0.95, 2.60, -1.50]
+      kp: [55.0, 80.0, 70.0]
+      kd: [2.0, 1.2, 1.2]
+      torque_limit: [23.0, 23.0, 40.0]
+    - name: side_push
+      duration: 0.90
+      joints: [1.00, 3.20, -0.90, 1.00, 3.20, -0.90, -0.85, 2.40, -1.70, -0.85, 2.40, -1.70]
+      kp: [60.0, 90.0, 80.0]
+      kd: [2.0, 1.2, 1.2]
+      torque_limit: [23.0, 23.0, 40.0]
+    - name: low_support
+      duration: 0.45
+      joints: [0.0, 1.15, -2.15, 0.0, 1.15, -2.15, 0.0, 1.15, -2.15, 0.0, 1.15, -2.15]
+      kp: [38.0, 42.0, 42.0]
+      kd: [3.0, 3.0, 3.0]
+      torque_limit: [24.0, 28.0, 38.0]
+    - name: stand
+      duration: 0.6
+      joints: [0.0, 0.8, -1.5, 0.0, 0.8, -1.5, 0.0, 0.8, -1.5, 0.0, 0.8, -1.5]
+      kp: [50.0, 50.0, 50.0]
+      kd: [3.0, 3.0, 3.0]
+      torque_limit: [25.0, 25.0, 35.0]
+
+  left_side:
+    - name: roll_to_back
+      duration: 0.40
+      joints: [0.70, 1.50, -2.40, 0.70, 1.50, -2.40, -1.00, 3.20, -0.90, -1.00, 3.20, -0.90]
+      kp: [60.0, 90.0, 80.0]
+      kd: [2.0, 1.2, 1.2]
+      torque_limit: [23.0, 23.0, 40.0]
+    - name: tuck
+      duration: 0.70
+      joints: [0.0, 1.40, -2.60, 0.0, 1.40, -2.60, 0.0, 1.40, -2.60, 0.0, 1.40, -2.60]
+      kp: [40.0, 45.0, 45.0]
+      kd: [2.5, 2.5, 2.5]
+      torque_limit: [23.0, 24.0, 35.0]
+
+  right_side:
+    - name: side_lever
+      duration: 0.40
+      joints: [0.70, 1.50, -2.40, 0.70, 1.50, -2.40, -1.00, 3.20, -0.90, -1.00, 3.20, -0.90]
+      kp: [60.0, 90.0, 80.0]
+      kd: [2.0, 1.2, 1.2]
+      torque_limit: [23.0, 23.0, 40.0]
+    - name: low_support
+      duration: 0.40
+      joints: [0.0, 1.15, -2.15, 0.0, 1.15, -2.15, 0.0, 1.15, -2.15, 0.0, 1.15, -2.15]
+      kp: [38.0, 42.0, 42.0]
+      kd: [3.0, 3.0, 3.0]
+      torque_limit: [24.0, 28.0, 38.0]
+    - name: stand
+      duration: 0.55
+      joints: [0.0, 0.8, -1.5, 0.0, 0.8, -1.5, 0.0, 0.8, -1.5, 0.0, 0.8, -1.5]
+      kp: [50.0, 50.0, 50.0]
+      kd: [3.0, 3.0, 3.0]
+      torque_limit: [25.0, 25.0, 35.0]
+
+  prone:
+    - name: tuck
+      duration: 0.8
+      joints: [0.0, 1.40, -2.60, 0.0, 1.40, -2.60, 0.0, 1.40, -2.60, 0.0, 1.40, -2.60]
+      kp: [28.0, 32.0, 32.0]
+      kd: [3.0, 3.0, 3.0]
+      torque_limit: [22.0, 24.0, 32.0]
+    - name: low_support
+      duration: 0.40
+      joints: [0.0, 1.15, -2.15, 0.0, 1.15, -2.15, 0.0, 1.15, -2.15, 0.0, 1.15, -2.15]
+      kp: [38.0, 42.0, 42.0]
+      kd: [3.0, 3.0, 3.0]
+      torque_limit: [24.0, 28.0, 38.0]
+    - name: stand
+      duration: 0.55
+      joints: [0.0, 0.8, -1.5, 0.0, 0.8, -1.5, 0.0, 0.8, -1.5, 0.0, 0.8, -1.5]
+      kp: [50.0, 50.0, 50.0]
+      kd: [3.0, 3.0, 3.0]
+      torque_limit: [25.0, 25.0, 35.0]

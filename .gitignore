@@ -82,6 +82,13 @@ artifacts/gifs/*.gif
 # Step 17 ジャンプ(平地・穴なし)。その場と短前方。各 <1MB。
 !artifacts/gifs/quadsdk_step17_vertical_jump.gif
 !artifacts/gifs/quadsdk_step17_fwd_jump.gif
+# 姿勢復帰。平地の仰向け・右横倒し・左横倒し。各 <1MB。
+!artifacts/gifs/quadsdk_recovery_flat_supine.gif
+!artifacts/gifs/quadsdk_recovery_flat_right.gif
+!artifacts/gifs/quadsdk_recovery_flat_left.gif
+
+# 姿勢復帰の試行ログ(mp4・CSV)。代表 GIF は artifacts/gifs/ 側を追跡する。
+artifacts/logs/recovery_modes/
 
 # backup/(2.0GB、未追跡)。archive/は履歴保持のため意図的にgit管理下にあり
 # (archive/README.md参照)、対象外とする
