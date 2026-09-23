@@ -205,3 +205,11 @@ artifacts/step17/*/fwd_jump.gif
 artifacts/step17/*/hop.gif
 artifacts/step17/stageA/
 artifacts/step17/stageB/
+# Step 18 以降の試行出力（mp4 / csv / gif）。world と README の代表 GIF は別途追跡する。
+artifacts/logs/quadsdk_step*/
+artifacts/logs/quadsdk_step*_run.log
+artifacts/logs/step2*.csv
+# colcon の生成物
+/build/
+/install/
+/log/

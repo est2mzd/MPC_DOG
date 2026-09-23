@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mujoco model="jp_stair_matrix_h20_d35_n06" xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <!-- Up-and-down stair curriculum: 6 step(s), riser 0.20 m,
+       tread 0.35 m, first riser x=3.00, top z=1.20
+       Terrain MAP is models/jp_stair_matrix_h20_d35_n06/meshes/jp_stair_matrix_h20_d35_n06.ply -->
+  <xacro:arg name="meshdir" default=""/>
+  <xacro:arg name="mjcf_path" default=""/>
+  <compiler angle="radian" meshdir="$(arg meshdir)" texturedir="$(arg meshdir)" autolimits="true"/>
+  <include file="$(arg mjcf_path)"/>
+  <worldbody>
+    <light directional="true" diffuse=".8 .8 .8" specular=".2 .2 .2" pos="0 0 5" dir="0 0 -1"/>
+    <geom name="approach" type="box" size="2.0000 1.5000 0.0500" pos="1.0000 0 -0.0500" rgba="0.75 0.82 0.75 1" friction="1.5 0.1 0.05" solref="0.007 1" solimp="0.95 0.99 0.002"/>
+    <geom name="up_01" type="box" size="0.1750 1.5000 0.1500" pos="3.1750 0 0.0500" rgba="0.72 0.62 0.48 1" friction="1.5 0.1 0.05" solref="0.007 1" solimp="0.95 0.99 0.002"/>
+    <geom name="up_02" type="box" size="0.1750 1.5000 0.2500" pos="3.5250 0 0.1500" rgba="0.60 0.50 0.38 1" friction="1.5 0.1 0.05" solref="0.007 1" solimp="0.95 0.99 0.002"/>
+    <geom name="up_03" type="box" size="0.1750 1.5000 0.3500" pos="3.8750 0 0.2500" rgba="0.72 0.62 0.48 1" friction="1.5 0.1 0.05" solref="0.007 1" solimp="0.95 0.99 0.002"/>
+    <geom name="up_04" type="box" size="0.1750 1.5000 0.4500" pos="4.2250 0 0.3500" rgba="0.60 0.50 0.38 1" friction="1.5 0.1 0.05" solref="0.007 1" solimp="0.95 0.99 0.002"/>
+    <geom name="up_05" type="box" size="0.1750 1.5000 0.5500" pos="4.5750 0 0.4500" rgba="0.72 0.62 0.48 1" friction="1.5 0.1 0.05" solref="0.007 1" solimp="0.95 0.99 0.002"/>
+    <geom name="top_run" type="box" size="0.1750 1.5000 0.6500" pos="4.9250 0 0.5500" rgba="0.86 0.84 0.70 1" friction="1.5 0.1 0.05" solref="0.007 1" solimp="0.95 0.99 0.002"/>
+    <geom name="down_01" type="box" size="0.1750 1.5000 0.5500" pos="5.2750 0 0.4500" rgba="0.62 0.58 0.70 1" friction="1.5 0.1 0.05" solref="0.007 1" solimp="0.95 0.99 0.002"/>
+    <geom name="down_02" type="box" size="0.1750 1.5000 0.4500" pos="5.6250 0 0.3500" rgba="0.50 0.46 0.60 1" friction="1.5 0.1 0.05" solref="0.007 1" solimp="0.95 0.99 0.002"/>
+    <geom name="down_03" type="box" size="0.1750 1.5000 0.3500" pos="5.9750 0 0.2500" rgba="0.62 0.58 0.70 1" friction="1.5 0.1 0.05" solref="0.007 1" solimp="0.95 0.99 0.002"/>
+    <geom name="down_04" type="box" size="0.1750 1.5000 0.2500" pos="6.3250 0 0.1500" rgba="0.50 0.46 0.60 1" friction="1.5 0.1 0.05" solref="0.007 1" solimp="0.95 0.99 0.002"/>
+    <geom name="down_05" type="box" size="0.1750 1.5000 0.1500" pos="6.6750 0 0.0500" rgba="0.62 0.58 0.70 1" friction="1.5 0.1 0.05" solref="0.007 1" solimp="0.95 0.99 0.002"/>
+    <geom name="exit_flat" type="box" size="1.5000 1.5000 0.0500" pos="8.3500 0 -0.0500" rgba="0.75 0.82 0.75 1" friction="1.5 0.1 0.05" solref="0.007 1" solimp="0.95 0.99 0.002"/>
+  </worldbody>
+</mujoco>
