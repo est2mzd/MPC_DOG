@@ -1,5 +1,7 @@
 #include "local_planner/local_footstep_planner.hpp"
 
+#include <algorithm>
+#include <array>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -14,16 +16,16 @@ namespace {
 // Writes CSVs used by the Step 09+ analyses (terrain-map layers, per-touchdown
 // foothold selection, future gait events, ...). Adds NOTHING to the control
 // path: no return value, cmd_vel, foothold or NMPC input changes.
-const char *stepDumpDir() {
-  static const char *d = []() {
-    const char *v = std::getenv("MPCDOG_STEPDUMP_DIR");
+const char* stepDumpDir() {
+  static const char* d = []() {
+    const char* v = std::getenv("MPCDOG_STEPDUMP_DIR");
     if (v == nullptr || v[0] == '\0') v = std::getenv("MPCDOG_STEP09_DIR");
     return v;
   }();
   return (d != nullptr && d[0] != '\0') ? d : nullptr;
 }
 
-double step09Sample(const grid_map::GridMap &grid, const char *layer, double x,
+double step09Sample(const grid_map::GridMap& grid, const char* layer, double x,
                     double y) {
   const grid_map::Position p(x, y);
   if (!grid.exists(layer) || !grid.isInside(p)) {
@@ -34,8 +36,8 @@ double step09Sample(const grid_map::GridMap &grid, const char *layer, double x,
 
 // Dump the terrain-map row nearest y = 0 (the robot's path; the test trenches
 // are full-width in y so any row is representative). Written once per process.
-void step09DumpMapCrossSection(const grid_map::GridMap &grid,
-                               double obj_threshold, const std::string &dir) {
+void step09DumpMapCrossSection(const grid_map::GridMap& grid,
+                               double obj_threshold, const std::string& dir) {
   std::ofstream f(dir + "/step09_map_cross_section.csv");
   if (!f) return;
   f << "map_stamp,frame,cell_i,cell_j,x,y,z_raw,z_inpainted,z_smooth,slope,"
@@ -47,20 +49,21 @@ void step09DumpMapCrossSection(const grid_map::GridMap &grid,
   if (sz(0) == 0 || sz(1) == 0) return;
   grid_map::Index c0;
   int jc = grid.getIndex(grid_map::Position(0.0, 0.0), c0) ? c0(1) : sz(1) / 2;
-  auto lyr = [&](const char *n) -> const grid_map::Matrix * {
+  auto lyr = [&](const char* n) -> const grid_map::Matrix* {
     return grid.exists(n) ? &grid.get(n) : nullptr;
   };
-  const grid_map::Matrix *Lz = lyr("z");
-  const grid_map::Matrix *Lzi = lyr("z_inpainted");
-  const grid_map::Matrix *Lzs = lyr("z_smooth");
-  const grid_map::Matrix *Lsl = lyr("slope");
-  const grid_map::Matrix *Lro = lyr("roughness");
-  const grid_map::Matrix *Ltr = lyr("traversability");
-  const grid_map::Matrix *Ltm = lyr("traversability_mask");
+  const grid_map::Matrix* Lz = lyr("z");
+  const grid_map::Matrix* Lzi = lyr("z_inpainted");
+  const grid_map::Matrix* Lzs = lyr("z_smooth");
+  const grid_map::Matrix* Lsl = lyr("slope");
+  const grid_map::Matrix* Lro = lyr("roughness");
+  const grid_map::Matrix* Ltr = lyr("traversability");
+  const grid_map::Matrix* Ltm = lyr("traversability_mask");
   for (int i = 0; i < sz(0); ++i) {
     grid_map::Position pos;
     grid.getPosition(grid_map::Index(i, jc), pos);
-    const double z = Lz ? (*Lz)(i, jc) : std::numeric_limits<double>::quiet_NaN();
+    const double z =
+        Lz ? (*Lz)(i, jc) : std::numeric_limits<double>::quiet_NaN();
     const double zi =
         Lzi ? (*Lzi)(i, jc) : std::numeric_limits<double>::quiet_NaN();
     const double zs =
@@ -99,12 +102,12 @@ void step09DumpMapCrossSection(const grid_map::GridMap &grid,
 // (traversability > threshold) with all 4 orthogonal neighbours also safe
 // (foot-sole / edge margin), (c) observed (raw z finite; unknown != safe).
 // Appends one summary row per call. Nothing here feeds control.
-void step11EnumerateCandidates(const grid_map::GridMap &grid,
-                               const char *trav_layer, double obj_threshold,
-                               double toe_radius, const Eigen::Vector3d &hip,
+void step11EnumerateCandidates(const grid_map::GridMap& grid,
+                               const char* trav_layer, double obj_threshold,
+                               double toe_radius, const Eigen::Vector3d& hip,
                                double ik_max_reach, double time_s, int plan_idx,
-                               const char *leg, size_t td_idx, double sel_x,
-                               double sel_y, const std::string &dir) {
+                               const char* leg, size_t td_idx, double sel_x,
+                               double sel_y, const std::string& dir) {
   const double R = (ik_max_reach > 0.0) ? ik_max_reach : 0.45;
   const double res = std::max(grid.getResolution(), 1e-3);
   // coarse go2 leg workspace box around the hip (documented as approximate)
@@ -152,22 +155,22 @@ void step11EnumerateCandidates(const grid_map::GridMap &grid,
   int sel_reach = 0, sel_all = 0;
   if (std::isfinite(sel_x) && std::isfinite(sel_y)) {
     const grid_map::Position sp(sel_x, sel_y);
-    double szc =
-        (have_z && grid.isInside(sp))
-            ? grid.atPosition("z_inpainted", sp) + toe_radius
-            : 0.0;
+    double szc = (have_z && grid.isInside(sp))
+                     ? grid.atPosition("z_inpainted", sp) + toe_radius
+                     : 0.0;
     const double sd = std::sqrt((sel_x - hip.x()) * (sel_x - hip.x()) +
                                 (sel_y - hip.y()) * (sel_y - hip.y()) +
                                 (szc - hip.z()) * (szc - hip.z()));
     sel_reach = (sd <= R) ? 1 : 0;
-    const double szr = (have_raw && grid.isInside(sp)) ? grid.atPosition("z", sp)
-                                                      : std::nan("");
-    sel_all = (sel_reach && trav_ok(sel_x, sel_y) &&
-              trav_ok(sel_x + res, sel_y) && trav_ok(sel_x - res, sel_y) &&
-              trav_ok(sel_x, sel_y + res) && trav_ok(sel_x, sel_y - res) &&
-              std::isfinite(szr))
-                 ? 1
-                 : 0;
+    const double szr = (have_raw && grid.isInside(sp))
+                           ? grid.atPosition("z", sp)
+                           : std::nan("");
+    sel_all =
+        (sel_reach && trav_ok(sel_x, sel_y) && trav_ok(sel_x + res, sel_y) &&
+         trav_ok(sel_x - res, sel_y) && trav_ok(sel_x, sel_y + res) &&
+         trav_ok(sel_x, sel_y - res) && std::isfinite(szr))
+            ? 1
+            : 0;
   }
 
   const std::string path = dir + "/step11_candidates.csv";
@@ -180,11 +183,11 @@ void step11EnumerateCandidates(const grid_map::GridMap &grid,
          "sel_in_reach,sel_passes_all,ik_max_reach\n";
   }
   char b[384];
-  std::snprintf(b, sizeof(b),
-                "%.4f,%d,%s,%zu,%.5f,%.5f,%.5f,%d,%d,%d,%.5f,%.5f,%.5f,%d,%d,%.3f",
-                time_s, plan_idx, leg, td_idx, hip.x(), hip.y(), hip.z(), n_reach,
-                n_safe, n_valid, min_valid_reach, sel_x, sel_y, sel_reach,
-                sel_all, R);
+  std::snprintf(
+      b, sizeof(b),
+      "%.4f,%d,%s,%zu,%.5f,%.5f,%.5f,%d,%d,%d,%.5f,%.5f,%.5f,%d,%d,%.3f",
+      time_s, plan_idx, leg, td_idx, hip.x(), hip.y(), hip.z(), n_reach, n_safe,
+      n_valid, min_valid_reach, sel_x, sel_y, sel_reach, sel_all, R);
   f << b << "\n";
 }
 
@@ -193,34 +196,39 @@ void step11EnumerateCandidates(const grid_map::GridMap &grid,
 // At each future touchdown it projects the body forward at v_fwd, gets that
 // leg's hip, enumerates reachable+safe+observed cells (same tests as Step 11),
 // and takes the min-cost one. Verdict:
-//   FEASIBLE_TO_RANGE     - placed footholds out to plan_distance (or the step cap)
-//   BLOCKED_AT_STEP_K     - no valid candidate at touchdown k
+//   FEASIBLE_TO_RANGE     - placed footholds out to plan_distance (or the step
+//   cap) BLOCKED_AT_STEP_K     - no valid candidate at touchdown k
 //   UNKNOWN_BEFORE_RANGE  - ran off the mapped area first
 // Nothing here feeds control. Throttled to every 5th plan cycle.
 struct Step12Result {
-  int verdict = 0;   // 0 FEASIBLE_TO_RANGE, 1 BLOCKED_AT_STEP_K, 2 UNKNOWN_BEFORE_RANGE
+  int verdict =
+      0;  // 0 FEASIBLE_TO_RANGE, 1 BLOCKED_AT_STEP_K, 2 UNKNOWN_BEFORE_RANGE
   int blocked_k = -1;
   int blocked_leg = -1;
   // [MPC_DOG Step 15] first planned touchdown foothold per leg index
   // (0=FL,1=BL,2=FR,3=BR): world x/y AND the nominal hip x/y it was chosen
   // relative to. computeFootPlan applies (planned - planned_hip) as a
   // body-tracking terrain offset, not the stale world position. planned_ok[leg]
-  // is true only when that leg's first touchdown found a reachable+safe+observed
-  // cell (n_valid>0), i.e. not the first_solid_x fallback and not a blocked step.
+  // is true only when that leg's first touchdown found a
+  // reachable+safe+observed cell (n_valid>0), i.e. not the first_solid_x
+  // fallback and not a blocked step.
   double planned_x[4] = {0.0, 0.0, 0.0, 0.0};
   double planned_y[4] = {0.0, 0.0, 0.0, 0.0};
-  double planned_bx[4] = {0.0, 0.0, 0.0, 0.0};  // body x this touchdown planned for
+  double planned_bx[4] = {0.0, 0.0, 0.0,
+                          0.0};  // body x this touchdown planned for
   bool planned_ok[4] = {false, false, false, false};
 };
 
-Step12Result step12PlanSequence(
-    const grid_map::GridMap &grid,
-    const std::shared_ptr<quad_utils::QuadKD2> &kd, double dt, int period,
-    double bx, double by, double byaw, double bz, double v_fwd,
-    double ik_max_reach, double toe_radius, double obj_threshold,
-    double plan_distance, double time_s, int plan_idx, const std::string &dir) {
+Step12Result step12PlanSequence(const grid_map::GridMap& grid,
+                                const std::shared_ptr<quad_utils::QuadKD2>& kd,
+                                double dt, int period, double bx, double by,
+                                double byaw, double bz, double v_fwd,
+                                double ik_max_reach, double toe_radius,
+                                double obj_threshold, double plan_distance,
+                                double time_s, int plan_idx,
+                                const std::string& dir) {
   const auto t_start = std::chrono::steady_clock::now();
-  const char *legname[4] = {"FL", "BL", "FR", "BR"};
+  const char* legname[4] = {"FL", "BL", "FR", "BR"};
   const int order[4] = {0, 3, 2, 1};  // observed crawl touchdown order
   const double R = (ik_max_reach > 0.0) ? ik_max_reach : 0.45;
   const double res = std::max(grid.getResolution(), 1e-3);
@@ -256,7 +264,7 @@ Step12Result step12PlanSequence(
   std::string verdict = "FEASIBLE_TO_RANGE";
   int blocked_k = -1;
   int blocked_leg_idx = -1;
-  const char *blocked_leg = "-";
+  const char* blocked_leg = "-";
   double max_progress = 0.0;
   int placed = 0;
   std::vector<std::string> foot_rows;
@@ -273,7 +281,7 @@ Step12Result step12PlanSequence(
     const double bxk = bx + v_fwd * t;
     Eigen::Vector3d hip;
     kd->worldToNominalHipFKWorldFrame(leg, Eigen::Vector3d(bxk, by, bz),
-                                     Eigen::Vector3d(0.0, 0.0, byaw), hip);
+                                      Eigen::Vector3d(0.0, 0.0, byaw), hip);
     if (!grid.isInside(grid_map::Position(hip.x(), hip.y()))) {
       verdict = "UNKNOWN_BEFORE_RANGE";
       blocked_k = k;
@@ -302,8 +310,7 @@ Step12Result step12PlanSequence(
         }
       }
     }
-    if (max_nan_run >= uncrossable_nan_width ||
-        !std::isfinite(first_solid_x)) {
+    if (max_nan_run >= uncrossable_nan_width || !std::isfinite(first_solid_x)) {
       verdict = "BLOCKED_AT_STEP_K";
       blocked_k = k;
       blocked_leg = legname[leg];
@@ -331,8 +338,8 @@ Step12Result step12PlanSequence(
                                    (zc - hip.z()) * (zc - hip.z()));
         if (d > R) continue;
         ++n_valid;
-        const double cost = std::fabs(x - (hip.x() + 0.08)) +
-                            std::fabs(y - hip.y());
+        const double cost =
+            std::fabs(x - (hip.x() + 0.08)) + std::fabs(y - hip.y());
         if (cost < best_cost) {
           best_cost = cost;
           best_x = x;
@@ -374,7 +381,8 @@ Step12Result step12PlanSequence(
     if (sf) {
       if (sh) {
         sf << "time,current_plan_index,verdict,blocked_step_k,blocked_leg,"
-              "n_placed,max_feasible_progress_m,plan_distance_m,compute_time_us\n";
+              "n_placed,max_feasible_progress_m,plan_distance_m,compute_time_"
+              "us\n";
       }
       char b[256];
       std::snprintf(b, sizeof(b), "%.4f,%d,%s,%d,%s,%d,%.4f,%.2f,%ld", time_s,
@@ -390,7 +398,7 @@ Step12Result step12PlanSequence(
       std::ofstream ff(fp, std::ios::app);
       if (ff) {
         if (fh) ff << "time,current_plan_index,step_k,leg,x,y,hip_x,n_valid\n";
-        for (const auto &r : foot_rows) ff << r << "\n";
+        for (const auto& r : foot_rows) ff << r << "\n";
       }
     }
   }
@@ -449,7 +457,11 @@ void LocalFootstepPlanner::setSpatialParams(
     std::shared_ptr<quad_utils::QuadKD2> kinematics,
     double foothold_search_radius, double foothold_obj_threshold,
     std::string obj_fun_layer, double toe_radius, double edge_clearance,
-    double max_crossable_gap, bool ik_reach_check, double ik_max_reach) {
+    double max_crossable_gap, bool ik_reach_check, double ik_max_reach,
+    double stair_tread_snap_max_run, std::string foothold_support_check_mode,
+    double foothold_support_margin, double foothold_support_height_tolerance,
+    std::string foothold_ik_check_mode, double foothold_ik_joint_margin,
+    std::string foothold_edge_inset_mode, std::string front_next_tread_mode) {
   ground_clearance_ = ground_clearance;
   hip_clearance_ = hip_clearance;
   standing_error_threshold_ = standing_error_threshold;
@@ -463,6 +475,89 @@ void LocalFootstepPlanner::setSpatialParams(
   max_crossable_gap_ = max_crossable_gap;
   ik_reach_check_ = ik_reach_check;
   ik_max_reach_ = ik_max_reach;
+  stair_tread_snap_max_run_ = stair_tread_snap_max_run;
+  if (foothold_support_check_mode != "off" &&
+      foothold_support_check_mode != "shadow" &&
+      foothold_support_check_mode != "enforce") {
+    RCLCPP_WARN(node_->get_logger(),
+                "Unknown foothold_support_check_mode '%s'; using off",
+                foothold_support_check_mode.c_str());
+    foothold_support_check_mode = "off";
+  }
+  foothold_support_check_mode_ = foothold_support_check_mode;
+  foothold_support_margin_ = std::max(foothold_support_margin, 0.0);
+  foothold_support_height_tolerance_ =
+      std::max(foothold_support_height_tolerance, 0.0);
+  if (foothold_ik_check_mode != "off" && foothold_ik_check_mode != "shadow" &&
+      foothold_ik_check_mode != "enforce") {
+    RCLCPP_WARN(node_->get_logger(),
+                "Unknown foothold_ik_check_mode '%s'; using off",
+                foothold_ik_check_mode.c_str());
+    foothold_ik_check_mode = "off";
+  }
+  foothold_ik_check_mode_ = foothold_ik_check_mode;
+  foothold_ik_joint_margin_ = std::max(foothold_ik_joint_margin, 0.0);
+  if (foothold_edge_inset_mode != "off" &&
+      foothold_edge_inset_mode != "enforce") {
+    RCLCPP_WARN(node_->get_logger(),
+                "Unknown foothold_edge_inset_mode '%s'; using off",
+                foothold_edge_inset_mode.c_str());
+    foothold_edge_inset_mode = "off";
+  }
+  foothold_edge_inset_mode_ = foothold_edge_inset_mode;
+  if (front_next_tread_mode != "off" && front_next_tread_mode != "enforce") {
+    RCLCPP_WARN(node_->get_logger(),
+                "Unknown front_next_tread_mode '%s'; using off",
+                front_next_tread_mode.c_str());
+    front_next_tread_mode = "off";
+  }
+  front_next_tread_mode_ = front_next_tread_mode;
+}
+
+LocalFootstepPlanner::FrontNextTreadPlacement
+LocalFootstepPlanner::frontFootFarOnNextTread(
+    const std::vector<double>& heights, double x_start, double step,
+    double height_tolerance, double inset) {
+  FrontNextTreadPlacement result;
+  if (heights.size() < 2 || !(step > 0.0) || !(height_tolerance > 0.0)) {
+    return result;
+  }
+  const double z0 = heights.front();
+  if (!std::isfinite(z0)) {
+    return result;
+  }
+  size_t next = 1;
+  for (; next < heights.size(); ++next) {
+    if (!std::isfinite(heights[next]) ||
+        std::abs(heights[next] - z0) >= height_tolerance) {
+      break;
+    }
+  }
+  if (next >= heights.size() || !std::isfinite(heights[next])) {
+    return result;
+  }
+  const double z_next = heights[next];
+  size_t far = next;
+  for (size_t i = next + 1; i < heights.size(); ++i) {
+    if (!std::isfinite(heights[i]) ||
+        std::abs(heights[i] - z_next) >= height_tolerance) {
+      break;
+    }
+    far = i;
+  }
+  if (far + 1 >= heights.size()) {
+    return result;
+  }
+  const double x_near = x_start + static_cast<double>(next) * step;
+  const double x_far = x_start + static_cast<double>(far) * step;
+  const double margin = std::max(inset, 0.0);
+  double x = x_far - margin;
+  if (x < x_near + margin) {
+    x = 0.5 * (x_near + x_far);
+  }
+  result.applied = true;
+  result.x = x;
+  return result;
 }
 
 void LocalFootstepPlanner::setMultistepParams(bool enabled,
@@ -475,6 +570,18 @@ void LocalFootstepPlanner::setMultistepParams(bool enabled,
   multistep_apply_foothold_ = apply_foothold;
   multistep_stop_margin_steps_ = std::max(1, stop_margin_steps);
   multistep_planning_distance_ = planning_distance;
+}
+
+void LocalFootstepPlanner::setSwingTerrainParams(std::string mode) {
+  if (mode != "off" && mode != "shadow" && mode != "enforce") {
+    RCLCPP_WARN(node_->get_logger(),
+                "Unknown swing_terrain_check_mode '%s'; using off",
+                mode.c_str());
+    mode = "off";
+  }
+  swing_terrain_check_mode_ = mode;
+  RCLCPP_INFO(node_->get_logger(), "[DIAG] swing terrain mode=%s",
+              swing_terrain_check_mode_.c_str());
 }
 
 void LocalFootstepPlanner::updateMap(const FastTerrainMap& terrain) {
@@ -635,9 +742,9 @@ FootPlanResult LocalFootstepPlanner::computeFootPlan(
   };
 
   // [MPC_DOG Step 09] measurement-only: collect per-touchdown foothold rows.
-  const char *s09_dir = stepDumpDir();
+  const char* s09_dir = stepDumpDir();
   std::vector<std::string> s09_foot_rows;
-  const char *kS09Legs[4] = {"FL", "BL", "FR", "BR"};
+  const char* kS09Legs[4] = {"FL", "BL", "FR", "BR"};
 
   // [MPC_DOG Step 11] enumerate reachable candidates once per leg per cycle.
   bool s11_leg_done[4] = {false, false, false, false};
@@ -675,26 +782,25 @@ FootPlanResult LocalFootstepPlanner::computeFootPlan(
     static long s12_calls = 0;
     if ((s12_calls++ % 5) == 0) {
       const double v_fwd = std::min(
-          1.0, std::max(0.0, (body_plan(body_plan.rows() - 1, 0) -
-                              body_plan(0, 0)) /
-                                 std::max(1e-6, (body_plan.rows() - 1) * dt_)));
+          1.0,
+          std::max(0.0, (body_plan(body_plan.rows() - 1, 0) - body_plan(0, 0)) /
+                            std::max(1e-6, (body_plan.rows() - 1) * dt_)));
       const Step12Result s12 = step12PlanSequence(
-          terrain_grid_, quadKD_, dt_, period_, body_plan(0, 0), body_plan(0, 1),
-          body_plan(0, 5), body_plan(0, 2), v_fwd, ik_max_reach_, toe_radius_,
-          foothold_obj_threshold_, multistep_planning_distance_,
-          node_->now().seconds(), current_plan_index,
+          terrain_grid_, quadKD_, dt_, period_, body_plan(0, 0),
+          body_plan(0, 1), body_plan(0, 5), body_plan(0, 2), v_fwd,
+          ik_max_reach_, toe_radius_, foothold_obj_threshold_,
+          multistep_planning_distance_, node_->now().seconds(),
+          current_plan_index,
           s09_dir != nullptr ? std::string(s09_dir) : std::string());
       if (multistep_apply_stop_ && s12.verdict == 1 && s12.blocked_k >= 0) {
         // final_stop_steps from a conservative post-latch stopping model
         // (a_safe ~ 0.44 m/s^2, t_delay ~ 0.19 s, floor 0.12 m, +0.10 m margin;
         //  Step 13), converted to touchdown events (v * td_spacing).
         const double v = std::max(0.05, v_fwd);
-        const double td_spacing =
-            (period_ > 0) ? (period_ * dt_ / 4.0) : 0.225;
+        const double td_spacing = (period_ > 0) ? (period_ * dt_ / 4.0) : 0.225;
         double d_stop = v * 0.19 + v * v / (2.0 * 0.44);
         d_stop = std::max(d_stop, 0.12) + 0.10;
-        const int req =
-            static_cast<int>(std::ceil(d_stop / (v * td_spacing)));
+        const int req = static_cast<int>(std::ceil(d_stop / (v * td_spacing)));
         const int final_stop_steps =
             std::max(multistep_stop_margin_steps_, req);
         plan_result.multistep_blocked_k = s12.blocked_k;
@@ -821,9 +927,9 @@ FootPlanResult LocalFootstepPlanner::computeFootPlan(
         // step12 touchdown events are period*dt/4 = 0.225 s apart, so the first
         // planned touchdown lands ~7-8 horizon steps out; edit only once it is
         // within kImminent so it is not re-nudged for many replan cycles.
-        constexpr int kImminent = 12;        // horizon steps: only edit if this close
-        constexpr double kBxMatch = 0.06;    // m, body-x alignment tolerance
-        constexpr double kMaxDelta = 0.12;   // m, max nominal correction
+        constexpr int kImminent = 12;  // horizon steps: only edit if this close
+        constexpr double kBxMatch = 0.06;   // m, body-x alignment tolerance
+        constexpr double kMaxDelta = 0.12;  // m, max nominal correction
         if (multistep_apply_foothold_ && multistep_enabled_ &&
             !multistep_first_td_applied[j] && j >= 0 && j < 4 &&
             static_cast<int>(i) <= kImminent && multistep_planned_ok_[j] &&
@@ -858,7 +964,8 @@ FootPlanResult LocalFootstepPlanner::computeFootPlan(
         if (!terrain_grid_.isInside(foot_position_grid_map)) {
           ++diag_outside;
           // Phase 2A: the bare `continue` below leaves this touchdown without a
-          // fresh foothold; flag it so computeLocalPlan() can withhold the plan.
+          // fresh foothold; flag it so computeLocalPlan() can withhold the
+          // plan.
           record_foothold_failure(FootholdStatus::NOMINAL_OUTSIDE_MAP, j,
                                   static_cast<int>(i));
           RCLCPP_WARN(node_->get_logger(),
@@ -877,16 +984,18 @@ FootPlanResult LocalFootstepPlanner::computeFootPlan(
 
         Eigen::Vector3d foot_position_previous =
             foot_positions.block<1, 3>(i, 3 * j);
+        body_pos_midstance = body_plan.row(i).segment<3>(0);
+        body_rpy_midstance = body_plan.row(i).segment<3>(3);
         const FootholdResult foothold = getNearestValidFootholdResult(
             foot_position_nominal, foot_position_previous, j,
-            hip_position_midstance);
+            hip_position_midstance, &body_pos_midstance, &body_rpy_midstance);
 
         if (foothold.status == FootholdStatus::VALID) {
           foot_positions.block<1, 3>(i, 3 * j) = foothold.position;
         } else {
           // Phase 2A: no traversable / finite cell was found. Do NOT write the
-          // hole/NaN nominal into the plan; inherit the previous touchdown value
-          // (same as the non-touchdown branch) and flag the failure.
+          // hole/NaN nominal into the plan; inherit the previous touchdown
+          // value (same as the non-touchdown branch) and flag the failure.
           record_foothold_failure(foothold.status, j, static_cast<int>(i));
           foot_positions.block<1, 3>(i, 3 * j) =
               getFootData(foot_positions, i - 1, j);
@@ -897,35 +1006,37 @@ FootPlanResult LocalFootstepPlanner::computeFootPlan(
         if (s09_dir != nullptr) {
           const double sx = foothold.position.x(), sy = foothold.position.y();
           const double s_zraw = step09Sample(terrain_grid_, "z", sx, sy);
-          const double s_zinp = step09Sample(terrain_grid_, "z_inpainted", sx,
-                                             sy);
+          const double s_zinp =
+              step09Sample(terrain_grid_, "z_inpainted", sx, sy);
           const double s_trav =
               step09Sample(terrain_grid_, obj_fun_layer_.c_str(), sx, sy);
           double s_hm = std::numeric_limits<double>::quiet_NaN();
           if (std::isfinite(s_zraw) && std::isfinite(s_zinp)) {
-            s_hm = std::max(0.0, std::min(1.0, 1.0 - std::abs(s_zraw - s_zinp)));
+            s_hm =
+                std::max(0.0, std::min(1.0, 1.0 - std::abs(s_zraw - s_zinp)));
           }
           const int s_obs = std::isfinite(s_zraw) ? 1 : 0;
           const int s_safe =
-              (std::isfinite(s_trav) && s_trav > foothold_obj_threshold_) ? 1 : 0;
+              (std::isfinite(s_trav) && s_trav > foothold_obj_threshold_) ? 1
+                                                                          : 0;
           char rb[768];
           // 20 columns, matching the header written at flush time.
           std::snprintf(
               rb, sizeof(rb),
-              "%.4f,%ld,%s,%s,%zu,%.4f,"      // time,stamp,frame,leg,td_idx,td_time
-              "%.5f,%.5f,%.5f,"               // nominal_x, nominal_y, nominal_trav
-              "%.5f,%.5f,%.5f,"               // selected_x, selected_y, selected_z
-              "%.5f,%.5f,%.5f,"               // sel_z_raw, sel_z_inpainted, sel_hole_mask
-              "%d,%d,"                        // sel_observed, sel_binary_safe
-              "%.5f,%.5f,%d",                 // snap_distance, hip_distance, status
+              "%.4f,%ld,%s,%s,%zu,%.4f,"  // time,stamp,frame,leg,td_idx,td_time
+              "%.5f,%.5f,%.5f,"           // nominal_x, nominal_y, nominal_trav
+              "%.5f,%.5f,%.5f,"           // selected_x, selected_y, selected_z
+              "%.5f,%.5f,%.5f,"  // sel_z_raw, sel_z_inpainted, sel_hole_mask
+              "%d,%d,"           // sel_observed, sel_binary_safe
+              "%.5f,%.5f,%d",    // snap_distance, hip_distance, status
               node_->now().seconds(),
               static_cast<long>(terrain_grid_.getTimestamp()),
               terrain_grid_.getFrameId().c_str(), kS09Legs[j], i,
               (current_plan_index + static_cast<int>(i)) * dt_,
               foot_position_nominal.x(), foot_position_nominal.y(),
               foothold.traversability_nominal, foothold.position.x(),
-              foothold.position.y(), foothold.position.z(), s_zraw, s_zinp, s_hm,
-              s_obs, s_safe, foothold.snap_distance,
+              foothold.position.y(), foothold.position.z(), s_zraw, s_zinp,
+              s_hm, s_obs, s_safe, foothold.snap_distance,
               (foothold.position - hip_position_midstance).norm(),
               static_cast<int>(foothold.status));
           s09_foot_rows.emplace_back(rb);
@@ -935,8 +1046,8 @@ FootPlanResult LocalFootstepPlanner::computeFootPlan(
         // result, for the nearest touchdown of each leg (whether or not the
         // planned value was actually applied). Lets a run show the planned <->
         // actual correspondence and the residual snap correction.
-        if (s09_dir != nullptr && multistep_apply_foothold_ &&
-            j >= 0 && j < 4 && (s15_applied || !s15_leg_logged[j])) {
+        if (s09_dir != nullptr && multistep_apply_foothold_ && j >= 0 &&
+            j < 4 && (s15_applied || !s15_leg_logged[j])) {
           s15_leg_logged[j] = true;
           char sb[384];
           std::snprintf(
@@ -944,10 +1055,12 @@ FootPlanResult LocalFootstepPlanner::computeFootPlan(
               "%.4f,%d,%s,%zu,%d,%.5f,%.5f,%.5f,%.5f,%.5f,%.5f,%.5f,%d,%d",
               node_->now().seconds(), current_plan_index, kS09Legs[j], i,
               s15_applied ? 1 : 0,
-              multistep_planned_ok_[j] ? multistep_planned_xy_[j].x() : raibert_x,
-              multistep_planned_ok_[j] ? multistep_planned_xy_[j].y() : raibert_y,
-              raibert_x, raibert_y, foothold.position.x(), foothold.position.y(),
-              foothold.snap_distance,
+              multistep_planned_ok_[j] ? multistep_planned_xy_[j].x()
+                                       : raibert_x,
+              multistep_planned_ok_[j] ? multistep_planned_xy_[j].y()
+                                       : raibert_y,
+              raibert_x, raibert_y, foothold.position.x(),
+              foothold.position.y(), foothold.snap_distance,
               current_plan_index - multistep_planned_plan_index_,
               static_cast<int>(foothold.status));
           s15_rows.emplace_back(sb);
@@ -962,8 +1075,8 @@ FootPlanResult LocalFootstepPlanner::computeFootPlan(
           s11_leg_done[j] = true;
           Eigen::Vector3d s11_hip;
           quadKD_->worldToNominalHipFKWorldFrame(
-              j, body_plan.row(i).segment(0, 3),
-              body_plan.row(i).segment(3, 3), s11_hip);
+              j, body_plan.row(i).segment(0, 3), body_plan.row(i).segment(3, 3),
+              s11_hip);
           step11EnumerateCandidates(
               terrain_grid_, obj_fun_layer_.c_str(), foothold_obj_threshold_,
               toe_radius_, s11_hip, ik_max_reach_, node_->now().seconds(),
@@ -1168,23 +1281,26 @@ FootPlanResult LocalFootstepPlanner::computeFootPlan(
   // [MPC_DOG Step 09] measurement-only: flush the per-touchdown rows (append)
   // and, once, the terrain-map cross-section. No effect on plan_result.
   if (s09_dir != nullptr) {
-    const std::string foot_path = std::string(s09_dir) + "/step09_footholds.csv";
+    const std::string foot_path =
+        std::string(s09_dir) + "/step09_footholds.csv";
     const bool need_header = !std::ifstream(foot_path).good();
     std::ofstream ff(foot_path, std::ios::app);
     if (ff) {
       if (need_header) {
         ff << "time,map_stamp,frame,leg,touchdown_index,touchdown_time,"
-              "nominal_x,nominal_y,nominal_traversability,selected_x,selected_y,"
+              "nominal_x,nominal_y,nominal_traversability,selected_x,selected_"
+              "y,"
               "selected_z,selected_z_raw,selected_z_inpainted,"
               "selected_hole_mask_recon,selected_observed,selected_binary_safe,"
               "snap_distance,hip_distance,foothold_status\n";
       }
-      for (const auto &r : s09_foot_rows) ff << r << "\n";
+      for (const auto& r : s09_foot_rows) ff << r << "\n";
     }
     static bool s09_map_done = false;
     if (!s09_map_done && terrain_grid_.getSize()(0) > 0 &&
         terrain_grid_.exists("traversability")) {
-      step09DumpMapCrossSection(terrain_grid_, foothold_obj_threshold_, s09_dir);
+      step09DumpMapCrossSection(terrain_grid_, foothold_obj_threshold_,
+                                s09_dir);
       s09_map_done = true;
     }
 
@@ -1198,7 +1314,7 @@ FootPlanResult LocalFootstepPlanner::computeFootPlan(
         gf << "time,current_plan_index,phase,period,dt,leg,event_ordinal,"
               "pred_touchdown_horizon_index,pred_touchdown_time\n";
       }
-      for (const auto &r : s10_gait_rows) gf << r << "\n";
+      for (const auto& r : s10_gait_rows) gf << r << "\n";
     }
 
     // [MPC_DOG Step 15] flush the planned-vs-actual foothold rows (append).
@@ -1213,7 +1329,7 @@ FootPlanResult LocalFootstepPlanner::computeFootPlan(
                   "planned_x,planned_y,raibert_x,raibert_y,snapped_x,snapped_y,"
                   "snap_distance,plan_age_cycles,foothold_status\n";
         }
-        for (const auto &r : s15_rows) s15f << r << "\n";
+        for (const auto& r : s15_rows) s15f << r << "\n";
       }
     }
   }
@@ -1281,10 +1397,94 @@ Eigen::Vector3d LocalFootstepPlanner::getNearestValidFoothold(
       .position;
 }
 
+FootholdSupportResult LocalFootstepPlanner::evaluateFootholdSupport(
+    const Eigen::Vector2d& position) const {
+  FootholdSupportResult support;
+  const double radius = std::max(toe_radius_ + foothold_support_margin_, 0.0);
+  const double resolution = std::max(terrain_grid_.getResolution(), 1e-3);
+  const double spacing = 0.5 * resolution;
+  constexpr double kTwoPi = 6.28318530717958647692;
+
+  auto sample = [&](const grid_map::Position& p) {
+    ++support.sample_count;
+    if (!terrain_grid_.isInside(p)) {
+      ++support.invalid_count;
+      return;
+    }
+    const double traversability = terrain_grid_.atPosition(
+        obj_fun_layer_, p, grid_map::InterpolationMethods::INTER_NEAREST);
+    const double height = terrain_grid_.atPosition(
+        "z_inpainted", p, grid_map::InterpolationMethods::INTER_NEAREST);
+    if (!std::isfinite(traversability) ||
+        traversability <= foothold_obj_threshold_ || !std::isfinite(height)) {
+      ++support.invalid_count;
+      return;
+    }
+    if (!std::isfinite(support.min_height)) {
+      support.min_height = height;
+      support.max_height = height;
+    } else {
+      support.min_height = std::min(support.min_height, height);
+      support.max_height = std::max(support.max_height, height);
+    }
+  };
+
+  sample(position);
+  const int ring_count =
+      (radius > 0.0)
+          ? std::max(1, static_cast<int>(std::ceil(radius / spacing)))
+          : 0;
+  for (int ring = 1; ring <= ring_count; ++ring) {
+    const double ring_radius = radius * ring / ring_count;
+    const int angular_samples = std::max(
+        8, static_cast<int>(std::ceil(kTwoPi * ring_radius / spacing)));
+    for (int i = 0; i < angular_samples; ++i) {
+      const double angle = kTwoPi * i / angular_samples;
+      sample(position + Eigen::Vector2d(ring_radius * std::cos(angle),
+                                        ring_radius * std::sin(angle)));
+    }
+  }
+
+  const double height_range =
+      (std::isfinite(support.min_height) && std::isfinite(support.max_height))
+          ? support.max_height - support.min_height
+          : std::numeric_limits<double>::infinity();
+  support.supported = support.invalid_count == 0 &&
+                      height_range <= foothold_support_height_tolerance_;
+  return support;
+}
+
+FootholdReachabilityResult LocalFootstepPlanner::evaluateFootholdReachability(
+    int leg_index, const Eigen::Vector3d& foot_position,
+    const Eigen::Vector3d& body_position,
+    const Eigen::Vector3d& body_rpy) const {
+  FootholdReachabilityResult reachability;
+  if (quadKD_ == nullptr || leg_index < 0 || leg_index >= num_feet_) {
+    return reachability;
+  }
+
+  reachability.exact = quadKD_->worldToFootIKWorldFrame(
+      leg_index, body_position, body_rpy, foot_position,
+      reachability.joint_position);
+  reachability.within_joint_margin = reachability.exact;
+  for (int joint = 0; joint < 3 && reachability.within_joint_margin; ++joint) {
+    const double lower = quadKD_->getJointLowerLimit(leg_index, joint) +
+                         foothold_ik_joint_margin_;
+    const double upper = quadKD_->getJointUpperLimit(leg_index, joint) -
+                         foothold_ik_joint_margin_;
+    const double q = reachability.joint_position[joint];
+    if (!std::isfinite(q) || lower > upper || q < lower || q > upper) {
+      reachability.within_joint_margin = false;
+    }
+  }
+  return reachability;
+}
+
 FootholdResult LocalFootstepPlanner::getNearestValidFootholdResult(
     const Eigen::Vector3d& foot_position,
     const Eigen::Vector3d& foot_position_prev_solve, int leg_index,
-    const Eigen::Vector3d& hip_world) const {
+    const Eigen::Vector3d& hip_world, const Eigen::Vector3d* body_position,
+    const Eigen::Vector3d* body_rpy) const {
   FootholdResult result;
   // Default = nominal, matching the prior "return nominal" fallback path.
   result.position = foot_position;
@@ -1310,6 +1510,8 @@ FootholdResult LocalFootstepPlanner::getNearestValidFootholdResult(
   terrain_grid_.getPosition(idx, pos_center_aligned);
   offset = pos_center - pos_center_aligned;
   double best_kin_cost = std::numeric_limits<double>::max();
+  bool saw_traversable_candidate = false;
+  bool rejected_candidate_by_ik = false;
 
   // Spiral outward from the nominal foothold and keep the best valid cell.
   for (grid_map::SpiralIterator iterator(terrain_grid_, pos_center_aligned,
@@ -1338,8 +1540,29 @@ FootholdResult LocalFootstepPlanner::getNearestValidFootholdResult(
     // shifts its body up, then the next step lands on the far strip as an
     // ordinary un-snapped foothold once it is within reach.
 
-    if (traversability > foothold_obj_threshold_ &&
-        (kin_cost < best_kin_cost)) {
+    if (traversability > foothold_obj_threshold_) {
+      saw_traversable_candidate = true;
+      if (foothold_support_check_mode_ == "enforce" &&
+          !evaluateFootholdSupport(pos_valid).supported) {
+        continue;
+      }
+      if (foothold_ik_check_mode_ == "enforce" && body_position != nullptr &&
+          body_rpy != nullptr && leg_index >= 0) {
+        Eigen::Vector3d candidate(pos_valid.x(), pos_valid.y(), 0.0);
+        candidate.z() = terrain_grid_.atPosition(
+                            "z_inpainted", pos_valid,
+                            grid_map::InterpolationMethods::INTER_LINEAR) +
+                        toe_radius_;
+        const FootholdReachabilityResult reachability =
+            evaluateFootholdReachability(leg_index, candidate, *body_position,
+                                         *body_rpy);
+        if (!reachability.exact || !reachability.within_joint_margin) {
+          rejected_candidate_by_ik = true;
+          continue;
+        }
+      }
+    }
+    if (traversability > foothold_obj_threshold_ && kin_cost < best_kin_cost) {
       foot_position_best.head<2>() = pos_valid;
       best_kin_cost = kin_cost;
     }
@@ -1351,7 +1574,210 @@ FootholdResult LocalFootstepPlanner::getNearestValidFootholdResult(
         node_->get_logger(), *node_->get_clock(),
         static_cast<rcutils_duration_value_t>(1e9),
         "No valid foothold found in radius of nominal, returning nominal");
-    result.status = FootholdStatus::NO_TRAVERSABLE_CANDIDATE;
+    if (rejected_candidate_by_ik && foothold_ik_check_mode_ == "enforce") {
+      result.status = FootholdStatus::IK_UNREACHABLE;
+    } else if (saw_traversable_candidate &&
+               foothold_support_check_mode_ == "enforce") {
+      result.status = FootholdStatus::NO_SUPPORTED_CANDIDATE;
+    } else {
+      result.status = FootholdStatus::NO_TRAVERSABLE_CANDIDATE;
+    }
+  }
+
+  // [MPC_DOG stairs] A tread is a short run of traversable cells at one
+  // height. The spiral above stops on the cell nearest the nominal, which
+  // on a stair is the nosing. If that run is shorter than
+  // stair_tread_snap_max_run_, put the foot in the middle of the run.
+  // An open floor fills the whole search radius, so its run is longer and
+  // the foot stays where the spiral put it.
+  if (found && stair_tread_snap_max_run_ > 0.0) {
+    const double step = std::max(terrain_grid_.getResolution(), 1e-3);
+    const double y = foot_position_best.y();
+    const double x_sel = foot_position_best.x();
+    const double z0 =
+        terrain_grid_.atPosition("z_inpainted", foot_position_best.head<2>(),
+                                 grid_map::InterpolationMethods::INTER_NEAREST);
+    auto same_tread = [&](double x) {
+      const grid_map::Position p(x, y);
+      if (!terrain_grid_.isInside(p)) return false;
+      const double trav = terrain_grid_.atPosition(obj_fun_layer_, p);
+      if (!std::isfinite(trav) || trav <= foothold_obj_threshold_) return false;
+      const double z = terrain_grid_.atPosition(
+          "z_inpainted", p, grid_map::InterpolationMethods::INTER_NEAREST);
+      // Half a 0.18 m riser: adjacent treads are not the same step.
+      return std::isfinite(z) && std::abs(z - z0) < 0.08;
+    };
+    double x_lo = x_sel;
+    double x_hi = x_sel;
+    for (double x = x_sel - step; x >= x_sel - foothold_search_radius_;
+         x -= step) {
+      if (!same_tread(x)) break;
+      x_lo = x;
+    }
+    for (double x = x_sel + step; x <= x_sel + foothold_search_radius_;
+         x += step) {
+      if (!same_tread(x)) break;
+      x_hi = x;
+    }
+    const double run = x_hi - x_lo;
+    if (run > step && run < stair_tread_snap_max_run_) {
+      foot_position_best.x() = 0.5 * (x_lo + x_hi);
+    }
+  }
+
+  // [MPC_DOG stairs] Keep the whole toe on the tread. A height or
+  // traversability change is an edge; the search-radius limit and the map
+  // boundary are not. Move x to the nearest point that is toe_radius plus
+  // the support margin inside each real edge. Do not move to the center
+  // unless the tread is narrower than that inset on both sides.
+  if (found && foothold_edge_inset_mode_ == "enforce") {
+    const double inset = toe_radius_ + foothold_support_margin_;
+    const double step = std::max(terrain_grid_.getResolution(), 1e-3);
+    if (inset > 0.0) {
+      const double y = foot_position_best.y();
+      const double x_sel = foot_position_best.x();
+      const double z0 = terrain_grid_.atPosition(
+          "z_inpainted", foot_position_best.head<2>(),
+          grid_map::InterpolationMethods::INTER_NEAREST);
+      constexpr double kSameTreadHeight = 0.08;
+      // 0 = still on this tread, 1 = map boundary, 2 = real edge.
+      auto stop_reason = [&](double x) {
+        const grid_map::Position p(x, y);
+        if (!terrain_grid_.isInside(p)) {
+          return 1;
+        }
+        const double trav = terrain_grid_.atPosition(obj_fun_layer_, p);
+        if (!std::isfinite(trav) || trav <= foothold_obj_threshold_) {
+          return 2;
+        }
+        const double z = terrain_grid_.atPosition(
+            "z_inpainted", p, grid_map::InterpolationMethods::INTER_NEAREST);
+        if (!std::isfinite(z) || std::abs(z - z0) >= kSameTreadHeight) {
+          return 2;
+        }
+        return 0;
+      };
+      bool lo_edge = false;
+      bool hi_edge = false;
+      double x_lo = x_sel;
+      double x_hi = x_sel;
+      for (double x = x_sel - step; x >= x_sel - foothold_search_radius_;
+           x -= step) {
+        const int reason = stop_reason(x);
+        if (reason == 2) {
+          lo_edge = true;
+          break;
+        }
+        if (reason != 0) {
+          break;
+        }
+        x_lo = x;
+      }
+      for (double x = x_sel + step; x <= x_sel + foothold_search_radius_;
+           x += step) {
+        const int reason = stop_reason(x);
+        if (reason == 2) {
+          hi_edge = true;
+          break;
+        }
+        if (reason != 0) {
+          break;
+        }
+        x_hi = x;
+      }
+      double x = x_sel;
+      if (lo_edge && hi_edge && (x_lo + inset) > (x_hi - inset)) {
+        x = 0.5 * (x_lo + x_hi);
+      } else {
+        if (lo_edge) {
+          x = std::max(x, x_lo + inset);
+        }
+        if (hi_edge) {
+          x = std::min(x, x_hi - inset);
+        }
+      }
+      foot_position_best.x() = x;
+    }
+  }
+
+  // Front feet only: place the toe as far forward as it can sit on the next
+  // tread, and stop before the tread after that.
+  if (found && front_next_tread_mode_ == "enforce" &&
+      (leg_index == 0 || leg_index == 2)) {
+    const double step = std::max(terrain_grid_.getResolution(), 1e-3);
+    double x_foot = foot_position_best.x();
+    if (std::isfinite(foot_position_prev_solve.x()) &&
+        std::abs(foot_position_prev_solve.x() - foot_position_best.x()) <
+            1.5) {
+      x_foot = foot_position_prev_solve.x();
+    }
+    const double y = foot_position_best.y();
+    // 1.60 m covers a 1.00 m top platform plus the next riser, so the
+    // scan can see the end of that one tread and still refuse the one after.
+    constexpr double kLookahead = 1.60;
+    constexpr double kHeightTol = 0.08;
+    auto finite_layer_at = [&](const std::string& layer, double x,
+                               double sample_y, double& value) {
+      const grid_map::Position sample(x, sample_y);
+      grid_map::Index index;
+      if (!terrain_grid_.isInside(sample) ||
+          !terrain_grid_.getIndex(sample, index) ||
+          !terrain_grid_.exists(layer)) {
+        return false;
+      }
+      value = terrain_grid_.at(layer, index);
+      return std::isfinite(value);
+    };
+    std::vector<double> heights;
+    for (double x = x_foot; x <= x_foot + kLookahead + 0.5 * step; x += step) {
+      double height = std::numeric_limits<double>::quiet_NaN();
+      if (!finite_layer_at("z_inpainted", x, y, height)) {
+        heights.push_back(height);
+        break;
+      }
+      heights.push_back(height);
+    }
+    const FrontNextTreadPlacement placement = frontFootFarOnNextTread(
+        heights, x_foot, step, kHeightTol,
+        toe_radius_ + foothold_support_margin_);
+    // The geometric far edge sits on the low-traversability lip. Walk back
+    // along the same tread and keep the farthest cell that still scores
+    // above the foothold threshold. Do not step onto the next height.
+    bool wrote = false;
+    if (placement.applied) {
+      double tread_height = std::numeric_limits<double>::quiet_NaN();
+      if (finite_layer_at("z_inpainted", placement.x, y, tread_height)) {
+        for (double x = placement.x; x >= x_foot - 0.5 * step; x -= step) {
+          double height = std::numeric_limits<double>::quiet_NaN();
+          double traversability = std::numeric_limits<double>::quiet_NaN();
+          if (!finite_layer_at("z_inpainted", x, y, height) ||
+              std::abs(height - tread_height) >= kHeightTol) {
+            break;
+          }
+          // A front foot can reach about 0.45 m ahead of its last foothold.
+          // Farther than that is the next tread in name only, so skip it
+          // until a later step can actually land there.
+          if (x > x_foot + 0.45) {
+            continue;
+          }
+          if (finite_layer_at(obj_fun_layer_, x, y, traversability) &&
+              traversability > foothold_obj_threshold_) {
+            foot_position_best.x() = x;
+            wrote = true;
+            break;
+          }
+        }
+      }
+    }
+    static long diag_front = 0;
+    if (diag_front++ % 40 == 0) {
+      RCLCPP_INFO(
+          node_->get_logger(),
+          "[DIAG] front next tread applied=%d wrote=%d x_foot=%.3f "
+          "x_target=%.3f x_used=%.3f",
+          placement.applied ? 1 : 0, wrote ? 1 : 0, x_foot, placement.x,
+          foot_position_best.x());
+    }
   }
 
   // Height query is unchanged: on the no-candidate path foot_position_best.xy
@@ -1367,16 +1793,44 @@ FootholdResult LocalFootstepPlanner::getNearestValidFootholdResult(
       result.status = FootholdStatus::NONFINITE_HEIGHT;
     } else {
       result.status = FootholdStatus::VALID;
-      result.traversability_selected =
-          terrain_grid_.atPosition(obj_fun_layer_, foot_position_best.head<2>());
+      result.traversability_selected = terrain_grid_.atPosition(
+          obj_fun_layer_, foot_position_best.head<2>());
       result.snap_distance =
           (foot_position_best.head<2>() - foot_position.head<2>()).norm();
     }
   }
 
+  if (foothold_support_check_mode_ != "off") {
+    const FootholdSupportResult support =
+        evaluateFootholdSupport(foot_position_best.head<2>());
+    result.support_valid = support.supported;
+    if (std::isfinite(support.min_height) &&
+        std::isfinite(support.max_height)) {
+      result.support_height_range = support.max_height - support.min_height;
+    }
+    if (found && result.status == FootholdStatus::VALID &&
+        foothold_support_check_mode_ == "enforce" && !support.supported) {
+      result.status = FootholdStatus::NO_SUPPORTED_CANDIDATE;
+    }
+  }
+
+  if (foothold_ik_check_mode_ != "off" && found && leg_index >= 0 &&
+      body_position != nullptr && body_rpy != nullptr) {
+    const FootholdReachabilityResult reachability =
+        evaluateFootholdReachability(leg_index, foot_position_best,
+                                     *body_position, *body_rpy);
+    result.ik_exact = reachability.exact;
+    result.ik_within_joint_margin = reachability.within_joint_margin;
+    if (result.status == FootholdStatus::VALID &&
+        foothold_ik_check_mode_ == "enforce" &&
+        (!reachability.exact || !reachability.within_joint_margin)) {
+      result.status = FootholdStatus::IK_UNREACHABLE;
+    }
+  }
+
   // Phase 3: forward probe from the chosen foothold along the travel direction
-  // (+x for the transverse full-width gaps in these scenarios and Step 05). If a
-  // hole starts within edge_clearance_ (the foothold is on a lip) AND solid
+  // (+x for the transverse full-width gaps in these scenarios and Step 05). If
+  // a hole starts within edge_clearance_ (the foothold is on a lip) AND solid
   // ground does not resume within max_crossable_gap_ past the hole start (no
   // reachable far side), the foothold is EDGE_TOO_CLOSE and Phase 2A withholds
   // the plan. A lip before a *crossable* gap (step03/04's 0.3 m trench) stays
@@ -1439,12 +1893,15 @@ FootholdResult LocalFootstepPlanner::getNearestValidFootholdResult(
       RCLCPP_INFO(node_->get_logger(),
                   "[DIAG] gnvf #%ld: nominal x=%.3f trav=%.3f -> snapped "
                   "x=%.3f (thr=%.2f rad=%.2f) found=%d status=%d snap=%.3f "
-                  "edge_clr=%.3f",
+                  "edge_clr=%.3f support=%d support_dz=%.3f "
+                  "ik_exact=%d ik_margin=%d",
                   diag_gnvf, foot_position.x(), result.traversability_nominal,
                   result.position.x(), foothold_obj_threshold_,
                   foothold_search_radius_, found,
                   static_cast<int>(result.status), result.snap_distance,
-                  result.edge_clearance);
+                  result.edge_clearance, result.support_valid,
+                  result.support_height_range, result.ik_exact,
+                  result.ik_within_joint_margin);
     }
   }
 
@@ -1567,22 +2024,104 @@ Eigen::Vector3d LocalFootstepPlanner::welzlMinimumCircle(
   return welzlMinimumCircle(P, R);
 }
 
+SwingClearanceResult LocalFootstepPlanner::evaluateSwingClearance(
+    int leg_idx, const Eigen::VectorXd& body_plan,
+    const Eigen::Vector3d& foot_position_prev,
+    const Eigen::Vector3d& foot_position_next) const {
+  SwingClearanceResult result;
+  Eigen::Matrix4d g_world_legbase;
+  quadKD_->worldToLegbaseFKWorldFrame(leg_idx, body_plan.segment(0, 3),
+                                      body_plan.segment(3, 3), g_world_legbase);
+  const double hip_height = g_world_legbase(2, 3);
+  constexpr double kMaxExtension = 0.35;
+
+  result.hip_ceiling = hip_height - hip_clearance_;
+  result.legacy_apex =
+      std::min(ground_clearance_ - toe_radius_ +
+                   std::max(foot_position_prev.z(), foot_position_next.z()),
+               result.hip_ceiling);
+  result.legacy_apex = std::max(result.legacy_apex, hip_height - kMaxExtension);
+
+  const Eigen::Vector2d start = foot_position_prev.head<2>();
+  const Eigen::Vector2d finish = foot_position_next.head<2>();
+  const double distance = (finish - start).norm();
+  const double resolution = std::max(terrain_grid_.getResolution(), 1e-3);
+  const int sample_count =
+      std::max(1, static_cast<int>(std::ceil(distance / (0.5 * resolution))));
+  result.path_finite = true;
+  result.max_terrain_height = -std::numeric_limits<double>::infinity();
+  for (int i = 0; i <= sample_count; ++i) {
+    const double phase = static_cast<double>(i) / sample_count;
+    const grid_map::Position p = start + phase * (finish - start);
+    if (!terrain_grid_.isInside(p)) {
+      result.path_finite = false;
+      break;
+    }
+    const double height = terrain_grid_.atPosition(
+        "z_inpainted", p, grid_map::InterpolationMethods::INTER_NEAREST);
+    if (!std::isfinite(height)) {
+      result.path_finite = false;
+      break;
+    }
+    result.max_terrain_height = std::max(result.max_terrain_height, height);
+  }
+
+  if (result.path_finite) {
+    result.required_apex = std::max(
+        result.legacy_apex, result.max_terrain_height + ground_clearance_);
+    result.feasible = result.required_apex <= result.hip_ceiling;
+  }
+  return result;
+}
+
 double LocalFootstepPlanner::computeSwingApex(
     int leg_idx, const Eigen::VectorXd& body_plan,
     const Eigen::Vector3d& foot_position_prev,
     const Eigen::Vector3d& foot_position_next) {
-  Eigen::Matrix4d g_world_legbase;
-  quadKD_->worldToLegbaseFKWorldFrame(leg_idx, body_plan.segment(0, 3),
-                                      body_plan.segment(3, 3), g_world_legbase);
-  double hip_height = g_world_legbase(2, 3);
-  double max_extension = 0.35;
+  static bool first_call = true;
+  if (first_call) {
+    RCLCPP_INFO(node_->get_logger(),
+                "[DIAG] computeSwingApex first call mode=%s",
+                swing_terrain_check_mode_.c_str());
+    first_call = false;
+  }
+  const SwingClearanceResult clearance = evaluateSwingClearance(
+      leg_idx, body_plan, foot_position_prev, foot_position_next);
+  const bool applied = swing_terrain_check_mode_ == "enforce" &&
+                       clearance.path_finite && clearance.feasible;
+  const double selected_apex =
+      applied ? clearance.required_apex : clearance.legacy_apex;
 
-  // Keep swing high enough for terrain, but below hip clearance limits.
-  double swing_apex =
-      std::min(ground_clearance_ - toe_radius_ +
-                   std::max(foot_position_prev.z(), foot_position_next.z()),
-               hip_height - hip_clearance_);
-  swing_apex = std::max(swing_apex, hip_height - max_extension);
+  if (swing_terrain_check_mode_ == "shadow" ||
+      swing_terrain_check_mode_ == "enforce") {
+    RCLCPP_INFO_THROTTLE(
+        node_->get_logger(), *node_->get_clock(),
+        static_cast<rcutils_duration_value_t>(1e9),
+        "[DIAG] swing terrain: leg=%d x=%.3f->%.3f legacy=%.3f "
+        "required=%.3f selected=%.3f max_z=%.3f hip_ceiling=%.3f "
+        "finite=%d feasible=%d applied=%d",
+        leg_idx, foot_position_prev.x(), foot_position_next.x(),
+        clearance.legacy_apex, clearance.required_apex, selected_apex,
+        clearance.max_terrain_height, clearance.hip_ceiling,
+        clearance.path_finite, clearance.feasible, applied);
 
-  return swing_apex;
+    static std::array<bool, 4> first_raise_logged = {false, false, false,
+                                                     false};
+    if (leg_idx >= 0 && leg_idx < static_cast<int>(first_raise_logged.size()) &&
+        !first_raise_logged[leg_idx] &&
+        clearance.required_apex > clearance.legacy_apex + 1e-4) {
+      RCLCPP_INFO(
+          node_->get_logger(),
+          "[DIAG] swing terrain first raise: leg=%d x=%.3f->%.3f "
+          "legacy=%.3f required=%.3f selected=%.3f max_z=%.3f "
+          "hip_ceiling=%.3f finite=%d feasible=%d applied=%d",
+          leg_idx, foot_position_prev.x(), foot_position_next.x(),
+          clearance.legacy_apex, clearance.required_apex, selected_apex,
+          clearance.max_terrain_height, clearance.hip_ceiling,
+          clearance.path_finite, clearance.feasible, applied);
+      first_raise_logged[leg_idx] = true;
+    }
+  }
+
+  return selected_apex;
 }

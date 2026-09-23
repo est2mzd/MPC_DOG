@@ -20,8 +20,8 @@
       safe_stop_horizon: 40               # [MPC_DOG Phase 2B] horizon-step window; only invalid footholds this close latch the stop (default = whole horizon)
       safe_stop_lookahead: 2.5            # [MPC_DOG Phase 2B-3] m to probe the terrain map forward from the body (independent of the NMPC horizon) for an uncrossable gap; latch the stop before entering a field of crossable gaps that ends at a cliff. 0 disables. No-op when edge_clearance == 0.
       multistep_planner:
-        enabled: false                   # [MPC_DOG Step 12/14] run the shadow multi-step foothold-sequence search (every 5th cycle). false = off; the CSV-dump env (MPCDOG_STEPDUMP_DIR) also enables it for measurement.
-        apply_stop_request: false        # [MPC_DOG Step 14] act on the shadow verdict. false = shadow only (no control effect). true = BLOCKED_AT_STEP_K within final_stop_steps latches the Phase 2B graceful stop; a farther block scales cmd_vel by slow_factor.
+        enabled: true                    # [MPC_DOG unified terrain] use one multi-step lookahead for flat, gaps and stairs
+        apply_stop_request: true         # [MPC_DOG unified terrain] cross reachable gaps and latch a graceful stop before an unreachable sequence
         apply_foothold: false            # [MPC_DOG Step 15] feed the planned foothold sequence to the nominal (receding horizon, nearest touchdown per leg; the existing getNearestValidFoothold snap still runs as the final local correction). false = pre-Step-15 (nominal Raibert foothold). Run with apply_stop_request:true so a vanished plan over a wide void goes to SLOW/STOP, not a silent revert.
         stop_margin_steps: 4             # [MPC_DOG Step 13/14] user M. final_stop_steps = max(M, required_stop_steps from d_stop). Step 13 measured required ~4-7; M=4 gives a comfortable margin at 0.3 m/s.
         planning_distance: 2.5           # [MPC_DOG Step 12] m to plan the foothold sequence forward (terrain_planning_distance).
@@ -30,6 +30,17 @@
       grf_weight: 0.45                   # Blend weight between GRF and terrain foothold costs
       standing_error_threshold: 0.03     # Foot position error tolerated while standing, m
       foothold_obj_threshold: 0.6        # Minimum terrain score for candidate footholds
+      stair_tread_snap_max_run: 0.0      # [MPC_DOG stairs] m. 0 = off (same foothold as before). >0 moves a short traversable run to its middle, which is a stair tread. An open floor is longer than this and stays put.
+      foothold_support_check_mode: shadow # [MPC_DOG terrain-independent footholds] off=old behaviour, shadow=measure full-toe support without changing selection, enforce=reject unsupported candidates
+      foothold_edge_inset_mode: "off" # [MPC_DOG stairs] off=keep spiral foothold, enforce=move x inside toe_radius of a real tread edge; does not center the tread
+      front_next_tread_mode: "off" # [MPC_DOG stairs] off=keep foothold, enforce=front feet only, far side of the next tread and not the tread after it
+      support_triangle_shift_mode: "off" # [MPC_DOG stairs] off=keep cmd_vel body xy, enforce=shift xy up to 0.05 m toward the centroid of the 3 stance feet
+      top_nose_down_pitch_rad: 0.0 # [MPC_DOG stairs] rad. 0=terrain pitch. >0 replaces a flat top-landing pitch with this nose-down pitch; logged positive pitch is nose-down
+      foothold_support_margin: 0.0        # m beyond the physical toe_radius sampled for support; robot/map safety margin, not a stair dimension
+      foothold_support_height_tolerance: 0.02 # m maximum z_inpainted range below one toe footprint; tied to contact/map tolerance, not riser height
+      foothold_ik_check_mode: shadow      # off=old behaviour, shadow=measure exact URDF IK without changing selection, enforce=reject candidates outside IK/joint margins
+      foothold_ik_joint_margin: 0.05      # rad kept between the IK solution and every URDF joint limit; robot safety margin, not a terrain dimension
+      swing_terrain_check_mode: enforce   # raise feasible swing apexes above max z_inpainted; flat terrain keeps the legacy apex
       obj_fun_layer: traversability      # Grid map layer used for foothold scoring
       edge_clearance: 0.0                # [MPC_DOG Phase 3] m. 0 = off (foothold may sit on a hole lip, pre-Phase-3). >0 = a foothold with a hole/off-map cell within this radius is EDGE_TOO_CLOSE (-> Phase 2A withholds the plan). Kept 0 so step03/04 gap-crossing is unchanged; opt in per run.
       max_crossable_gap: 0.6             # [MPC_DOG Phase 3] m. An EDGE_TOO_CLOSE foothold whose hole has solid ground again within this reach ahead is put back to VALID (crossable gap, e.g. the 0.3 m step03/04 trench). Only holes with no far side within reach (cliffs / wide trenches) keep EDGE_TOO_CLOSE. NOTE (Step 08): retuning this DOES NOT catch ~0.4-0.9 m gaps - the terrain filter's InpaintFilter (filter_chain.yaml, radius 0.4) bridges them in the traversability layer this probe reads, so the robot walks in and falls. Only >=~1.0 m gaps leave an unfilled core and get flagged. Fixing that needs the probe to consult the raw elevation NaN, not inpainted traversability (future work).

@@ -61,7 +61,7 @@ mapping:
           params:
             input_layer: z_smooth
             output_layers_prefix: smooth_normal_vectors_
-            radius: 0.4
+            radius: 0.1
             normal_vector_positive_axis: z
 
         filter6:

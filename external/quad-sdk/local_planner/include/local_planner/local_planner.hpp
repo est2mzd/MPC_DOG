@@ -1,6 +1,7 @@
 #ifndef LOCAL_PLANNER_H
 #define LOCAL_PLANNER_H
 
+#include <cmath>
 #include <gtest/gtest_prod.h>
 #include <local_planner/local_footstep_planner.hpp>
 #include <local_planner/local_planner_modes.hpp>
@@ -94,6 +95,31 @@ class LocalPlanner {
    * @return Boolean if local plan was found successfully
    */
   bool computeLocalPlan();
+
+  /**
+   * @brief Horizontal shift of the body reference toward the centroid of
+   * exactly three stance feet. Any other stance count returns zero.
+   */
+  // Positive pitch is nose-down in the logged body pitch. On a flat top
+  // landing, replace the parallel pitch with this offset. Sloped risers and
+  // lower treads keep the terrain pitch.
+  static double topFlatNoseDownPitch(double terrain_height_m,
+                                     double terrain_roll_rad,
+                                     double terrain_pitch_rad,
+                                     double nose_down_pitch_rad) {
+    constexpr double kMinHeightM = 0.55;
+    constexpr double kFlatLimitRad = 0.15;
+    if (!(nose_down_pitch_rad > 0.0) || terrain_height_m < kMinHeightM ||
+        std::abs(terrain_roll_rad) >= kFlatLimitRad ||
+        std::abs(terrain_pitch_rad) >= kFlatLimitRad) {
+      return terrain_pitch_rad;
+    }
+    return nose_down_pitch_rad;
+  }
+
+  static Eigen::Vector2d supportTriangleShiftDelta(
+      const Eigen::Vector2d& body_xy,
+      const std::vector<Eigen::Vector2d>& stance_xy, double max_shift_m);
 
   /**
    * @brief Function to publish the local plan
@@ -352,6 +378,15 @@ class LocalPlanner {
 
   /// Position error threshold (from foot centroid) to enter stand mode
   double stand_pos_error_threshold_;
+
+  /// off keeps the cmd_vel body xy. enforce shifts it toward 3 stance feet.
+  std::string support_triangle_shift_mode_ = "off";
+
+  /// rad. 0 keeps terrain pitch. >0 sets nose-down pitch on a flat top landing.
+  double top_nose_down_pitch_rad_ = 0.0;
+
+  void applySupportTriangleShift();
+  void applyTopFlatNoseDown(int row);
 };
 
 #endif  // LOCAL_PLANNER_H

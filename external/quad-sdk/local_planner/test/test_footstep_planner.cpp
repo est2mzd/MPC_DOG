@@ -47,7 +47,8 @@ std::string go2RobotDescription() {
   return urdf;
 }
 
-grid_map::GridMap makeTerrain(double height = 0.0, double traversability = 1.0) {
+grid_map::GridMap makeTerrain(double height = 0.0,
+                              double traversability = 1.0) {
   grid_map::GridMap map({"z_inpainted", "z_smooth", "normal_vectors_x",
                          "normal_vectors_y", "normal_vectors_z",
                          "smooth_normal_vectors_x", "smooth_normal_vectors_y",
@@ -85,14 +86,19 @@ std::shared_ptr<rclcpp::Node> makeGo2Node(const std::string& name) {
 }
 
 LocalFootstepPlanner makePlanner(double edge_clearance = 0.0,
-                                 double max_crossable_gap = 0.0) {
+                                 double max_crossable_gap = 0.0,
+                                 const std::string& support_mode = "off",
+                                 double support_margin = 0.0,
+                                 double support_height_tolerance = 0.02,
+                                 double foothold_search_radius = 0.25) {
   auto node = std::make_shared<rclcpp::Node>("local_footstep_planner_test");
   LocalFootstepPlanner planner(node);
   planner.setTemporalParams(0.1, 4, 6, {0.5, 0.5, 0.5, 0.5},
                             {0.0, 0.5, 0.5, 0.0});
-  planner.setSpatialParams(0.07, 0.1, 0.45, 0.03, nullptr, 0.25, 0.6,
-                           "traversability", 0.02, edge_clearance,
-                           max_crossable_gap);
+  planner.setSpatialParams(
+      0.07, 0.1, 0.45, 0.03, nullptr, foothold_search_radius, 0.6,
+      "traversability", 0.02, edge_clearance, max_crossable_gap, false, 0.45,
+      0.0, support_mode, support_margin, support_height_tolerance);
   const auto terrain_grid = makeTerrain();
   FastTerrainMap terrain;
   terrain.loadDataFromGridMap(terrain_grid);
@@ -101,16 +107,19 @@ LocalFootstepPlanner makePlanner(double edge_clearance = 0.0,
   return planner;
 }
 
-LocalFootstepPlanner makeGo2Planner(double foothold_search_radius = 0.25,
-                                    bool ik_reach_check = false) {
+LocalFootstepPlanner makeGo2Planner(
+    double foothold_search_radius = 0.25, bool ik_reach_check = false,
+    const std::string& foothold_ik_check_mode = "off",
+    double foothold_ik_joint_margin = 0.0) {
   auto node = makeGo2Node("local_footstep_planner_go2_test");
   auto kinematics = std::make_shared<quad_utils::QuadKD2>(node, "robot_1");
   LocalFootstepPlanner planner(node);
   planner.setTemporalParams(0.1, 4, 6, {0.5, 0.5, 0.5, 0.5},
                             {0.0, 0.5, 0.5, 0.0});
-  planner.setSpatialParams(0.07, 0.1, 0.45, 0.03, kinematics,
-                           foothold_search_radius, 0.6, "traversability", 0.02,
-                           0.0, 0.6, ik_reach_check);
+  planner.setSpatialParams(
+      0.07, 0.1, 0.45, 0.03, kinematics, foothold_search_radius, 0.6,
+      "traversability", 0.02, 0.0, 0.6, ik_reach_check, 0.45, 0.0, "off", 0.0,
+      0.02, foothold_ik_check_mode, foothold_ik_joint_margin);
   const auto terrain_grid = makeTerrain();
   FastTerrainMap terrain;
   terrain.loadDataFromGridMap(terrain_grid);
@@ -167,12 +176,13 @@ grid_map::GridMap makeTerrainWithHole(double hole_radius) {
 
 // Flat z=0 terrain, traversable everywhere except a non-traversable band
 // x in [gap_lo, gap_hi] (a straight gap with solid ground on both sides).
-grid_map::GridMap makeTerrainWithGapBand(double gap_lo, double gap_hi) {
+grid_map::GridMap makeTerrainWithGapBand(double gap_lo, double gap_hi,
+                                         double resolution = 0.1) {
   grid_map::GridMap map({"z_inpainted", "z_smooth", "normal_vectors_x",
                          "normal_vectors_y", "normal_vectors_z",
                          "smooth_normal_vectors_x", "smooth_normal_vectors_y",
                          "smooth_normal_vectors_z", "traversability"});
-  map.setGeometry(grid_map::Length(6.0, 4.0), 0.1);
+  map.setGeometry(grid_map::Length(6.0, 4.0), resolution);
   for (grid_map::GridMapIterator it(map); !it.isPastEnd(); ++it) {
     grid_map::Position pos;
     map.getPosition(*it, pos);
@@ -188,6 +198,39 @@ grid_map::GridMap makeTerrainWithGapBand(double gap_lo, double gap_hi) {
     map.at("traversability", *it) = in_gap ? 0.0 : 1.0;
   }
   return map;
+}
+
+// Fine grid with a raised, solid tread x in [tread_lo, tread_hi]. The lower
+// and raised surfaces are both traversable; only their height differs.
+grid_map::GridMap makeTerrainWithRaisedTread(double tread_lo, double tread_hi,
+                                             double tread_height) {
+  grid_map::GridMap map({"z_inpainted", "z_smooth", "normal_vectors_x",
+                         "normal_vectors_y", "normal_vectors_z",
+                         "smooth_normal_vectors_x", "smooth_normal_vectors_y",
+                         "smooth_normal_vectors_z", "traversability"});
+  map.setGeometry(grid_map::Length(4.0, 2.0), 0.02);
+  for (grid_map::GridMapIterator it(map); !it.isPastEnd(); ++it) {
+    grid_map::Position pos;
+    map.getPosition(*it, pos);
+    const bool on_tread = pos.x() >= tread_lo && pos.x() <= tread_hi;
+    const double z = on_tread ? tread_height : 0.0;
+    map.at("z_inpainted", *it) = z;
+    map.at("z_smooth", *it) = z;
+    map.at("normal_vectors_x", *it) = 0.0;
+    map.at("normal_vectors_y", *it) = 0.0;
+    map.at("normal_vectors_z", *it) = 1.0;
+    map.at("smooth_normal_vectors_x", *it) = 0.0;
+    map.at("smooth_normal_vectors_y", *it) = 0.0;
+    map.at("smooth_normal_vectors_z", *it) = 1.0;
+    map.at("traversability", *it) = 1.0;
+  }
+  return map;
+}
+
+FastTerrainMap loadTerrain(const grid_map::GridMap& grid) {
+  FastTerrainMap terrain;
+  terrain.loadDataFromGridMap(grid);
+  return terrain;
 }
 
 void setFoot(quad_msgs::msg::MultiFootState& feet, int foot, double x, double y,
@@ -249,11 +292,16 @@ TEST(LocalFootstepPlannerTest, ContactScheduleForwardJumpSubPhases) {
   planner.computeContactSchedule(0, body_plan, primitives, STEP, schedule);
 
   ASSERT_EQ(schedule.size(), 6u);
-  EXPECT_EQ(schedule[0], (std::vector<bool>{true, true, true, true}));    // PRELOAD
-  EXPECT_EQ(schedule[1], (std::vector<bool>{false, true, false, true}));  // REAR_PUSH
-  EXPECT_EQ(schedule[2], (std::vector<bool>{false, false, false, false}));  // FLIGHT
-  EXPECT_EQ(schedule[3], (std::vector<bool>{true, false, true, false}));  // FRONT_LAND
-  EXPECT_EQ(schedule[4], (std::vector<bool>{true, true, true, true}));    // SETTLE
+  EXPECT_EQ(schedule[0],
+            (std::vector<bool>{true, true, true, true}));  // PRELOAD
+  EXPECT_EQ(schedule[1],
+            (std::vector<bool>{false, true, false, true}));  // REAR_PUSH
+  EXPECT_EQ(schedule[2],
+            (std::vector<bool>{false, false, false, false}));  // FLIGHT
+  EXPECT_EQ(schedule[3],
+            (std::vector<bool>{true, false, true, false}));  // FRONT_LAND
+  EXPECT_EQ(schedule[4],
+            (std::vector<bool>{true, true, true, true}));  // SETTLE
   // CONNECT leaves the tiled nominal gait in place (trot phase 0 -> FL+RR).
   EXPECT_EQ(schedule[5], (std::vector<bool>{true, false, false, true}));
 }
@@ -322,9 +370,9 @@ TEST(LocalFootstepPlannerTest, CubicHermiteSplineMatchesEndpoints) {
 TEST(LocalFootstepPlannerTest, ContactTransitionHelpersFindEdges) {
   LocalFootstepPlanner planner = makePlanner();
   std::vector<std::vector<bool>> schedule = {
-      {true, false, true, true},  {false, false, true, true},
-      {false, true, true, true},  {true, true, false, true},
-      {true, true, true, true},   {true, false, true, true},
+      {true, false, true, true}, {false, false, true, true},
+      {false, true, true, true}, {true, true, false, true},
+      {true, true, true, true},  {true, false, true, true},
   };
 
   EXPECT_FALSE(planner.isNewLiftoff(schedule, 0, 0));
@@ -382,7 +430,8 @@ TEST(LocalFootstepPlannerTest, FootholdResultReportsValidOnFlatTerrain) {
   EXPECT_NEAR(r.traversability_selected, 1.0, kTol);
   EXPECT_NEAR(r.position.z(), 0.02, kTol);
   // Wrapper and result agree on the chosen position.
-  const Eigen::Vector3d pos = planner.getNearestValidFoothold(nominal, previous);
+  const Eigen::Vector3d pos =
+      planner.getNearestValidFoothold(nominal, previous);
   EXPECT_NEAR(pos.x(), r.position.x(), kTol);
   EXPECT_NEAR(pos.y(), r.position.y(), kTol);
   EXPECT_NEAR(pos.z(), r.position.z(), kTol);
@@ -390,7 +439,8 @@ TEST(LocalFootstepPlannerTest, FootholdResultReportsValidOnFlatTerrain) {
 
 TEST(LocalFootstepPlannerTest, FootholdResultReportsNoTraversableCandidate) {
   LocalFootstepPlanner planner = makePlanner();
-  const auto invalid_grid = makeTerrain(0.15, 0.0);  // traversability 0 all over
+  const auto invalid_grid =
+      makeTerrain(0.15, 0.0);  // traversability 0 all over
   FastTerrainMap terrain;
   terrain.loadDataFromGridMap(invalid_grid);
   planner.updateMap(invalid_grid);
@@ -457,23 +507,106 @@ TEST(LocalFootstepPlannerTest, FootholdResultSnapDistanceMatchesSelection) {
 
   EXPECT_EQ(r.status, FootholdStatus::VALID);
   EXPECT_GT(r.snap_distance, 0.0);
-  const double d =
-      (r.position.head<2>() - nominal.head<2>()).norm();
+  const double d = (r.position.head<2>() - nominal.head<2>()).norm();
   EXPECT_NEAR(r.snap_distance, d, kTol);
   EXPECT_NEAR(r.traversability_selected, 1.0, kTol);
 }
 
-// ---- Phase 3: EDGE_TOO_CLOSE (forward probe: lip before an uncrossable gap) --
+// ---- Terrain-independent full-toe support check ----------------------------
 
-// makeEdgeGrid: flat terrain with a non-traversable band x in [lo, hi].
-static FastTerrainMap loadTerrain(const grid_map::GridMap& grid) {
-  FastTerrainMap t;
-  t.loadDataFromGridMap(grid);
-  return t;
+TEST(LocalFootstepPlannerTest, ToeSupportAcceptsFlatAndTreadInterior) {
+  LocalFootstepPlanner planner = makePlanner(0.0, 0.0, "shadow", 0.0, 0.02);
+  const auto grid = makeTerrainWithRaisedTread(0.0, 0.24, 0.18);
+  planner.updateMap(grid);
+  planner.updateMap(loadTerrain(grid));
+
+  const FootholdSupportResult flat =
+      planner.evaluateFootholdSupport(Eigen::Vector2d(-0.20, 0.0));
+  const FootholdSupportResult tread =
+      planner.evaluateFootholdSupport(Eigen::Vector2d(0.12, 0.0));
+
+  EXPECT_TRUE(flat.supported);
+  EXPECT_TRUE(tread.supported);
+  EXPECT_EQ(flat.invalid_count, 0);
+  EXPECT_EQ(tread.invalid_count, 0);
+  EXPECT_NEAR(flat.max_height - flat.min_height, 0.0, kTol);
+  EXPECT_NEAR(tread.max_height - tread.min_height, 0.0, kTol);
 }
 
-// A foothold just before a WIDE gap (no far side within max_crossable_gap ahead)
-// is EDGE_TOO_CLOSE, and edge_clearance records how far ahead the hole starts.
+TEST(LocalFootstepPlannerTest, ToeSupportRejectsFootprintAcrossStepEdge) {
+  LocalFootstepPlanner planner = makePlanner(0.0, 0.0, "shadow", 0.0, 0.02);
+  const auto grid = makeTerrainWithRaisedTread(0.0, 0.24, 0.18);
+  planner.updateMap(grid);
+  planner.updateMap(loadTerrain(grid));
+
+  const FootholdSupportResult edge =
+      planner.evaluateFootholdSupport(Eigen::Vector2d(0.01, 0.0));
+
+  EXPECT_FALSE(edge.supported);
+  EXPECT_EQ(edge.invalid_count, 0);
+  EXPECT_NEAR(edge.min_height, 0.0, kTol);
+  EXPECT_NEAR(edge.max_height, 0.18, kTol);
+}
+
+TEST(LocalFootstepPlannerTest, ToeSupportRejectsFootprintAcrossGapEdge) {
+  LocalFootstepPlanner planner = makePlanner(0.0, 0.0, "shadow", 0.0, 0.02);
+  const auto grid = makeTerrainWithGapBand(0.0, 0.30, 0.02);
+  planner.updateMap(grid);
+  planner.updateMap(loadTerrain(grid));
+
+  const FootholdSupportResult edge =
+      planner.evaluateFootholdSupport(Eigen::Vector2d(-0.01, 0.0));
+
+  EXPECT_FALSE(edge.supported);
+  EXPECT_GT(edge.invalid_count, 0);
+}
+
+TEST(LocalFootstepPlannerTest,
+     EnforcedSupportChoosesNearestSafeLongTreadPoint) {
+  LocalFootstepPlanner planner =
+      makePlanner(0.0, 0.0, "enforce", 0.0, 0.02, 0.25);
+  const auto grid = makeTerrainWithRaisedTread(0.0, 1.0, 0.18);
+  planner.updateMap(grid);
+  planner.updateMap(loadTerrain(grid));
+
+  const Eigen::Vector3d nominal(0.005, 0.0, 0.0);
+  const FootholdResult r =
+      planner.getNearestValidFootholdResult(nominal, nominal);
+
+  ASSERT_EQ(r.status, FootholdStatus::VALID);
+  EXPECT_TRUE(r.support_valid);
+  EXPECT_GT(r.position.x(), 0.02);
+  EXPECT_LT(r.position.x(), 0.20);
+  EXPECT_NEAR(r.position.z(), 0.20, 0.011);
+}
+
+TEST(LocalFootstepPlannerTest, ShadowSupportDoesNotChangeGapFoothold) {
+  LocalFootstepPlanner off = makePlanner(0.15, 0.6, "off");
+  LocalFootstepPlanner shadow = makePlanner(0.15, 0.6, "shadow");
+  const auto grid = makeTerrainWithGapBand(0.05, 0.35);
+  off.updateMap(grid);
+  off.updateMap(loadTerrain(grid));
+  shadow.updateMap(grid);
+  shadow.updateMap(loadTerrain(grid));
+  const Eigen::Vector3d nominal(0.0, 0.0, 0.0);
+
+  const FootholdResult off_result =
+      off.getNearestValidFootholdResult(nominal, nominal);
+  const FootholdResult shadow_result =
+      shadow.getNearestValidFootholdResult(nominal, nominal);
+
+  EXPECT_EQ(off_result.status, shadow_result.status);
+  EXPECT_NEAR(off_result.position.x(), shadow_result.position.x(), kTol);
+  EXPECT_NEAR(off_result.position.y(), shadow_result.position.y(), kTol);
+  EXPECT_NEAR(off_result.position.z(), shadow_result.position.z(), kTol);
+}
+
+// ---- Phase 3: EDGE_TOO_CLOSE (forward probe: lip before an uncrossable gap)
+// --
+
+// A foothold just before a WIDE gap (no far side within max_crossable_gap
+// ahead) is EDGE_TOO_CLOSE, and edge_clearance records how far ahead the hole
+// starts.
 TEST(LocalFootstepPlannerTest, EdgeTooCloseForLipBeforeUncrossableGap) {
   LocalFootstepPlanner planner = makePlanner(0.15, 0.6);
   const auto grid = makeTerrainWithGapBand(0.05, 1.5);  // 1.45 m gap ahead in x
@@ -544,7 +677,8 @@ TEST(LocalFootstepPlannerTest, EdgeProbeIgnoresHoleBehindFarAndWhenDisabled) {
   // probe reaches the map boundary and stops without flagging -- the unmapped
   // area beyond is not a cliff. (Phase 2B: this removed spurious EDGE_TOO_CLOSE
   // on far-horizon footholds near the last mapped strip.)
-  const auto flat = makeTerrainWithGapBand(-2.9, -2.8);  // trivial band, far away
+  const auto flat =
+      makeTerrainWithGapBand(-2.9, -2.8);  // trivial band, far away
   LocalFootstepPlanner edge_planner = makePlanner(0.15, 0.6);
   edge_planner.updateMap(flat);
   edge_planner.updateMap(loadTerrain(flat));
@@ -557,7 +691,8 @@ TEST(LocalFootstepPlannerTest, EdgeProbeIgnoresHoleBehindFarAndWhenDisabled) {
 
 // Phase 2B-3: body-forward lookahead for an uncrossable gap on the route.
 TEST(LocalFootstepPlannerTest, HasUncrossableGapAheadDistinguishesGapWidth) {
-  // Narrow gap [0.3, 0.6] -> crossable (strip resumes within max_crossable_gap).
+  // Narrow gap [0.3, 0.6] -> crossable (strip resumes within
+  // max_crossable_gap).
   LocalFootstepPlanner narrow = makePlanner(0.15, 0.6);
   const auto narrow_grid = makeTerrainWithGapBand(0.3, 0.6);
   narrow.updateMap(narrow_grid);
@@ -587,36 +722,76 @@ TEST(LocalFootstepPlannerTest, IkUnreachableFlagsFarFootholdWhenEnabled) {
 
   // Foothold under the hip on the ground -> ~0.26 m away -> within reach.
   const Eigen::Vector3d near_nom(0.15, 0.12, 0.02);
-  EXPECT_EQ(planner
-                .getNearestValidFootholdResult(near_nom, near_nom, /*leg=*/0, hip)
-                .status,
-            FootholdStatus::VALID);
+  EXPECT_EQ(
+      planner.getNearestValidFootholdResult(near_nom, near_nom, /*leg=*/0, hip)
+          .status,
+      FootholdStatus::VALID);
 
   // 1.5 m in front -> ~1.3 m from the hip -> far past the leg's reach.
   const Eigen::Vector3d far_nom(1.5, 0.12, 0.02);
-  EXPECT_EQ(planner
-                .getNearestValidFootholdResult(far_nom, far_nom, /*leg=*/0, hip)
-                .status,
-            FootholdStatus::IK_UNREACHABLE);
+  EXPECT_EQ(
+      planner.getNearestValidFootholdResult(far_nom, far_nom, /*leg=*/0, hip)
+          .status,
+      FootholdStatus::IK_UNREACHABLE);
 }
 
 TEST(LocalFootstepPlannerTest, IkReachCheckDisabledLeavesFarFootholdValid) {
   LocalFootstepPlanner planner = makeGo2Planner(0.25, /*ik_reach_check=*/false);
   const Eigen::Vector3d far_nom(1.5, 0.12, 0.02);
-  EXPECT_EQ(planner
-                .getNearestValidFootholdResult(far_nom, far_nom, /*leg=*/0,
-                                               Eigen::Vector3d(0.19, 0.13, 0.28))
-                .status,
-            FootholdStatus::VALID);
+  EXPECT_EQ(
+      planner
+          .getNearestValidFootholdResult(far_nom, far_nom, /*leg=*/0,
+                                         Eigen::Vector3d(0.19, 0.13, 0.28))
+          .status,
+      FootholdStatus::VALID);
 }
 
 // A negative leg index (the default) skips the reach check even when it is on.
 TEST(LocalFootstepPlannerTest, IkReachCheckSkippedWithoutLegIndex) {
   LocalFootstepPlanner planner = makeGo2Planner(0.25, /*ik_reach_check=*/true);
   const Eigen::Vector3d far_nom(1.5, 0.12, 0.02);
-  EXPECT_EQ(
-      planner.getNearestValidFootholdResult(far_nom, far_nom).status,
-      FootholdStatus::VALID);
+  EXPECT_EQ(planner.getNearestValidFootholdResult(far_nom, far_nom).status,
+            FootholdStatus::VALID);
+}
+
+TEST(LocalFootstepPlannerTest, ExactIkUsesUrdfGeometryAndJointLimits) {
+  LocalFootstepPlanner planner = makeGo2Planner(0.25, false, "shadow", 0.05);
+  const Eigen::Vector3d body_position(0.0, 0.0, 0.30);
+  const Eigen::Vector3d body_rpy = Eigen::Vector3d::Zero();
+
+  const FootholdReachabilityResult reachable =
+      planner.evaluateFootholdReachability(0, Eigen::Vector3d(0.20, 0.12, 0.02),
+                                           body_position, body_rpy);
+  const FootholdReachabilityResult unreachable =
+      planner.evaluateFootholdReachability(0, Eigen::Vector3d(1.50, 0.12, 0.02),
+                                           body_position, body_rpy);
+
+  EXPECT_TRUE(reachable.exact);
+  EXPECT_TRUE(reachable.within_joint_margin);
+  EXPECT_FALSE(unreachable.exact);
+  EXPECT_FALSE(unreachable.within_joint_margin);
+}
+
+TEST(LocalFootstepPlannerTest, ExactIkJointMarginCanRejectExactSolution) {
+  LocalFootstepPlanner planner = makeGo2Planner(0.25, false, "shadow", 10.0);
+  const FootholdReachabilityResult result =
+      planner.evaluateFootholdReachability(0, Eigen::Vector3d(0.20, 0.12, 0.02),
+                                           Eigen::Vector3d(0.0, 0.0, 0.30),
+                                           Eigen::Vector3d::Zero());
+
+  EXPECT_TRUE(result.exact);
+  EXPECT_FALSE(result.within_joint_margin);
+}
+
+TEST(LocalFootstepPlannerTest, EnforcedExactIkRejectsUnreachableCandidates) {
+  LocalFootstepPlanner planner = makeGo2Planner(0.25, false, "enforce", 0.05);
+  const Eigen::Vector3d nominal(1.50, 0.12, 0.02);
+  const Eigen::Vector3d body_position(0.0, 0.0, 0.30);
+  const Eigen::Vector3d body_rpy = Eigen::Vector3d::Zero();
+  const FootholdResult result = planner.getNearestValidFootholdResult(
+      nominal, nominal, 0, Eigen::Vector3d::Zero(), &body_position, &body_rpy);
+
+  EXPECT_EQ(result.status, FootholdStatus::IK_UNREACHABLE);
 }
 
 TEST(LocalFootstepPlannerTest, WelzlMinimumCircleHandlesBoundaryCases) {
@@ -661,12 +836,71 @@ TEST(LocalFootstepPlannerTest, ComputeSwingApexRespectsClearanceBounds) {
   EXPECT_GT(apex, next.z());
 }
 
+TEST(LocalFootstepPlannerTest, SwingClearanceSamplesIntermediateTerrain) {
+  LocalFootstepPlanner planner = makeGo2Planner();
+  planner.setSwingTerrainParams("shadow");
+  const auto grid = makeTerrainWithRaisedTread(0.0, 0.24, 0.18);
+  planner.updateMap(grid);
+  planner.updateMap(loadTerrain(grid));
+
+  Eigen::VectorXd body = Eigen::VectorXd::Zero(12);
+  body[2] = 0.45;
+  const Eigen::Vector3d prev(-0.10, 0.12, 0.02);
+  const Eigen::Vector3d next(0.30, 0.12, 0.02);
+  const SwingClearanceResult result =
+      planner.evaluateSwingClearance(0, body, prev, next);
+
+  EXPECT_TRUE(result.path_finite);
+  EXPECT_TRUE(result.feasible);
+  EXPECT_NEAR(result.max_terrain_height, 0.18, kTol);
+  EXPECT_GT(result.required_apex, result.legacy_apex);
+  EXPECT_NEAR(planner.computeSwingApex(0, body, prev, next), result.legacy_apex,
+              kTol);
+}
+
+TEST(LocalFootstepPlannerTest, SwingClearanceMatchesLegacyOnFlatTerrain) {
+  LocalFootstepPlanner planner = makeGo2Planner();
+  Eigen::VectorXd body = Eigen::VectorXd::Zero(12);
+  body[2] = 0.45;
+  const Eigen::Vector3d prev(-0.10, 0.12, 0.02);
+  const Eigen::Vector3d next(0.30, 0.12, 0.02);
+  const SwingClearanceResult result =
+      planner.evaluateSwingClearance(0, body, prev, next);
+
+  EXPECT_TRUE(result.path_finite);
+  EXPECT_TRUE(result.feasible);
+  EXPECT_NEAR(result.max_terrain_height, 0.0, kTol);
+  EXPECT_NEAR(result.required_apex, result.legacy_apex, kTol);
+}
+
+TEST(LocalFootstepPlannerTest,
+     EnforcedSwingClearanceRaisesApexOverIntermediateTerrain) {
+  LocalFootstepPlanner planner = makeGo2Planner();
+  planner.setSwingTerrainParams("enforce");
+  const auto grid = makeTerrainWithRaisedTread(0.0, 0.24, 0.18);
+  planner.updateMap(grid);
+  planner.updateMap(loadTerrain(grid));
+
+  Eigen::VectorXd body = Eigen::VectorXd::Zero(12);
+  body[2] = 0.45;
+  const Eigen::Vector3d prev(-0.10, 0.12, 0.02);
+  const Eigen::Vector3d next(0.30, 0.12, 0.02);
+  const SwingClearanceResult result =
+      planner.evaluateSwingClearance(0, body, prev, next);
+
+  ASSERT_TRUE(result.path_finite);
+  ASSERT_TRUE(result.feasible);
+  EXPECT_GT(result.required_apex, result.legacy_apex);
+  EXPECT_NEAR(planner.computeSwingApex(0, body, prev, next),
+              result.required_apex, kTol);
+}
+
 TEST(LocalFootstepPlannerTest, ComputeFootPlanHandlesSwingAndTouchdown) {
   LocalFootstepPlanner planner = makeGo2Planner();
   std::vector<std::vector<bool>> schedule = {
-      {true, true, true, true},   {false, true, true, true},
-      {false, true, true, true},  {true, true, true, true},
-      {true, true, true, true},   {true, true, true, true},
+      {true, true, true, true},  {false, true, true, true},
+      {false, true, true, true}, {true, true, true, true},
+      {true, true, true, true},  {true, true, true, true},
   };
   Eigen::MatrixXd body_plan = Eigen::MatrixXd::Zero(6, 12);
   Eigen::MatrixXd ref_body_plan = Eigen::MatrixXd::Zero(6, 12);
@@ -678,8 +912,8 @@ TEST(LocalFootstepPlannerTest, ComputeFootPlanHandlesSwingAndTouchdown) {
   }
   Eigen::MatrixXd grf_plan = Eigen::MatrixXd::Zero(5, 12);
   Eigen::VectorXd current_feet(12);
-  current_feet << 0.20, 0.12, 0.02, 0.20, -0.12, 0.02, -0.20, 0.12, 0.02,
-      -0.20, -0.12, 0.02;
+  current_feet << 0.20, 0.12, 0.02, 0.20, -0.12, 0.02, -0.20, 0.12, 0.02, -0.20,
+      -0.12, 0.02;
   Eigen::VectorXd current_vel = Eigen::VectorXd::Zero(12);
   Eigen::MatrixXd feet = Eigen::MatrixXd::Zero(6, 12);
   Eigen::MatrixXd foot_vel = Eigen::MatrixXd::Zero(6, 12);
@@ -722,9 +956,9 @@ struct FootPlanRun {
 
 FootPlanRun runFootPlanScenario(LocalFootstepPlanner& planner) {
   std::vector<std::vector<bool>> schedule = {
-      {true, true, true, true},   {false, true, true, true},
-      {false, true, true, true},  {true, true, true, true},
-      {true, true, true, true},   {true, true, true, true},
+      {true, true, true, true},  {false, true, true, true},
+      {false, true, true, true}, {true, true, true, true},
+      {true, true, true, true},  {true, true, true, true},
   };
   Eigen::MatrixXd body_plan = Eigen::MatrixXd::Zero(6, 12);
   Eigen::MatrixXd ref_body_plan = Eigen::MatrixXd::Zero(6, 12);
@@ -753,10 +987,9 @@ FootPlanRun runFootPlanScenario(LocalFootstepPlanner& planner) {
             current_feet[3 * foot + 2], 0);
   }
   FootPlanRun run;
-  run.result =
-      planner.computeFootPlan(0, schedule, body_plan, grf_plan, ref_body_plan,
-                              current_feet, current_vel, 0.1, past, feet,
-                              foot_vel, foot_acc);
+  run.result = planner.computeFootPlan(0, schedule, body_plan, grf_plan,
+                                       ref_body_plan, current_feet, current_vel,
+                                       0.1, past, feet, foot_vel, foot_acc);
   run.feet = feet;
   return run;
 }
@@ -781,7 +1014,8 @@ TEST(LocalFootstepPlannerTest, ComputeFootPlanReportsOkOnFlatTerrain) {
 // failed touchdown inherits the previous foothold instead.
 TEST(LocalFootstepPlannerTest, ComputeFootPlanReportsInvalidOverHole) {
   LocalFootstepPlanner planner = makeGo2Planner();
-  const auto blocked_grid = makeTerrain(0.0, 0.0);  // traversability 0 everywhere
+  const auto blocked_grid =
+      makeTerrain(0.0, 0.0);  // traversability 0 everywhere
   FastTerrainMap blocked_terrain;
   blocked_terrain.loadDataFromGridMap(blocked_grid);
   planner.updateMap(blocked_grid);
@@ -828,13 +1062,81 @@ TEST(LocalFootstepPlannerTest, FootPlanMessagesContainTouchdownsAndTimestamps) {
   ASSERT_EQ(continuous.states.size(), 4u);
   EXPECT_EQ(continuous.states[0].traj_index, 7);
   EXPECT_EQ(continuous.states[3].traj_index, 10);
-  EXPECT_NEAR(
-      (rclcpp::Time(continuous.states[1].header.stamp) -
-       rclcpp::Time(continuous.states[0].header.stamp))
-          .seconds(),
-      0.05, kTol);
+  EXPECT_NEAR((rclcpp::Time(continuous.states[1].header.stamp) -
+               rclcpp::Time(continuous.states[0].header.stamp))
+                  .seconds(),
+              0.05, kTol);
   ASSERT_EQ(footholds.feet.size(), 4u);
   ASSERT_EQ(footholds.feet[0].footholds.size(), 1u);
   ASSERT_EQ(footholds.feet[1].footholds.size(), 1u);
   EXPECT_NEAR(footholds.feet[0].footholds.front().position.x, 0.4, kTol);
+}
+
+TEST(LocalFootstepPlannerTest, EdgeInsetPullsFootOffTreadNosingOnly) {
+  grid_map::GridMap map = makeTerrain(0.0, 1.0);
+  for (grid_map::GridMapIterator it(map); !it.isPastEnd(); ++it) {
+    grid_map::Position position;
+    map.getPosition(*it, position);
+    if (position.x() >= 0.0 && position.x() < 0.30) {
+      map.at("z_inpainted", *it) = 0.15;
+    }
+  }
+
+  int node_count = 0;
+  auto make = [&](const std::string& mode) {
+    auto node = std::make_shared<rclcpp::Node>(
+        "edge_inset_" + mode + "_" + std::to_string(node_count++));
+    LocalFootstepPlanner planner(node);
+    planner.setTemporalParams(0.1, 4, 6, {0.5, 0.5, 0.5, 0.5},
+                              {0.0, 0.5, 0.5, 0.0});
+    planner.setSpatialParams(0.07, 0.1, 0.45, 0.03, nullptr, 0.4, 0.6,
+                             "traversability", 0.02, 0.0, 0.0, false, 0.45,
+                             0.0, "off", 0.0, 0.02, "off", 0.0, mode);
+    planner.updateMap(map);
+    return planner;
+  };
+
+  const Eigen::Vector3d nosing(0.02, 0.0, 0.0);
+  const FootholdResult off =
+      make("off").getNearestValidFootholdResult(nosing, nosing);
+  const FootholdResult inset =
+      make("enforce").getNearestValidFootholdResult(nosing, nosing);
+  EXPECT_NEAR(off.position.x(), 0.02, 0.05);
+  EXPECT_GT(inset.position.x(), off.position.x() + 0.01);
+  EXPECT_LT(inset.position.x(), 0.12);
+  EXPECT_NEAR(inset.position.y(), off.position.y(), kTol);
+
+  const Eigen::Vector3d middle(0.15, 0.0, 0.0);
+  const FootholdResult middle_off =
+      make("off").getNearestValidFootholdResult(middle, middle);
+  const FootholdResult middle_inset =
+      make("enforce").getNearestValidFootholdResult(middle, middle);
+  EXPECT_NEAR(middle_inset.position.x(), middle_off.position.x(), kTol);
+
+  const Eigen::Vector3d floor_point(-1.0, 0.0, 0.0);
+  const FootholdResult floor_off =
+      make("off").getNearestValidFootholdResult(floor_point, floor_point);
+  const FootholdResult floor_inset =
+      make("enforce").getNearestValidFootholdResult(floor_point, floor_point);
+  EXPECT_NEAR(floor_inset.position.x(), floor_off.position.x(), kTol);
+}
+
+TEST(LocalFootstepPlannerTest, FrontFootStopsAtFarSideOfNextTread) {
+  const std::vector<double> stair = {0.00, 0.00, 0.00, 0.15, 0.15,
+                                     0.15, 0.30};
+  const auto placed = LocalFootstepPlanner::frontFootFarOnNextTread(
+      stair, 0.0, 0.10, 0.08, 0.02);
+  EXPECT_TRUE(placed.applied);
+  EXPECT_NEAR(placed.x, 0.48, kTol);
+
+  const std::vector<double> open_end = {0.00, 0.00, 0.15, 0.15, 0.15};
+  const auto unfinished = LocalFootstepPlanner::frontFootFarOnNextTread(
+      open_end, 0.0, 0.10, 0.08, 0.02);
+  EXPECT_FALSE(unfinished.applied);
+
+  const std::vector<double> descent = {0.30, 0.30, 0.15, 0.15, 0.00};
+  const auto down = LocalFootstepPlanner::frontFootFarOnNextTread(
+      descent, 0.0, 0.10, 0.08, 0.02);
+  EXPECT_TRUE(down.applied);
+  EXPECT_NEAR(down.x, 0.28, kTol);
 }

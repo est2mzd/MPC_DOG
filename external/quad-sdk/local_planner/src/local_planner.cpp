@@ -96,9 +96,9 @@ LocalPlanner::LocalPlanner(rclcpp::Node::SharedPtr node)
 
   // Step 14: multi-step foothold-sequence planner -> control link. All default
   // to the pre-Step-14 behaviour (shadow off, no control effect).
-  quad_utils::loadROSParamDefault(
-      node_, "local_planner.multistep_planner.enabled", multistep_enabled_,
-      false);
+  quad_utils::loadROSParamDefault(node_,
+                                  "local_planner.multistep_planner.enabled",
+                                  multistep_enabled_, false);
   quad_utils::loadROSParamDefault(
       node_, "local_planner.multistep_planner.apply_stop_request",
       multistep_apply_stop_, false);
@@ -111,9 +111,9 @@ LocalPlanner::LocalPlanner(rclcpp::Node::SharedPtr node)
   quad_utils::loadROSParamDefault(
       node_, "local_planner.multistep_planner.planning_distance",
       multistep_planning_distance_, 2.5);
-  quad_utils::loadROSParamDefault(
-      node_, "local_planner.multistep_planner.slow_factor",
-      multistep_slow_factor_, 0.4);
+  quad_utils::loadROSParamDefault(node_,
+                                  "local_planner.multistep_planner.slow_factor",
+                                  multistep_slow_factor_, 0.4);
 
   // Convert kinematics
   quadKD_ = std::make_shared<quad_utils::QuadKD2>(node_, robot_ns_);
@@ -193,10 +193,10 @@ void LocalPlanner::initLocalFootstepPlanner() {
   // Load parameters from server
   double grf_weight, ground_clearance, hip_clearance, standing_error_threshold,
       period_d, foothold_search_radius, foothold_obj_threshold;
-  double edge_clearance = 0.0;      // Phase 3; 0 = disabled (pre-Phase-3)
-  double max_crossable_gap = 0.6;   // Phase 3 crossability reach, m
-  bool ik_reach_check = false;      // Phase 4; false = disabled (pre-Phase-4)
-  double ik_max_reach = 0.45;       // Phase 4 max hip->foothold distance, m
+  double edge_clearance = 0.0;     // Phase 3; 0 = disabled (pre-Phase-3)
+  double max_crossable_gap = 0.6;  // Phase 3 crossability reach, m
+  bool ik_reach_check = false;     // Phase 4; false = disabled (pre-Phase-4)
+  double ik_max_reach = 0.45;      // Phase 4 max hip->foothold distance, m
   std::string obj_fun_layer;
   int period;
   std::vector<double> duty_cycles, phase_offsets;
@@ -224,12 +224,62 @@ void LocalPlanner::initLocalFootstepPlanner() {
                            phase_offsets);
   quad_utils::loadROSParamDefault(
       node_, "local_footstep_planner.edge_clearance", edge_clearance, 0.0);
-  quad_utils::loadROSParamDefault(
-      node_, "local_footstep_planner.max_crossable_gap", max_crossable_gap, 0.6);
+  quad_utils::loadROSParamDefault(node_,
+                                  "local_footstep_planner.max_crossable_gap",
+                                  max_crossable_gap, 0.6);
   quad_utils::loadROSParamDefault(
       node_, "local_footstep_planner.ik_reach_check", ik_reach_check, false);
+  quad_utils::loadROSParamDefault(node_, "local_footstep_planner.ik_max_reach",
+                                  ik_max_reach, 0.45);
+  double stair_tread_snap_max_run = 0.0;
   quad_utils::loadROSParamDefault(
-      node_, "local_footstep_planner.ik_max_reach", ik_max_reach, 0.45);
+      node_, "local_footstep_planner.stair_tread_snap_max_run",
+      stair_tread_snap_max_run, 0.0);
+  std::string foothold_support_check_mode = "off";
+  double foothold_support_margin = 0.0;
+  double foothold_support_height_tolerance = 0.02;
+  std::string foothold_ik_check_mode = "off";
+  double foothold_ik_joint_margin = 0.0;
+  std::string swing_terrain_check_mode = "off";
+  quad_utils::loadROSParamDefault(
+      node_, "local_footstep_planner.foothold_support_check_mode",
+      foothold_support_check_mode, std::string("off"));
+  quad_utils::loadROSParamDefault(
+      node_, "local_footstep_planner.foothold_support_margin",
+      foothold_support_margin, 0.0);
+  quad_utils::loadROSParamDefault(
+      node_, "local_footstep_planner.foothold_support_height_tolerance",
+      foothold_support_height_tolerance, 0.02);
+  quad_utils::loadROSParamDefault(
+      node_, "local_footstep_planner.foothold_ik_check_mode",
+      foothold_ik_check_mode, std::string("off"));
+  quad_utils::loadROSParamDefault(
+      node_, "local_footstep_planner.foothold_ik_joint_margin",
+      foothold_ik_joint_margin, 0.0);
+  quad_utils::loadROSParamDefault(
+      node_, "local_footstep_planner.swing_terrain_check_mode",
+      swing_terrain_check_mode, std::string("off"));
+  std::string foothold_edge_inset_mode = "off";
+  quad_utils::loadROSParamDefault(
+      node_, "local_footstep_planner.foothold_edge_inset_mode",
+      foothold_edge_inset_mode, std::string("off"));
+  std::string front_next_tread_mode = "off";
+  quad_utils::loadROSParamDefault(
+      node_, "local_footstep_planner.front_next_tread_mode",
+      front_next_tread_mode, std::string("off"));
+  quad_utils::loadROSParamDefault(
+      node_, "local_footstep_planner.support_triangle_shift_mode",
+      support_triangle_shift_mode_, std::string("off"));
+  quad_utils::loadROSParamDefault(
+      node_, "local_footstep_planner.top_nose_down_pitch_rad",
+      top_nose_down_pitch_rad_, 0.0);
+  if (support_triangle_shift_mode_ != "off" &&
+      support_triangle_shift_mode_ != "enforce") {
+    RCLCPP_WARN(node_->get_logger(),
+                "Unknown support_triangle_shift_mode '%s'; using off",
+                support_triangle_shift_mode_.c_str());
+    support_triangle_shift_mode_ = "off";
+  }
 
   period = period_d / dt_;
 
@@ -248,10 +298,14 @@ void LocalPlanner::initLocalFootstepPlanner() {
       ground_clearance, hip_clearance, grf_weight, standing_error_threshold,
       quadKD_, foothold_search_radius, foothold_obj_threshold, obj_fun_layer,
       toe_radius_, edge_clearance, max_crossable_gap, ik_reach_check,
-      ik_max_reach);
+      ik_max_reach, stair_tread_snap_max_run, foothold_support_check_mode,
+      foothold_support_margin, foothold_support_height_tolerance,
+      foothold_ik_check_mode, foothold_ik_joint_margin,
+      foothold_edge_inset_mode, front_next_tread_mode);
   local_footstep_planner_->setMultistepParams(
       multistep_enabled_, multistep_apply_stop_, multistep_apply_foothold_,
       multistep_stop_margin_steps_, multistep_planning_distance_);
+  local_footstep_planner_->setSwingTerrainParams(swing_terrain_check_mode);
 
   past_footholds_msg_.feet.resize(num_feet_);
 }
@@ -395,8 +449,7 @@ void LocalPlanner::getReference() {
       const double sp = cmd_vel_.head<2>().norm();
       const double kSlowFloor = 0.12;  // m/s
       if (sp > kSlowFloor) {
-        const double scale =
-            std::max(multistep_slow_factor_, kSlowFloor / sp);
+        const double scale = std::max(multistep_slow_factor_, kSlowFloor / sp);
         cmd_vel_(0) *= scale;
         cmd_vel_(1) *= scale;
       }
@@ -467,6 +520,7 @@ void LocalPlanner::getReference() {
     local_footstep_planner_->getTerrainSlope(
         ref_body_plan_(0, 0), ref_body_plan_(0, 1), ref_body_plan_(0, 5),
         ref_body_plan_(0, 3), ref_body_plan_(0, 4));
+    applyTopFlatNoseDown(0);
 
     // Integrate to get full body plan (Forward Euler)
     for (int i = 1; i < N_; i++) {
@@ -500,6 +554,7 @@ void LocalPlanner::getReference() {
       local_footstep_planner_->getTerrainSlope(
           ref_body_plan_(i, 0), ref_body_plan_(i, 1), ref_body_plan_(i, 5),
           ref_body_plan_(i, 3), ref_body_plan_(i, 4));
+      applyTopFlatNoseDown(i);
     }
   } else {
     // Use global plan
@@ -581,6 +636,74 @@ void LocalPlanner::unwrapYawReference() {
   math_utils::unwrapVector(yaw_ref_traj);
 }
 
+Eigen::Vector2d LocalPlanner::supportTriangleShiftDelta(
+    const Eigen::Vector2d& body_xy,
+    const std::vector<Eigen::Vector2d>& stance_xy, double max_shift_m) {
+  if (stance_xy.size() != 3 || !(max_shift_m > 0.0)) {
+    return Eigen::Vector2d::Zero();
+  }
+  Eigen::Vector2d centroid = Eigen::Vector2d::Zero();
+  for (const Eigen::Vector2d& foot : stance_xy) {
+    centroid += foot;
+  }
+  centroid /= 3.0;
+  Eigen::Vector2d delta = centroid - body_xy;
+  const double norm = delta.norm();
+  if (!(norm > 0.0)) {
+    return Eigen::Vector2d::Zero();
+  }
+  if (norm > max_shift_m) {
+    delta *= max_shift_m / norm;
+  }
+  return delta;
+}
+
+void LocalPlanner::applySupportTriangleShift() {
+  if (support_triangle_shift_mode_ != "enforce" ||
+      contact_schedule_.empty() || current_foot_positions_world_.size() < 12) {
+    return;
+  }
+  const std::vector<bool>& stance = contact_schedule_.front();
+  std::vector<Eigen::Vector2d> stance_xy;
+  for (int leg = 0; leg < num_feet_ && leg < static_cast<int>(stance.size());
+       ++leg) {
+    if (!stance[leg]) {
+      continue;
+    }
+    stance_xy.emplace_back(current_foot_positions_world_(3 * leg),
+                           current_foot_positions_world_(3 * leg + 1));
+  }
+  constexpr double kMaxShiftM = 0.05;
+  const Eigen::Vector2d delta = supportTriangleShiftDelta(
+      ref_body_plan_.row(0).head<2>(), stance_xy, kMaxShiftM);
+  if (delta.norm() <= 0.0) {
+    return;
+  }
+  for (int i = 0; i < ref_body_plan_.rows(); ++i) {
+    ref_body_plan_(i, 0) += delta.x();
+    ref_body_plan_(i, 1) += delta.y();
+    ref_ground_height_(i) = local_footstep_planner_->getTerrainHeight(
+        ref_body_plan_(i, 0), ref_body_plan_(i, 1));
+    ref_body_plan_(i, 2) = z_des_ + ref_ground_height_(i);
+    local_footstep_planner_->getTerrainSlope(
+        ref_body_plan_(i, 0), ref_body_plan_(i, 1), ref_body_plan_(i, 5),
+        ref_body_plan_(i, 3), ref_body_plan_(i, 4));
+    applyTopFlatNoseDown(i);
+  }
+}
+
+void LocalPlanner::applyTopFlatNoseDown(int row) {
+  if (!(top_nose_down_pitch_rad_ > 0.0) || row < 0 ||
+      row >= ref_body_plan_.rows()) {
+    return;
+  }
+  const double height = local_footstep_planner_->getTerrainHeight(
+      ref_body_plan_(row, 0), ref_body_plan_(row, 1));
+  ref_body_plan_(row, 4) = topFlatNoseDownPitch(
+      height, ref_body_plan_(row, 3), ref_body_plan_(row, 4),
+      top_nose_down_pitch_rad_);
+}
+
 bool LocalPlanner::computeLocalPlan() {
   if (terrain_.isEmpty() || (body_plan_msg_ == NULL && !use_twist_input_) ||
       robot_state_msg_ == NULL) {
@@ -602,19 +725,19 @@ bool LocalPlanner::computeLocalPlan() {
   // grf_plan is filled)
   const FootPlanResult foot_plan_result =
       local_footstep_planner_->computeFootPlan(
-      current_plan_index_, contact_schedule_, body_plan_, grf_plan_,
-      ref_body_plan_, current_foot_positions_world_,
-      current_foot_velocities_world_, first_element_duration_,
-      past_footholds_msg_, foot_positions_world_, foot_velocities_world_,
-      foot_accelerations_world_);
+          current_plan_index_, contact_schedule_, body_plan_, grf_plan_,
+          ref_body_plan_, current_foot_positions_world_,
+          current_foot_velocities_world_, first_element_duration_,
+          past_footholds_msg_, foot_positions_world_, foot_velocities_world_,
+          foot_accelerations_world_);
 
   // Phase 2B-3: look farther than the NMPC horizon. If an uncrossable gap lies
   // within safe_stop_lookahead_ ahead of the body, latch the graceful stop now
   // -- before the robot commits to a field of crossable narrow gaps that ends
   // at a cliff (Step 06). No-op unless Phase 3 is enabled (edge_clearance > 0).
   if (safe_stop_latch_ && !safe_stop_latched_ &&
-      local_footstep_planner_->hasUncrossableGapAhead(
-          current_state_.head<2>(), safe_stop_lookahead_)) {
+      local_footstep_planner_->hasUncrossableGapAhead(current_state_.head<2>(),
+                                                      safe_stop_lookahead_)) {
     RCLCPP_WARN(node_->get_logger(),
                 "[safe-stop] latching graceful stop: uncrossable gap within "
                 "%.2f m ahead of the body",
@@ -624,14 +747,15 @@ bool LocalPlanner::computeLocalPlan() {
 
   // Never hand an invalid foothold plan to NMPC.
   if (stop_on_invalid_foothold_ && !foot_plan_result.ok) {
-    const bool near = foot_plan_result.nearest_failed_index >= 0 &&
-                      foot_plan_result.nearest_failed_index <= safe_stop_horizon_;
+    const bool near =
+        foot_plan_result.nearest_failed_index >= 0 &&
+        foot_plan_result.nearest_failed_index <= safe_stop_horizon_;
     if (safe_stop_latch_ && near) {
-      // Phase 2B: latch a graceful stop. Keep publishing the plan; getReference()
-      // zeros cmd_vel so the existing STEP->STAND transition decelerates the
-      // body, lands the swing legs and holds a stand pose. Phase 2A-3 has
-      // already replaced the invalid touchdown(s) with the previous foothold,
-      // so nothing invalid reaches NMPC.
+      // Phase 2B: latch a graceful stop. Keep publishing the plan;
+      // getReference() zeros cmd_vel so the existing STEP->STAND transition
+      // decelerates the body, lands the swing legs and holds a stand pose.
+      // Phase 2A-3 has already replaced the invalid touchdown(s) with the
+      // previous foothold, so nothing invalid reaches NMPC.
       if (!safe_stop_latched_) {
         RCLCPP_WARN(node_->get_logger(),
                     "[safe-stop] latching graceful stop: impassable gap in the "
@@ -653,7 +777,8 @@ bool LocalPlanner::computeLocalPlan() {
           static_cast<int>(foot_plan_result.worst_status));
       return false;
     }
-    // else (safe_stop_latch_ && !near): invalid foothold beyond safe_stop_horizon
+    // else (safe_stop_latch_ && !near): invalid foothold beyond
+    // safe_stop_horizon
     // -> ignore this cycle; keep walking (the sanitised plan is safe for NMPC).
   }
 
@@ -700,6 +825,8 @@ bool LocalPlanner::computeLocalPlan() {
   quad_utils::vectorToEigen(robot_state_msg_->joints.velocity, joint_vel);
   current_full_state.segment(12, 12) = joint_pos;
   current_full_state.segment(24, 12) = joint_vel;
+
+  applySupportTriangleShift();
 
   // Compute leg plan with MPC, return if solve fails
   if (!local_body_planner_nonlinear_->computeLegPlan(

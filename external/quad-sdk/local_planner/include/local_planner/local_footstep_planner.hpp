@@ -19,6 +19,8 @@
 #include <quad_utils/ros_utils.hpp>
 #include <rclcpp/rclcpp.hpp>
 
+#include <vector>
+
 #include <eigen3/Eigen/Eigen>
 #include <grid_map_core/grid_map_core.hpp>
 #include <grid_map_ros/GridMapRosConverter.hpp>
@@ -37,10 +39,40 @@
 enum class FootholdStatus {
   VALID,                     //!< A traversable candidate was selected
   NOMINAL_OUTSIDE_MAP,       //!< Nominal foothold lies outside the terrain map
-  NO_TRAVERSABLE_CANDIDATE,  //!< No cell in the search radius passed the threshold
-  NONFINITE_HEIGHT,          //!< Selected cell's inpainted height is not finite
-  EDGE_TOO_CLOSE,  //!< Selected cell is within edge_clearance of a hole/off-map cell
-  IK_UNREACHABLE,  //!< Selected cell cannot be reached by the leg's inverse kinematics
+  NO_TRAVERSABLE_CANDIDATE,  //!< No cell in the search radius passed the
+                             //!< threshold
+  NO_SUPPORTED_CANDIDATE,  //!< Traversable cells exist, but no full toe support
+  NONFINITE_HEIGHT,        //!< Selected cell's inpainted height is not finite
+  EDGE_TOO_CLOSE,  //!< Selected cell is within edge_clearance of a hole/off-map
+                   //!< cell
+  IK_UNREACHABLE,  //!< Selected cell cannot be reached by the leg's inverse
+                   //!< kinematics
+};
+
+//! Support under the circular toe footprint at one foothold candidate.
+struct FootholdSupportResult {
+  bool supported = false;
+  double min_height = std::numeric_limits<double>::quiet_NaN();
+  double max_height = std::numeric_limits<double>::quiet_NaN();
+  int sample_count = 0;
+  int invalid_count = 0;
+};
+
+//! Exact inverse-kinematics result for one foothold and predicted body pose.
+struct FootholdReachabilityResult {
+  bool exact = false;
+  bool within_joint_margin = false;
+  Eigen::Vector3d joint_position = Eigen::Vector3d::Zero();
+};
+
+//! Terrain height and feasibility along one straight swing-foot path.
+struct SwingClearanceResult {
+  bool path_finite = false;
+  bool feasible = false;
+  double max_terrain_height = std::numeric_limits<double>::quiet_NaN();
+  double legacy_apex = std::numeric_limits<double>::quiet_NaN();
+  double required_apex = std::numeric_limits<double>::quiet_NaN();
+  double hip_ceiling = std::numeric_limits<double>::quiet_NaN();
 };
 
 //! Result of getNearestValidFootholdResult().
@@ -52,7 +84,8 @@ enum class FootholdStatus {
    edge clearance and IK reachability are added in later phases.
 */
 struct FootholdResult {
-  Eigen::Vector3d position = Eigen::Vector3d::Zero();  //!< Chosen foothold, world
+  Eigen::Vector3d position =
+      Eigen::Vector3d::Zero();  //!< Chosen foothold, world
   FootholdStatus status = FootholdStatus::VALID;
   double traversability_nominal =
       std::numeric_limits<double>::quiet_NaN();  //!< obj-layer value at nominal
@@ -62,9 +95,15 @@ struct FootholdResult {
   double edge_clearance =
       std::numeric_limits<double>::quiet_NaN();  //!< Phase 3: distance from the
                                                  //!< chosen cell to the nearest
-                                                 //!< unsafe cell (clamped to the
-                                                 //!< scan radius); NaN if the
-                                                 //!< check is disabled
+                                                 //!< unsafe cell (clamped to
+                                                 //!< the scan radius); NaN if
+                                                 //!< the check is disabled
+  bool support_valid = true;  //!< Full toe footprint has finite, valid support
+  double support_height_range =
+      std::numeric_limits<double>::quiet_NaN();  //!< max(z)-min(z) under toe
+  bool ik_exact = true;  //!< Exact IK reaches the selected foothold
+  bool ik_within_joint_margin =
+      true;  //!< IK solution stays away from URDF joint limits
 };
 
 //! Aggregate outcome of one computeFootPlan() call over the whole horizon.
@@ -80,7 +119,7 @@ struct FootPlanResult {
   bool ok = true;                //!< false if any touchdown failed placement
   FootholdStatus worst_status =  //!< status of the first failing touchdown
       FootholdStatus::VALID;
-  int failed_leg = -1;              //!< leg index of the first failure, -1 if none
+  int failed_leg = -1;  //!< leg index of the first failure, -1 if none
   int failed_touchdown_index = -1;  //!< horizon index of the first failure
   int failed_count = 0;             //!< total failing touchdowns this call
   int nearest_failed_index = -1;    //!< smallest horizon index among failures
@@ -88,10 +127,10 @@ struct FootPlanResult {
                                     //!< decide how soon to start the stop
 
   //! [MPC_DOG Step 12/14] multi-step foothold-sequence shadow result.
-  int multistep_blocked_k = -1;     //!< touchdown step where the sequence blocks
-  int multistep_blocked_leg = -1;   //!< leg index at that step
+  int multistep_blocked_k = -1;    //!< touchdown step where the sequence blocks
+  int multistep_blocked_leg = -1;  //!< leg index at that step
   bool multistep_stop_request = false;  //!< blocked within final_stop_steps
-  bool multistep_slow = false;          //!< blocked, but beyond final_stop_steps
+  bool multistep_slow = false;  //!< blocked, but beyond final_stop_steps
   int multistep_applied_footholds = 0;  //!< [Step 15] touchdowns whose nominal
                                         //!< was replaced by a planned foothold
                                         //!< this call (0 unless apply_foothold)
@@ -146,8 +185,27 @@ class LocalFootstepPlanner {
                         std::string obj_fun_layer, double toe_radius,
                         double edge_clearance = 0.0,
                         double max_crossable_gap = 0.6,
-                        bool ik_reach_check = false,
-                        double ik_max_reach = 0.45);
+                        bool ik_reach_check = false, double ik_max_reach = 0.45,
+                        double stair_tread_snap_max_run = 0.0,
+                        std::string foothold_support_check_mode = "off",
+                        double foothold_support_margin = 0.0,
+                        double foothold_support_height_tolerance = 0.02,
+                        std::string foothold_ik_check_mode = "off",
+                        double foothold_ik_joint_margin = 0.0,
+                        std::string foothold_edge_inset_mode = "off",
+                        std::string front_next_tread_mode = "off");
+
+  struct FrontNextTreadPlacement {
+    bool applied = false;
+    double x = 0.0;
+  };
+
+  // heights[0] is the terrain height at x_start. The next tread is the first
+  // height change ahead, and x is its far edge minus inset. A scan that does
+  // not see the end of that tread leaves the foothold unchanged.
+  static FrontNextTreadPlacement frontFootFarOnNextTread(
+      const std::vector<double>& heights, double x_start, double step,
+      double height_tolerance, double inset);
 
   /**
    * @brief [MPC_DOG Step 14] Configure the multi-step foothold-sequence shadow
@@ -162,6 +220,13 @@ class LocalFootstepPlanner {
   void setMultistepParams(bool enabled, bool apply_stop_request,
                           bool apply_foothold, int stop_margin_steps,
                           double planning_distance);
+
+  /**
+   * @brief Configure terrain sampling along swing-foot paths
+   * @param[in] mode off preserves the endpoint-only apex; shadow measures the
+   * full path without changing control
+   */
+  void setSwingTerrainParams(std::string mode);
 
   /**
    * @brief Transform a vector of foot positions from the world to the body
@@ -226,9 +291,9 @@ class LocalFootstepPlanner {
    * @param[out] foot_positions Foot positions over the horizon
    * @param[out] foot_velocities Foot velocities over the horizon
    * @param[out] foot_accelerations Foot accelerations over the horizon
-   * @return FootPlanResult: ok=false (with first-failure details + count) if any
-   * touchdown could not be placed on a traversable in-map cell. Footholds are
-   * unchanged relative to the pre-Phase-2A behaviour except that a failed
+   * @return FootPlanResult: ok=false (with first-failure details + count) if
+   * any touchdown could not be placed on a traversable in-map cell. Footholds
+   * are unchanged relative to the pre-Phase-2A behaviour except that a failed
    * touchdown now inherits the previous foothold instead of a hole/NaN cell.
    */
   FootPlanResult computeFootPlan(
@@ -408,7 +473,8 @@ class LocalFootstepPlanner {
    * return value in every case; only the extra fields are new.
    * @param[in] foot_position Nominal foothold to optimize around
    * @param[in] foot_position_prev_solve Foothold in prior solve
-   * @param[in] leg_index Leg this foothold is for (Phase 4 reach check); -1 skips
+   * @param[in] leg_index Leg this foothold is for (Phase 4 reach check); -1
+   * skips
    * @param[in] hip_world World-frame hip this foothold supports during stance
    * (the midstance hip from computeFootPlan) -- Phase 4 reach check
    * @return FootholdResult with position + status + diagnostics
@@ -416,7 +482,33 @@ class LocalFootstepPlanner {
   FootholdResult getNearestValidFootholdResult(
       const Eigen::Vector3d& foot_position,
       const Eigen::Vector3d& foot_position_prev_solve, int leg_index = -1,
-      const Eigen::Vector3d& hip_world = Eigen::Vector3d::Zero()) const;
+      const Eigen::Vector3d& hip_world = Eigen::Vector3d::Zero(),
+      const Eigen::Vector3d* body_position = nullptr,
+      const Eigen::Vector3d* body_rpy = nullptr) const;
+
+  /**
+   * @brief Evaluate whether the full circular toe footprint is supported
+   * @param[in] position Candidate foothold x/y in the world frame
+   * @return Support diagnostics over the toe radius plus configured margin
+   */
+  FootholdSupportResult evaluateFootholdSupport(
+      const Eigen::Vector2d& position) const;
+
+  /**
+   * @brief Evaluate exact IK and URDF joint-limit margin for one foothold
+   */
+  FootholdReachabilityResult evaluateFootholdReachability(
+      int leg_index, const Eigen::Vector3d& foot_position,
+      const Eigen::Vector3d& body_position,
+      const Eigen::Vector3d& body_rpy) const;
+
+  /**
+   * @brief Evaluate the terrain height needed along a swing-foot path
+   */
+  SwingClearanceResult evaluateSwingClearance(
+      int leg_idx, const Eigen::VectorXd& body_plan,
+      const Eigen::Vector3d& foot_position_prev,
+      const Eigen::Vector3d& foot_position_next) const;
 
   /**
    * @brief Compute the minimum enclosing circle using Welzl's algorithm
@@ -577,6 +669,36 @@ class LocalFootstepPlanner {
 
   /// Minimum objective function value for valid foothold
   double foothold_obj_threshold_;
+
+  /// [MPC_DOG stairs] If the traversable run along +x/-x around the chosen
+  /// cell is shorter than this (a tread, not an open floor), move the
+  /// foothold to the middle of that run. 0 disables the snap.
+  double stair_tread_snap_max_run_ = 0.0;
+
+  /// off leaves the spiral foothold. enforce moves x just inside a real
+  /// tread edge by toe_radius plus the support margin, and does not center.
+  std::string foothold_edge_inset_mode_ = "off";
+  std::string front_next_tread_mode_ = "off";
+
+  /// Full-toe support check: off preserves prior behaviour, shadow records
+  /// diagnostics only, and enforce rejects unsupported foothold candidates.
+  std::string foothold_support_check_mode_ = "off";
+
+  /// Extra radius outside the physical toe used for support sampling, metres.
+  double foothold_support_margin_ = 0.0;
+
+  /// Maximum z_inpainted range allowed below one toe footprint, metres.
+  double foothold_support_height_tolerance_ = 0.02;
+
+  /// Exact IK check: off preserves prior behaviour, shadow records only, and
+  /// enforce removes candidates that violate IK or the configured joint margin.
+  std::string foothold_ik_check_mode_ = "off";
+
+  /// Required angular distance from each URDF joint limit, radians.
+  double foothold_ik_joint_margin_ = 0.0;
+
+  /// off keeps the endpoint-only swing apex; shadow measures the full path.
+  std::string swing_terrain_check_mode_ = "off";
 
   /// Terrain layer for foothold search
   std::string obj_fun_layer_;

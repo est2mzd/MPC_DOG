@@ -477,6 +477,40 @@ TEST(LocalPlannerTest, UnwrapYawReferenceRemovesPiDiscontinuity) {
             M_PI);
 }
 
+TEST(LocalPlannerTest, TopFlatNoseDownPitchAppliesOnlyOnFlatTop) {
+  EXPECT_NEAR(LocalPlanner::topFlatNoseDownPitch(0.60, 0.0, 0.0, 0.10), 0.10,
+              kTol);
+  EXPECT_NEAR(LocalPlanner::topFlatNoseDownPitch(0.60, 0.0, 0.0, 0.0), 0.0,
+              kTol);
+  EXPECT_NEAR(LocalPlanner::topFlatNoseDownPitch(0.45, 0.0, 0.0, 0.10), 0.0,
+              kTol);
+  EXPECT_NEAR(LocalPlanner::topFlatNoseDownPitch(0.60, 0.0, -0.46, 0.10),
+              -0.46, kTol);
+}
+
+TEST(LocalPlannerTest, SupportTriangleShiftUsesThreeStanceFeetOnly) {
+  const Eigen::Vector2d body(0.0, 0.0);
+  const std::vector<Eigen::Vector2d> triangle = {
+      {0.0, 0.2}, {0.0, -0.2}, {-0.3, 0.0}};
+  const Eigen::Vector2d delta =
+      LocalPlanner::supportTriangleShiftDelta(body, triangle, 0.05);
+  EXPECT_NEAR(delta.x(), -0.05, kTol);
+  EXPECT_NEAR(delta.y(), 0.0, kTol);
+
+  const Eigen::Vector2d centroid(-0.1, 0.0);
+  const Eigen::Vector2d inside =
+      LocalPlanner::supportTriangleShiftDelta(centroid, triangle, 0.05);
+  EXPECT_NEAR(inside.norm(), 0.0, kTol);
+
+  const std::vector<Eigen::Vector2d> four = {
+      {0.2, 0.1}, {0.2, -0.1}, {-0.2, 0.1}, {-0.2, -0.1}};
+  EXPECT_NEAR(
+      LocalPlanner::supportTriangleShiftDelta(body, four, 0.05).norm(), 0.0,
+      kTol);
+  EXPECT_NEAR(LocalPlanner::supportTriangleShiftDelta(body, {}, 0.05).norm(),
+              0.0, kTol);
+}
+
 int main(int argc, char** argv) {
   testing::InitGoogleTest(&argc, argv);
   rclcpp::init(argc, argv);
