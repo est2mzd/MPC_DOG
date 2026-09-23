@@ -1,29 +1,44 @@
 
-
-
 このファイルは開発経緯である。実行方法と代表 GIF は [README.md](./README.md) にある。
 
 # Squad-SDK のためのREADME
 
- - [README](./agent_reports/step01/quad_sdk_environment_and_step01.md)
- - [PyMPCとSquad-SDKの使い分け](./agent_reports/step01/quad_sdk_pympc_selection_and_distribution.md)
-
 ## Quad-SDK
 
+### 初期立ち上げ
+
+ - [README](./agent_reports/step01/quad_sdk_environment_and_step01.md)
+ - [PyMPCとSquad-SDKの使い分け](./agent_reports/step01/quad_sdk_pympc_selection_and_distribution.md)
  - [Step 01 検証記録(経緯・実験ログ)](./agent_reports/step01/quad_sdk_step01_investigation.md)
  - [Step 01 引き継ぎ資料(前進歩行の到達点・未完了事項・変更ファイル一覧)](./agent_reports/handoff/quadsdk_step01_handoff.md)
  - [Step 01 変更点と実行方法(要点まとめ)](./agent_reports/step01/quad_sdk_step01_changes_and_usage.md)
  - [記録ハーネス(quadsdk_step01_baseline.py)の構造説明](./agent_reports/step01/quadsdk_step01_baseline_py_structure.md)
  - [Step 01 の制御パイプライン(map → sensing → MPC → WBC のノード構成)](./agent_reports/quadsdk_step01_control_pipeline.md)
- - [Step 01 の地形マップ(map)の作り方とデータ構造(事実と推測を分離)](./agent_reports/quadsdk_step01_terrain_map.md)
- - [Step 01 のセンシング(状態推定)の仕組みとデータ構造(事実と推測を分離)](./agent_reports/quadsdk_step01_sensing.md)
- - [Step 01 の MPC(NMPC)の理論・コスト・制約・最適化とパラメータ(事実と推測を分離)](./agent_reports/quadsdk_step01_mpc.md)
- - [Step 01 の WBC(脚コントローラ/逆動力学)の理論・コード・パラメータ(事実と推測を分離)](./agent_reports/quadsdk_step01_wbc.md)
- - [Step 01 の GAIT(歩容)と MPC の関係 — 理論式・コード(事実と推測を分離)](./agent_reports/quadsdk_step01_gait_and_mpc.md)
- - [NMPC の simple モデルと complex モデルの差分 / MPC でできることの違い(事実と推測を分離)](./agent_reports/quadsdk_step01_mpc_simple_vs_complex.md)
- - [simple モデルで地形対応(高さ考慮の足場選び・穴超え)はどこまでできるか(事実と推測を分離)](./agent_reports/quadsdk_step01_simple_model_terrain_and_gaps.md)
  - [go2 の寸法・質量・関節・パラメータ(Quad-SDK モデル + 公称スペック)](./agent_reports/quadsdk_go2_dimensions_and_params.md)
  - [Quad-SDK 元コードからの変更・チューニングまとめ(ビルド/実行修正・歩容/探索/ホライズン/地形表現の調整・診断機能追加。何をなぜ変えたか一覧)](./agent_reports/quadsdk_original_code_tuning_summary.md)
+ - [現状アーキテクチャ](./agent_reports/architecture_current.md)
+ - [現状アーキテクチャの計画](./agent_reports/architecture_current_plan.md)
+
+### ソルバー対応
+
+ - [Step 01 の MPC(NMPC)の理論・コスト・制約・最適化とパラメータ(事実と推測を分離)](./agent_reports/quadsdk_step01_mpc.md)
+ - [NMPC の simple モデルと complex モデルの差分 / MPC でできることの違い(事実と推測を分離)](./agent_reports/quadsdk_step01_mpc_simple_vs_complex.md)
+ - [Quad-SDK 元コードからの変更・チューニングまとめ(ビルド/実行修正・歩容/探索/ホライズン/地形表現の調整・診断機能追加。何をなぜ変えたか一覧)](./agent_reports/quadsdk_original_code_tuning_summary.md)
+
+### WBC
+
+ - [Step 01 の WBC(脚コントローラ/逆動力学)の理論・コード・パラメータ(事実と推測を分離)](./agent_reports/quadsdk_step01_wbc.md)
+
+### 平面移動
+
+ - [Step 01 のセンシング(状態推定)の仕組みとデータ構造(事実と推測を分離)](./agent_reports/quadsdk_step01_sensing.md)
+ - [Step 01 の地形マップ(map)の作り方とデータ構造(事実と推測を分離)](./agent_reports/quadsdk_step01_terrain_map.md)
+ - [Step 01 の GAIT(歩容)と MPC の関係 — 理論式・コード(事実と推測を分離)](./agent_reports/quadsdk_step01_gait_and_mpc.md)
+ - [Step 01 引き継ぎ資料(前進歩行の到達点・未完了事項・変更ファイル一覧)](./agent_reports/handoff/quadsdk_step01_handoff.md)
+
+### 穴超え
+
+ - [simple モデルで地形対応(高さ考慮の足場選び・穴超え)はどこまでできるか(事実と推測を分離)](./agent_reports/quadsdk_step01_simple_model_terrain_and_gaps.md)
  - [穴対応 Foot Placement 改善:**まとめ(現状・成果・GIF)** — 1 枚で現状がわかる。フェーズ一覧(2A/3(A)/2B/4 実装済み)、5 シナリオの結果と実行 GIF、既存挙動を壊していない根拠](./agent_reports/quadsdk_gap_foothold_summary.md)
  - [穴対応 Foot Placement 改善:**全体の考え方(概観)** — 安全のための 4 段(認識/足場選択/gate/停止シーケンス)、フェーズ ↔ 何を足したか ↔ どのシナリオで確かめたか、シナリオ一覧と現状、ユーザー判断の履歴](./agent_reports/quadsdk_gap_foothold_overview.md)
  - [穴対応 Foot Placement 改善:**試行錯誤の記録** — 外した見立て(15cm連続穴は成立困難 / gate だけで安全停止)、踏んだC++バグ(非voidの return 忘れ→UBで無限ループ / THROTTLE がms巨大値でログ0件)、Phase 3 を2回作り直した経緯、効いた作業のやり方](./agent_reports/quadsdk_gap_foothold_trial_and_error.md)
@@ -48,9 +63,9 @@
  - [Step 15:計画足場列を足場ノミナルへ差し込む(`apply_foothold:=true`、既定 OFF)。目前の 1 着地だけ、穴の上の Raibert ノミナルを計画足場側へ前方 ≤0.12 m 寄せる。**15/30 cm は 3/3 直立完走・planned↔actual がログで追え・NMPC 負荷は OFF と同水準**、50/100 cm は差し込まず(applied=0)Step 14 停止。world 座標直入れ→チャタリング→後ろ引き の 3 回の転倒を経て前方ナッジまで限定](./agent_reports/steps/step_15_multistep_foothold_nmpc_integration.md)
  - [Step 16:全回帰と限界 Map — 穴幅 15〜100 cm × {OFF, shadow, stop-only, foothold-apply} × v=0.30/0.50 を掃引(非決定条件は各 6 回)。**保護機能 ON の 18 run すべてで ≥50 cm への落下ゼロ**。stop-only は ≤35 cm 通過 / ≥50 cm 直立停止の境界が素直で NMPC 負荷も一定 → 実運用向け。foothold-apply は 25/35 cm 単独トレンチで 1/6〜2/6 転倒(実験段階)。当初課題「50 cm で数歩手前に止まれない」は stop-only 有効化で解決](./agent_reports/steps/step_16_multistep_terrain_planner_full_regression.md)
  - [上流の判断機は今どこまで「汎用」か(Step 16 時点の整理・大学院初心者向け)— 判断機の骨組み(歩容予測・生 `z` の NaN 判定・reach 判定・速度依存の停止距離)は汎用。「穴が何 m 以上で渡れないか」の境界値 `uncrossable_nan_width = 0.52 m` だけが試験の溝幅に合わせた固定値で、これは想定どおりの現状。速度非依存なので Step 16 で「30 cm は v=0.50 で落下」が出た。汎用化の道筋(能力から `max_crossable_gap(v, gait, ...)` を計算)を記載](./agent_reports/steps/step_16b_upstream_decider_genericity.md)
- - [Step 17(実装前分析):Go2 前方ジャンプ — 後脚踏切パイプラインの現状と問題。現在の「リープ」は実質「四脚接地スクワット→(運が良ければ)四脚同時飛翔→四脚接地」で、`REAR_PUSH`(後脚のみ支持)も `FRONT_LAND`(前脚のみ着地)も**到達不能**(`local_footstep_planner.cpp:531-538` はデッドコード)。課題の問題 A〜E は行番号付きで全て実在を確認。GBP は点質量+単一合力モデルで後脚荷重配分・ピッチモーメントを表現不可、踏切の水平力の向きは乱数、NMPC/ID は計画接触のみ使用、primitive ID は 3 ファイルに重複定義、NMPC 脚別 GRF 上限 150 N/脚 は必要ピーク(推定 ≈477 N)に届かない。**レイヤ横断の大改修が必要**と判定し実装前に整理](./agent_reports/steps/step_17_forward_jump_code_analysis.md)
- - [Step 17(実装・進行中):前方ジャンプ。方針を「平地・穴なし・その場ジャンプ・後脚位置で計測」に絞り、`jump_mode:=force_leap` で GBP が RRT を回さず 1 回のジャンプ経路を決定論的に publish、NMPC+ID が追従。**計測**(`flat_wide`):その場ジャンプ `step17_hop_sym2`/`step17_hop_rep1` = 胴体 +0.22 m・四脚離地 ≈260 ms・着地後直立維持・NMPC 失敗 0・転倒なし(2/2 再現、ただし飛翔中ピッチが一時 ~0.33 rad)。短前方ジャンプ `step17_fwd_b` = **後脚前進 +0.386 m(≥30 cm)**・四脚離地 314 ms・着地後直立維持。REAR_PUSH/FRONT_LAND を実際に効かせる(姿勢発散回避のため現状は四脚対称ホップ)と穴シナリオは残課題。`colcon test` 112 pass。ブランチ `feature/jump`](./agent_reports/steps/step_17_forward_jump_rear_leg_push.md)
- - [Step 17b(分析・計画):その場・垂直ジャンプを「こけずに」着地させる — gait と WBC(NMPC/逆動力学)の調整計画(大学院初心者向け)。**結論**:強制ジャンプ経路は既に gait をほぼバイパスしており(接触は primitive 上書き、着地後は四脚 hold→STAND)、こけた `hop_v0` の原因は gait でなく WBC 側 — 後脚のみ踏切で前脚支持なし・NMPC の roll/pitch 追従重みが既定 0.5 で弱い・点質量プランの鉛直速度が不連続。堅牢化は主に WBC:姿勢重みの恒常引き上げ・PRELOAD の GRF 形状づけ・滑らかなしゃがみ→伸展の胴体高さ基準・horizon 延長・飛翔中 Cartesian swing ゲイン有効化・着地 kd。gait 側は「着地後の四脚 hold 保証」など限定的。Stage A〜F の段階計画つき](./agent_reports/steps/step_17b_vertical_jump_gait_and_wbc_plan.md)
+
+### 階段
+
  - [Step 18 横幅:床の横幅だけを ±0.8 m に狭めたら `foothold_search_radius` 0.7 m が床の横端に届き、最初の蹴上の手前 x=1.2 m で横転した。幅は ±1.5 m に戻す](./agent_reports/steps/step_18_stair_floor_width.md)
  - [Step 18 蹴上の手前の傾き:横幅を戻した走行は x=2.88 m まで横転せず、最初の蹴上 x=3 m の手前で、平地にいるのに段の方へ傾いて落ちた。傾きは半径 0.4 m の `smooth_normal_vectors` から来る](./agent_reports/steps/step_18_stair_approach_pitch.md)
  - [Step 18 残っていた映像:`t01` から `t03` は mp4 だけで状態 CSV が無く、`t06` は最初の蹴上の手前まで直立したあとロールが崩れて後退した](./agent_reports/steps/step_18_remaining_videos.md)
@@ -63,6 +78,16 @@
  - [Step 21 形状の段階:10 段から始めず、高さ 0.10 m、奥行き 0.35 m の 1 段を上って下りるところから難しくする。上り専用の試行は判定に使わない](./agent_reports/steps/step_21_stair_shape_curriculum.md)
  - [Step 22 高さと段数:高さ 0.10 m・奥行き 0.35 m と、日本の階段寸法 3 組を、2・4・6・8・10 段の上り下りで比べる。0.10 m は 4 段だけ失敗し、0.15 m・奥行き 0.30 m は段の上か下りで転倒した](./agent_reports/steps/step_22_stair_height_step_matrix.md)
  - [Step 23 ロバスト性:高さ 0.15 m、奥行き 0.30 m、上り 4＋下り 4 を反復する。支持判定、段端後退、支持三角形、前足の奥置きは完走を 5/5 にしていない。選ぶ設定は基準 0.10 m/s。第17章は、高さ・踏面・段数を変えた形状確認である](./agent_reports/steps/step_23_stair_robustness.md)
+
+### ジャンプ
+
+ - [Step 17(実装前分析):Go2 前方ジャンプ — 後脚踏切パイプラインの現状と問題。現在の「リープ」は実質「四脚接地スクワット→(運が良ければ)四脚同時飛翔→四脚接地」で、`REAR_PUSH`(後脚のみ支持)も `FRONT_LAND`(前脚のみ着地)も**到達不能**(`local_footstep_planner.cpp:531-538` はデッドコード)。課題の問題 A〜E は行番号付きで全て実在を確認。GBP は点質量+単一合力モデルで後脚荷重配分・ピッチモーメントを表現不可、踏切の水平力の向きは乱数、NMPC/ID は計画接触のみ使用、primitive ID は 3 ファイルに重複定義、NMPC 脚別 GRF 上限 150 N/脚 は必要ピーク(推定 ≈477 N)に届かない。**レイヤ横断の大改修が必要**と判定し実装前に整理](./agent_reports/steps/step_17_forward_jump_code_analysis.md)
+ - [Step 17(実装・進行中):前方ジャンプ。方針を「平地・穴なし・その場ジャンプ・後脚位置で計測」に絞り、`jump_mode:=force_leap` で GBP が RRT を回さず 1 回のジャンプ経路を決定論的に publish、NMPC+ID が追従。**計測**(`flat_wide`):その場ジャンプ `step17_hop_sym2`/`step17_hop_rep1` = 胴体 +0.22 m・四脚離地 ≈260 ms・着地後直立維持・NMPC 失敗 0・転倒なし(2/2 再現、ただし飛翔中ピッチが一時 ~0.33 rad)。短前方ジャンプ `step17_fwd_b` = **後脚前進 +0.386 m(≥30 cm)**・四脚離地 314 ms・着地後直立維持。REAR_PUSH/FRONT_LAND を実際に効かせる(姿勢発散回避のため現状は四脚対称ホップ)と穴シナリオは残課題。`colcon test` 112 pass。ブランチ `feature/jump`](./agent_reports/steps/step_17_forward_jump_rear_leg_push.md)
+ - [Step 17b(分析・計画):その場・垂直ジャンプを「こけずに」着地させる — gait と WBC(NMPC/逆動力学)の調整計画(大学院初心者向け)。**結論**:強制ジャンプ経路は既に gait をほぼバイパスしており(接触は primitive 上書き、着地後は四脚 hold→STAND)、こけた `hop_v0` の原因は gait でなく WBC 側 — 後脚のみ踏切で前脚支持なし・NMPC の roll/pitch 追従重みが既定 0.5 で弱い・点質量プランの鉛直速度が不連続。堅牢化は主に WBC:姿勢重みの恒常引き上げ・PRELOAD の GRF 形状づけ・滑らかなしゃがみ→伸展の胴体高さ基準・horizon 延長・飛翔中 Cartesian swing ゲイン有効化・着地 kd。gait 側は「着地後の四脚 hold 保証」など限定的。Stage A〜F の段階計画つき](./agent_reports/steps/step_17b_vertical_jump_gait_and_wbc_plan.md)
+
+### 復帰
+
+ - [姿勢復帰モードの実装計画(歩行用 MPC を使わず、関節空間の状態機械で転倒姿勢から立位へ戻す)](./agent_reports/recovery_modes/recovery_modes_plan.md)
 
 ### 実行例(時系列)
 
@@ -576,9 +601,17 @@ OFF の 3 つは、その実行で明示的に有効化したときだけ動く(
 
 ## Quadruped-PyMPC
 
+### 初期立ち上げ
+
  - [環境構築(acadosビルド・インストール)と実行方法](./agent_reports/step01/pympc_step01_changes_and_usage.md)
  - [Step 01 検証記録(経緯)](./agent_reports/steps/step_01_reference_baseline.md)
  - [記録ハーネス(step_01_baseline.py)の構造説明](./agent_reports/step01/step_01_baseline_py_structure.md)
+
+### 平面移動
+
  - [Step 02 検証記録(平面マップ・歩容周波数と前進速度／成功)](./agent_reports/steps/step_02_frequency.md)
+
+### 穴超え
+
  - [Step 03 検証記録(前進方向に並ぶ穴／轍を落ちずに越える・大学院初心者向け解説つき／成功)](./agent_reports/steps/step_03_gap_crossing.md)
  - [Step 04 検証記録(穴の間隔を 1.5 m に詰めて同様／大学院初心者向け解説つき／成功)](./agent_reports/steps/step_04_gap_crossing_1p5m.md)

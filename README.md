@@ -1,6 +1,6 @@
 # MPC Dog
 
-Go2 を Quad-SDK の NMPC で歩かせる。いま記録している地形は、平面、穴、階段の3系統である。各系統は制御を固定し、地形の変数だけを変える。GIF は、その条件の代表1本である。成功が無い階段だけ、1回目の失敗を置く。
+Go2 を Quad-SDK の NMPC で動かす。いま記録している例は、平面、穴、階段、ジャンプの4系統である。平面・穴・階段は制御を固定し、地形の変数だけを変える。ジャンプは平地で、前方離陸速度だけを変える。GIF は、その条件の代表1本である。成功が無い階段だけ、1回目の失敗を置く。
 
 開発の経緯は [DEVELOPMENT.md](./DEVELOPMENT.md) にある。環境構築は [Step 01](./agent_reports/step01/quad_sdk_environment_and_step01.md) にある。
 
@@ -10,28 +10,65 @@ Go2 を Quad-SDK の NMPC で歩かせる。いま記録している地形は、
 
 ### 追加機能
 
-- Phase 1 `FootholdResult`: 足場の成否。位置は従来どおり
-- Phase 2A `stop_on_invalid_foothold`: 無効足場を NMPC へ渡さない
-- Phase 2B `safe_stop_lookahead` 2.5 m: 前方の渡れない穴で `cmd_vel` を 0
-- Phase 3 `edge_clearance`: 穴縁を `EDGE_TOO_CLOSE`。カタログは 0
-- Phase 4 `ik_reach_check`: 届かない足場を `IK_UNREACHABLE`。カタログは false
-- `multistep_planner` + `apply_stop_request`: 生 `z` の NaN 幅が 0.52 m 以上で停止。平面と穴は ON。`apply_foothold` は false
-- `swing_terrain_check_mode: enforce`: 振り足頂点を経路の地形より上へ。平地は従来頂点
-- `foothold_support_check_mode: shadow`: 足先全体の支持を記録。選択は変えない
-- `foothold_edge_inset_mode` / `support_triangle_shift_mode` / `front_next_tread_mode` / `top_nose_down_pitch_rad`: 段端後退、支持三角形、前足の奥置き、頭下げ。階段カタログは off / 0
+#### 最終的に使用
+
+- 目的A1: 無効な足場を NMPC に渡さない
+  - 手段: Phase 2A `stop_on_invalid_foothold: true`
+  - 手段: Phase 1 `FootholdResult`（成否。位置は従来どおり）
+- 目的A2: 無効な足場の手前で止まる
+  - 手段: Phase 2B `safe_stop_latch: true`（`cmd_vel` を 0）
+- 目的A3: 渡れない穴の手前で止まる
+  - 手段: `multistep_planner.enabled` + `apply_stop_request: true`
+  - 手段: 生 `z` の NaN 幅 `uncrossable_nan_width` 0.52 m
+- 目的A4: 振り足を段や穴縁より上へ上げる
+  - 手段: `swing_terrain_check_mode: enforce`（平地は従来頂点）
+
+#### 一時的に有効だが、最終的には不使用
+
+- 目的B1: 穴縁を渡れる穴と断崖に分ける
+  - 手段: Phase 3 `edge_clearance`（試験 0.15。最終 0）
+  - 手段: `safe_stop_lookahead` 2.5 m（`edge_clearance` が 0 なので動かない）
+- 目的B2: 脚が届かない足場で止まる
+  - 手段: Phase 4 `ik_reach_check`（試験 true。最終 false）
+- 目的B3: 計画した足場列を着地点へ入れる
+  - 手段: `apply_foothold`（試験 true。最終 false）
+- 目的B4: 足先全体が載る候補だけを選ぶ
+  - 手段: `foothold_support_check_mode: enforce`（最終 `shadow`。選択は変えない）
+- 目的B5: 足を段の内側へ寄せる
+  - 手段: `foothold_edge_inset_mode: enforce`（最終 `"off"`）
+- 目的B6: 胴体を支持している3脚の内側へ寄せる
+  - 手段: `support_triangle_shift_mode: enforce`（最終 `"off"`）
+- 目的B7: 前足を次の段の奥へ置く
+  - 手段: `front_next_tread_mode: enforce`（最終 `"off"`）
+- 目的B8: 最上段で頭を下げる
+  - 手段: `top_nose_down_pitch_rad` 0.10（最終 0）
 
 ### パラメータ修正
 
-- 歩容: trot → crawl
-- `period`: 0.36 → 0.90 s
-- `duty_cycles`: 0.5 → 0.75
-- `phase_offsets`: `[0, 0.5, 0.5, 0]` → `[0, 0.75, 0.5, 0.25]`
-- `foothold_search_radius`: 0.25 → 0.70 m
-- `ground_clearance`: 0.07 → 0.10 m
-- `horizon_length`: 26 → 40（0.78 → 1.20 s）
-- `stand_cmd_vel_threshold`: 0.1 → 0.05
-- ヨー境界: ±π → ±10 rad
-- `smooth_surface_normals` 半径: 0.40 → 0.10 m
+#### 最終的に使用
+
+- 目的C1: 穴の近くで同時に3脚以上を着ける
+  - 手段: 歩容 trot → crawl
+  - 手段: `period` 0.36 → 0.90 s
+  - 手段: `duty_cycles` 0.5 → 0.75
+  - 手段: `phase_offsets` `[0, 0.5, 0.5, 0]` → `[0, 0.75, 0.5, 0.25]`
+- 目的C2: 穴の反対側まで足場を探す
+  - 手段: `foothold_search_radius` 0.25 → 0.70 m
+- 目的C3: 遊脚を穴縁より高く上げる
+  - 手段: `ground_clearance` 0.07 → 0.10 m
+- 目的C4: クロール1周期を先読みに収める
+  - 手段: `horizon_length` 26 → 40（0.78 → 1.20 s）
+- 目的C5: 0.10 m/s の指令で歩き始める
+  - 手段: `stand_cmd_vel_threshold` 0.1 → 0.05
+- 目的C6: 180°を超える旋回のヨー参照を追従する
+  - 手段: ヨー境界 ±π → ±10 rad
+- 目的C7: 段の手前の平地で、胴体を段の方へ傾けない
+  - 手段: `smooth_surface_normals` 半径 0.40 → 0.10 m
+
+#### 一時的に有効だが、最終的には不使用
+
+- 目的D1: 段の手前だけ高さの平滑を狭くする
+  - 手段: `z_smooth` 半径 0.08 m（階段実行中のみ。最終 0.20 m）
 
 ### ビルド・実行
 
@@ -195,6 +232,33 @@ QUADSDK_OVERLAY_SETUP=/tmp/mpc_dog_stack_release_install/setup.bash \
 高さ 15 cm、踏面 39 cm、上り6＋下り6。失敗。1回目。
 
 ![高さ15cm踏面39cm6段](./artifacts/gifs/quadsdk_stair_shape_h15_d39_n06.gif)
+
+## ジャンプ
+
+制御は歩行と別である。`reference` は `gbpl`、`jump_mode` は `force_leap`、world は `flat_wide.xml`、穴は使わない。踏切は四脚対称で、`JUMP_PRELOAD_FRACTION=1.0`、`JUMP_FRONT_LAND_FRACTION=0.0`、NMPC の roll/pitch 追従重みは 20 である。歩容は duty 0.98、位相は全 0、`stand_pos_error_threshold` は 0.15 である。変えるのは前方離陸速度 `JUMP_TAKEOFF_VX` である。0 がその場、0.3 が短い前方である。
+
+その場は、実行された 12 回すべてが直立着地で、転倒 0、NMPC 失敗 0 である。胴体は +0.20〜0.25 m、四脚離地は 238〜290 ms である。短い前方は、後脚が +0.386 m 進み、四脚離地は 314 ms、着地後 2 s のロールとピッチは 0.003 rad 未満である。詳細は [Step 17](./agent_reports/steps/step_17_forward_jump_rear_leg_push.md) と [Step 17b](./agent_reports/steps/step_17b_vertical_jump_gait_and_wbc_plan.md) にある。
+
+```bash
+JUMP_TAKEOFF_VX=<vx> JUMP_DZ_LO=1.1 JUMP_DZ_HI=1.5 \
+  JUMP_TS_LO=0.20 JUMP_TS_HI=0.28 \
+  JUMP_PRELOAD_FRACTION=1.0 JUMP_FRONT_LAND_FRACTION=0.0 \
+  JUMP_ATT_WEIGHT=20 STEP_TAG=<tag> \
+  bash scripts/trial/run_step17_jump.sh
+```
+
+| 種類 | `JUMP_TAKEOFF_VX` | 結果 |
+| --- | ---: | --- |
+| その場 | 0 | 成功 |
+| 短い前方 | 0.3 | 成功 |
+
+その場。`JUMP_TAKEOFF_VX=0`。成功。
+
+![その場ジャンプ](./artifacts/gifs/quadsdk_step17_vertical_jump.gif)
+
+短い前方。`JUMP_TAKEOFF_VX=0.3`。成功。
+
+![短い前方ジャンプ](./artifacts/gifs/quadsdk_step17_fwd_jump.gif)
 
 ## Quadruped-PyMPC
 

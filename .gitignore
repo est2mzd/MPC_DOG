@@ -79,8 +79,9 @@ artifacts/gifs/*.gif
 !artifacts/gifs/quadsdk_allsc_*.gif
 # README の階段パターン。各条件の代表 GIF を1本。各 <1MB。
 !artifacts/gifs/quadsdk_stair_shape_*.gif
-# Step 17 その場・垂直ジャンプ(平地・穴なし)。<0.5MB。
+# Step 17 ジャンプ(平地・穴なし)。その場と短前方。各 <1MB。
 !artifacts/gifs/quadsdk_step17_vertical_jump.gif
+!artifacts/gifs/quadsdk_step17_fwd_jump.gif
 
 # backup/(2.0GB、未追跡)。archive/は履歴保持のため意図的にgit管理下にあり
 # (archive/README.md参照)、対象外とする
