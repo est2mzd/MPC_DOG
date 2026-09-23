@@ -14,6 +14,9 @@ __pycache__/
 *.egg-info/
 .pytest_cache/
 
+# 8月29日ビルドが要求する Pinocchio 4.0 と MuJoCo 3.4 の実体
+artifacts/soname/
+
 # Workshop capture intermediates (regenerate via scripts)
 docs/pympc_2day/assets/frames_*/
 docs/pympc_2day/assets/tuning_lab_results.json
@@ -74,6 +77,8 @@ artifacts/gifs/*.gif
 !artifacts/gifs/quadsdk_phase4_g30_ik_cross_12to40s.gif
 # 全シナリオ動作確認(stop-only 固定、world だけ変える)。1枚 <1MB。
 !artifacts/gifs/quadsdk_allsc_*.gif
+# README の階段パターン。各条件の代表 GIF を1本。各 <1MB。
+!artifacts/gifs/quadsdk_stair_shape_*.gif
 # Step 17 その場・垂直ジャンプ(平地・穴なし)。<0.5MB。
 !artifacts/gifs/quadsdk_step17_vertical_jump.gif
 
